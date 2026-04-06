@@ -12,3 +12,4 @@ OLD/
 .dev.vars*
 !.dev.vars.example
 !.env.example
+supabase/.temp/
