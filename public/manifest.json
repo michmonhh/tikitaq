@@ -1,0 +1,23 @@
+{
+  "name": "TIKITAQ",
+  "short_name": "TIKITAQ",
+  "description": "Turn-based tactical soccer",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0e1a",
+  "theme_color": "#00c853",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/webclip.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    }
+  ]
+}

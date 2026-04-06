@@ -1,0 +1,140 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  height: 100%;
+  width: 260px;
+  flex-shrink: 0;
+}
+
+.backBtn {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-align: left;
+  padding: var(--space-xs) 0;
+  transition: color var(--transition-fast);
+}
+.backBtn:hover {
+  color: var(--text-primary);
+}
+
+.scoreboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.team {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.activeTurn {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.teamDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.teamName {
+  flex: 1;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.score {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.divider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-xs) 0;
+}
+
+.time {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.half {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.turnInfo {
+  display: flex;
+  justify-content: center;
+}
+
+.turnBadge {
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: #0a0e1a;
+}
+
+.actions {
+  margin-top: auto;
+}
+
+.gameOver {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.gameOver h3 {
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.gameOver p {
+  font-size: var(--text-3xl);
+  font-weight: 800;
+}
+
+/* Mobile: sidebar becomes bottom bar */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding: var(--space-sm) var(--space-md);
+    gap: var(--space-sm);
+  }
+
+  .backBtn { order: -1; }
+  .scoreboard { flex-direction: row; align-items: center; flex: 1; }
+  .team { padding: var(--space-xs); }
+  .turnInfo { display: none; }
+  .actions { margin-top: 0; }
+}

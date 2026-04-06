@@ -1,0 +1,85 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  padding: var(--space-xl);
+  gap: var(--space-2xl);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 600px;
+}
+
+.backBtn {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  transition: color var(--transition-fast);
+}
+.backBtn:hover { color: var(--text-primary); }
+
+.title {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+}
+
+.matchup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xl);
+  flex: 1;
+  max-height: 300px;
+}
+
+.teamSlot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  min-width: 160px;
+  transition: all var(--transition-fast);
+}
+
+.teamSlot:hover {
+  border-color: var(--tc, var(--border-light));
+  transform: translateY(-2px);
+}
+
+.teamLogo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.teamName {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.teamRole {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.vs {
+  font-size: var(--text-3xl);
+  font-weight: 900;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.playBtn {
+  min-width: 240px;
+  font-size: var(--text-xl);
+  letter-spacing: 0.1em;
+}
