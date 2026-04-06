@@ -6,3 +6,9 @@ dist
 *.log
 .claude/
 OLD/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
