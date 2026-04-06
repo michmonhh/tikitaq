@@ -69,3 +69,16 @@
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
+
+.userBar {
+  position: absolute;
+  bottom: var(--space-xl);
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.username {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}

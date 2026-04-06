@@ -1,8 +1,11 @@
 import { useUIStore } from '../stores/uiStore'
+import { useAuthStore } from '../stores/authStore'
+import { Button } from '../components/Button'
 import styles from './MainMenuScreen.module.css'
 
 export function MainMenuScreen() {
   const navigate = useUIStore(s => s.navigate)
+  const { user, username, signOut } = useAuthStore()
 
   const menuItems = [
     { label: 'QUICK GAME', screen: 'quick-game' as const, description: 'Play vs AI' },
@@ -10,6 +13,11 @@ export function MainMenuScreen() {
     { label: 'SEASON', screen: 'main-menu' as const, description: 'Coming Soon', disabled: true },
     { label: 'WORLD LEAGUE', screen: 'main-menu' as const, description: 'Coming Soon', disabled: true },
   ]
+
+  const handleLogout = async () => {
+    await signOut()
+    navigate('intro')
+  }
 
   return (
     <div className={styles.container}>
@@ -30,6 +38,15 @@ export function MainMenuScreen() {
           </button>
         ))}
       </nav>
+
+      {user && (
+        <div className={styles.userBar}>
+          <span className={styles.username}>{username || user.email}</span>
+          <Button variant="ghost" size="sm" onClick={handleLogout}>
+            Logout
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
