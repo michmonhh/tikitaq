@@ -109,18 +109,25 @@
 .matchItem {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-sm);
   padding: var(--space-md);
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: all var(--transition-fast);
 }
 
 .matchItem:hover {
   background: var(--bg-card-hover);
   border-color: var(--border-light);
+}
+
+.matchInfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  cursor: pointer;
 }
 
 .matchTeams {
@@ -140,4 +147,23 @@
 .myTurn {
   background: var(--accent);
   color: #0a0e1a;
+}
+
+.confirmContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  text-align: center;
+}
+
+.confirmWarning {
+  font-size: var(--text-sm);
+  color: var(--danger);
+}
+
+.confirmActions {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: center;
+  margin-top: var(--space-sm);
 }

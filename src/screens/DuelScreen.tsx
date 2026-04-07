@@ -39,13 +39,13 @@ export function DuelScreen() {
   const [activeMatches, setActiveMatches] = useState<ActiveMatch[]>([])
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmQuit, setConfirmQuit] = useState<ActiveMatch | null>(null)
 
   // Load invitations and active matches
   useEffect(() => {
     if (!user) return
 
     const loadData = async () => {
-      // Load invitations
       const { data: invites } = await supabase
         .from('invitations')
         .select('*')
@@ -54,7 +54,6 @@ export function DuelScreen() {
 
       if (invites) setInvitations(invites)
 
-      // Load active matches
       const { data: matches } = await supabase
         .from('matches')
         .select('*')
@@ -66,7 +65,6 @@ export function DuelScreen() {
 
     loadData()
 
-    // Real-time subscriptions
     const inviteChannel = supabase
       .channel('invitations')
       .on('postgres_changes', {
@@ -97,7 +95,6 @@ export function DuelScreen() {
     setSending(true)
     setError(null)
 
-    // Find user by username
     const { data: profile } = await supabase
       .from('profiles')
       .select('id')
@@ -129,7 +126,6 @@ export function DuelScreen() {
   const acceptInvite = async (invite: Invitation) => {
     if (!user) return
 
-    // Create match
     const team1 = getTeamById(invite.team1_id)
     const { error: matchError } = await supabase
       .from('matches')
@@ -143,13 +139,24 @@ export function DuelScreen() {
       })
 
     if (!matchError) {
-      // Delete invitation
       await supabase.from('invitations').delete().eq('id', invite.id)
     }
   }
 
   const declineInvite = async (invite: Invitation) => {
     await supabase.from('invitations').delete().eq('id', invite.id)
+  }
+
+  const quitMatch = async () => {
+    if (!confirmQuit) return
+
+    await supabase
+      .from('matches')
+      .update({ status: 'abandoned' })
+      .eq('id', confirmQuit.id)
+
+    setActiveMatches(prev => prev.filter(m => m.id !== confirmQuit.id))
+    setConfirmQuit(null)
   }
 
   const openMatch = (match: ActiveMatch) => {
@@ -228,19 +235,29 @@ export function DuelScreen() {
           {activeMatches.map(match => {
             const isMyTurn = match.current_turn_id === user?.id
             return (
-              <div key={match.id} className={styles.matchItem} onClick={() => openMatch(match)}>
-                <span className={styles.matchTeams}>
-                  {match.team1_abbr} vs {match.team2_abbr}
-                </span>
-                <span className={`${styles.turnBadge} ${isMyTurn ? styles.myTurn : ''}`}>
-                  {isMyTurn ? 'YOUR TURN' : 'WAITING'}
-                </span>
+              <div key={match.id} className={styles.matchItem}>
+                <div className={styles.matchInfo} onClick={() => openMatch(match)}>
+                  <span className={styles.matchTeams}>
+                    {match.team1_abbr} vs {match.team2_abbr}
+                  </span>
+                  <span className={`${styles.turnBadge} ${isMyTurn ? styles.myTurn : ''}`}>
+                    {isMyTurn ? 'YOUR TURN' : 'WAITING'}
+                  </span>
+                </div>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={(e) => { e.stopPropagation(); setConfirmQuit(match) }}
+                >
+                  Quit
+                </Button>
               </div>
             )
           })}
         </section>
       </div>
 
+      {/* Team Selection Modal */}
       <Modal
         open={showTeamSelect}
         onClose={() => setShowTeamSelect(false)}
@@ -250,6 +267,28 @@ export function DuelScreen() {
           selectedId={inviteTeamId}
           onSelect={(id) => { setInviteTeamId(id); setShowTeamSelect(false) }}
         />
+      </Modal>
+
+      {/* Quit Confirmation Modal */}
+      <Modal
+        open={confirmQuit !== null}
+        onClose={() => setConfirmQuit(null)}
+        title="Quit Match?"
+      >
+        <div className={styles.confirmContent}>
+          <p>
+            Are you sure you want to quit <strong>{confirmQuit?.team1_abbr} vs {confirmQuit?.team2_abbr}</strong>?
+          </p>
+          <p className={styles.confirmWarning}>This will end the match for both players. This action cannot be undone.</p>
+          <div className={styles.confirmActions}>
+            <Button variant="ghost" onClick={() => setConfirmQuit(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={quitMatch}>
+              Quit Match
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   )
