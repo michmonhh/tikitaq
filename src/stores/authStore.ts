@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { User, Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseConfigured } from '../lib/supabase'
 
 interface AuthStore {
   user: User | null
@@ -21,67 +21,87 @@ export const useAuthStore = create<AuthStore>((set) => ({
   username: null,
 
   initialize: async () => {
-    const { data } = await supabase.auth.getSession()
-    const session = data.session
-    const user = session?.user ?? null
-
-    let username: string | null = null
-    if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', user.id)
-        .single()
-      username = profile?.username ?? null
+    if (!supabaseConfigured) {
+      set({ loading: false })
+      return
     }
 
-    set({ user, session, loading: false, username })
+    try {
+      const { data } = await supabase.auth.getSession()
+      const session = data.session
+      const user = session?.user ?? null
 
-    // Listen for auth changes
-    supabase.auth.onAuthStateChange((_event, session) => {
-      set({ user: session?.user ?? null, session })
-    })
+      let username: string | null = null
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user.id)
+          .single()
+        username = profile?.username ?? null
+      }
+
+      set({ user, session, loading: false, username })
+
+      supabase.auth.onAuthStateChange((_event, session) => {
+        set({ user: session?.user ?? null, session })
+      })
+    } catch (err) {
+      console.error('Auth initialization failed:', err)
+      set({ loading: false })
+    }
   },
 
   signIn: async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) return error.message
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) return error.message
 
-    const { data } = await supabase.auth.getSession()
-    const user = data.session?.user ?? null
+      const { data } = await supabase.auth.getSession()
+      const user = data.session?.user ?? null
 
-    let username: string | null = null
-    if (user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', user.id)
-        .single()
-      username = profile?.username ?? null
+      let username: string | null = null
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user.id)
+          .single()
+        username = profile?.username ?? null
+      }
+
+      set({ user, session: data.session, username })
+      return null
+    } catch {
+      return 'Connection failed. Please try again.'
     }
-
-    set({ user, session: data.session, username })
-    return null
   },
 
   signUp: async (email, password, username) => {
-    const { data, error } = await supabase.auth.signUp({ email, password })
-    if (error) return error.message
-    if (!data.user) return 'Registration failed'
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password })
+      if (error) return error.message
+      if (!data.user) return 'Registration failed'
 
-    // Create profile
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({ id: data.user.id, username })
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({ id: data.user.id, username })
 
-    if (profileError) return profileError.message
+      if (profileError) return profileError.message
 
-    set({ user: data.user, session: data.session, username })
-    return null
+      set({ user: data.user, session: data.session, username })
+      return null
+    } catch {
+      return 'Connection failed. Please try again.'
+    }
   },
 
   signOut: async () => {
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } catch {
+      // Ignore sign-out errors
+    }
     set({ user: null, session: null, username: null })
   },
 }))
