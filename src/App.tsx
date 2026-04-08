@@ -8,8 +8,7 @@ import { DuelScreen } from './screens/DuelScreen'
 import { AuthScreen } from './screens/AuthScreen'
 import { MatchScreen } from './screens/MatchScreen'
 
-// Screens that don't require authentication
-const PUBLIC_SCREENS = new Set(['intro', 'auth'])
+const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
 
 export default function App() {
   const screen = useUIStore(s => s.screen)
@@ -20,18 +19,7 @@ export default function App() {
     initialize()
   }, [initialize])
 
-  // Auth gate: redirect to auth screen if not logged in
-  // Localhost bypass for development
-  const isLocalhost = window.location.hostname === 'localhost'
-  const needsAuth = !PUBLIC_SCREENS.has(screen) && !user && !isLocalhost
-
-  useEffect(() => {
-    if (needsAuth) {
-      navigate('auth')
-    }
-  }, [needsAuth, navigate])
-
-  // After successful login, redirect to main menu
+  // After successful login, go to main menu
   useEffect(() => {
     if (user && screen === 'auth') {
       navigate('main-menu')
@@ -46,8 +34,8 @@ export default function App() {
     )
   }
 
-  // Force auth screen if needed
-  if (needsAuth) {
+  // Auth gate: require login for everything unless on localhost
+  if (!user && !isLocalhost) {
     return <AuthScreen />
   }
 
