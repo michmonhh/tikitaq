@@ -209,4 +209,8 @@ export interface SerializedMatchState {
   ballOwnerChangedThisTurn: boolean
   mustPass: boolean
   lastSetPiece: GamePhase | null
+  tackleAttemptedThisTurn: boolean
+  matchStats: { team1: TeamMatchStats; team2: TeamMatchStats }
+  ticker: TickerEntry[]
+  totalTurns: { team1: number; team2: number }
 }

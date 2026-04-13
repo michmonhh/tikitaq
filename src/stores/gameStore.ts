@@ -132,6 +132,8 @@ interface GameStore {
 
   // For multiplayer sync
   setState: (state: GameState) => void
+  setLocalTeam: (team: TeamSide) => void
+  setDuel: (isDuel: boolean) => void
   reset: () => void
 }
 
@@ -1477,6 +1479,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   setState: (state) => set({ state }),
+  setLocalTeam: (team) => set({ localTeam: team }),
+  setDuel: (isDuel) => set({ isDuel }),
 
   reset: () => set({
     state: null,

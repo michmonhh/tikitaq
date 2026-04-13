@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import type { GameState, SerializedMatchState } from '../engine/types'
 import { createFormation } from '../engine/formation'
-import { createInitialGameState } from '../engine/turn'
+import { createInitialGameState, emptyMatchStats } from '../engine/turn'
 
 interface MatchDetails {
   id: string
@@ -65,10 +65,7 @@ export function useMatchSync(matchId: string | undefined, userId: string | undef
       // Parse game state or create initial
       if (data.game_state) {
         const gs = data.game_state as SerializedMatchState
-        setState({
-          ...gs,
-          lastEvent: null,
-        })
+        setState(deserializeState(gs))
       } else {
         const players = createFormation()
         const initial = createInitialGameState(players)
@@ -106,10 +103,7 @@ export function useMatchSync(matchId: string | undefined, userId: string | undef
 
           if (updated.game_state) {
             const gs = updated.game_state as SerializedMatchState
-            setState({
-              ...gs,
-              lastEvent: null,
-            })
+            setState(deserializeState(gs))
           }
         }
       )
@@ -132,15 +126,16 @@ export function useMatchSync(matchId: string | undefined, userId: string | undef
       ? matchDetails.player2_id
       : matchDetails.player1_id
 
-    // Serialize game state (strip non-serializable fields)
+    // Serialize game state (strip non-serializable fields, reset turn-specific flags)
     const serialized: SerializedMatchState = {
       players: newState.players.map(p => ({
         ...p,
-        origin: { ...p.position }, // Reset origin for next turn
+        origin: { ...p.position },
         hasActed: false,
         hasMoved: false,
+        hasPassed: false,
         hasReceivedPass: false,
-        tackleLocked: p.tackleLocked ?? false,
+        tackleLocked: p.tackleLocked,
       })),
       ball: newState.ball,
       score: newState.score,
@@ -152,6 +147,10 @@ export function useMatchSync(matchId: string | undefined, userId: string | undef
       ballOwnerChangedThisTurn: false,
       mustPass: false,
       lastSetPiece: null,
+      tackleAttemptedThisTurn: false,
+      matchStats: newState.matchStats,
+      ticker: newState.ticker,
+      totalTurns: newState.totalTurns,
     }
 
     const { error: updateError } = await supabase
@@ -171,4 +170,23 @@ export function useMatchSync(matchId: string | undefined, userId: string | undef
   }, [matchId, userId, matchDetails])
 
   return { state, matchDetails, loading, error, submitMove, isSubmitting }
+}
+
+/** Convert SerializedMatchState → full GameState with defaults for missing fields. */
+function deserializeState(gs: SerializedMatchState): GameState {
+  return {
+    ...gs,
+    lastEvent: null,
+    // Backwards compat: fill in fields that older serialized states may lack
+    tackleAttemptedThisTurn: gs.tackleAttemptedThisTurn ?? false,
+    matchStats: gs.matchStats ?? { team1: emptyMatchStats(), team2: emptyMatchStats() },
+    ticker: gs.ticker ?? [],
+    totalTurns: gs.totalTurns ?? { team1: 0, team2: 0 },
+    // Ensure player fields exist
+    players: gs.players.map(p => ({
+      ...p,
+      tackleLocked: p.tackleLocked ?? false,
+      hasPassed: p.hasPassed ?? false,
+    })),
+  }
 }

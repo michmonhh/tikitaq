@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { useGameStore } from '../stores/gameStore'
+import { useAuthStore } from '../stores/authStore'
 import { repositionForSetPiece } from '../engine/ai/setPiece'
 import type { TeamSide } from '../engine/types'
 import { useUIStore } from '../stores/uiStore'
+import { useMatchSync } from '../hooks/useMatchSync'
 import { useGameLoop } from '../hooks/useGameLoop'
 import { GameSidebar } from '../components/GameSidebar'
 import { Button } from '../components/Button'
@@ -14,17 +16,42 @@ export function MatchScreen() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const { matchConfig } = useUIStore()
-  const { initGame, endCurrentTurn, confirmKickoff, executeAIAnimated, reset, state, isVsAI, aiRunning, penaltyState, confirmPenaltyDefense } = useGameStore()
+  const { initGame, endCurrentTurn, confirmKickoff, executeAIAnimated, reset, state, isVsAI, aiRunning, penaltyState, confirmPenaltyDefense, setLocalTeam, setDuel } = useGameStore()
   const goBack = useUIStore(s => s.goBack)
+  const userId = useAuthStore(s => s.user?.id)
 
   const team1 = matchConfig ? getTeamById(matchConfig.team1Id) : null
   const team2 = matchConfig ? getTeamById(matchConfig.team2Id) : null
 
+  // Duel match sync
+  const duelSync = useMatchSync(
+    matchConfig?.isDuel ? matchConfig.matchId : undefined,
+    userId
+  )
+
   useEffect(() => {
     if (!matchConfig || !team1 || !team2) return
     initGame(matchConfig.team1Id, matchConfig.team2Id, matchConfig.isVsAI)
+
+    // Duel: determine which team this player controls
+    if (matchConfig.isDuel) {
+      setDuel(true)
+      // player1_id always plays Team 1, player2_id plays Team 2
+      if (duelSync.matchDetails && userId) {
+        const myTeam: TeamSide = userId === duelSync.matchDetails.player1_id ? 1 : 2
+        setLocalTeam(myTeam)
+      }
+    }
+
     return () => reset()
   }, [matchConfig, team1, team2, initGame, reset])
+
+  // Update localTeam when matchDetails arrive (may load after initGame)
+  useEffect(() => {
+    if (!matchConfig?.isDuel || !duelSync.matchDetails || !userId) return
+    const myTeam: TeamSide = userId === duelSync.matchDetails.player1_id ? 1 : 2
+    setLocalTeam(myTeam)
+  }, [duelSync.matchDetails, userId, matchConfig?.isDuel, setLocalTeam])
 
   const team1Color = matchConfig ? getEffectiveColor(matchConfig.team1Id) : '#eada1e'
   const team2Color = matchConfig ? getEffectiveColor(matchConfig.team2Id) : '#e32221'
