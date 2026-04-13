@@ -1,0 +1,171 @@
+/* TEAM EDITOR STYLES */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  max-height: 70vh;
+}
+
+.teamSelect {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.select {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 600;
+  transition: border-color var(--transition-fast);
+}
+.select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.colorPicker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.colorLabel {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.colorInput {
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: none;
+  padding: 0;
+  transition: border-color var(--transition-fast);
+}
+.colorInput:hover {
+  border-color: var(--border-light);
+}
+.colorInput::-webkit-color-swatch-wrapper { padding: 2px; }
+.colorInput::-webkit-color-swatch { border-radius: 2px; border: none; }
+
+.playerList {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 50vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.headerRow {
+  display: flex;
+  gap: 2px;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.headerRow span {
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.playerRow {
+  display: flex;
+  gap: 2px;
+  padding: 2px var(--space-sm);
+  border-bottom: 1px solid rgba(0, 255, 106, 0.03);
+  transition: background var(--transition-fast);
+}
+.playerRow:hover {
+  background: rgba(0, 255, 106, 0.03);
+}
+
+.colPos {
+  width: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.colName {
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.colStat {
+  width: 36px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.nameInput {
+  width: 90px;
+  flex-shrink: 0;
+  padding: 2px 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  transition: border-color var(--transition-fast);
+}
+.nameInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.statInput {
+  width: 36px;
+  flex-shrink: 0;
+  padding: 2px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-align: center;
+  -moz-appearance: textfield;
+  transition: border-color var(--transition-fast);
+}
+.statInput::-webkit-outer-spin-button,
+.statInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.statInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+}

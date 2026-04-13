@@ -1,5 +1,8 @@
 import type { PlayerData, GameState, MoveAction, GameEvent } from './types'
-import { distance, getMovementRadius, getTackleRadius, clampToPitch, clampToRadius } from './geometry'
+import { name } from './playerName'
+import { getConfidenceModifier } from './confidence'
+import * as T from '../data/tickerTexts'
+import { distance, getMovementRadius, getTackleRadius, clampToPitch, clampToRadius, pointToSegmentDistance } from './geometry'
 
 export interface MoveResult {
   updatedPlayer: PlayerData
@@ -87,6 +90,42 @@ export function applyMove(
     }
   }
 
+  // Ballträger dribbelt durch den defensiven Radius eines/mehrerer Gegner
+  if (!tackle && state.ball.ownerId === player.id) {
+    // Alle Gegner sammeln, deren Radius der Laufweg kreuzt
+    const threats: { opp: PlayerData; segDist: number; winChance: number }[] = []
+
+    for (const opp of opponents) {
+      const oppRadius = getTackleRadius(opp)
+      const segDist = pointToSegmentDistance(opp.position, player.origin, target)
+      if (segDist <= oppRadius) {
+        threats.push({
+          opp,
+          segDist,
+          winChance: calculateTackleWinChance(opp, updatedPlayer),
+        })
+      }
+    }
+
+    if (threats.length > 0) {
+      // Erster Gegner entlang des Pfads → ihm wird der Zweikampf zugeschrieben (Foul/Karte)
+      threats.sort((a, b) => a.segDist - b.segDist)
+      const firstThreat = threats[0]
+
+      // Kumulierte Zweikampfwahrscheinlichkeit: 1 - ∏(1 - winChance_i)
+      // 2 Gegner à 40% → 64%, 3 Gegner à 40% → 78%
+      let survivalChance = 1
+      for (const t of threats) survivalChance *= (1 - t.winChance)
+      const compoundWinProb = Math.min(0.95, 1 - survivalChance)
+
+      tackle = {
+        defender: firstThreat.opp,
+        attacker: updatedPlayer,
+        winProbability: compoundWinProb,
+      }
+    }
+  }
+
   return {
     updatedPlayer,
     ballPickedUp,
@@ -95,16 +134,59 @@ export function applyMove(
       type: 'move',
       playerId: player.id,
       position: target,
-      message: `${player.positionLabel} moves`,
+      message: T.tickerMove(name(player)),
     },
   }
 }
 
 /**
  * Calculate probability that the tackler wins the ball.
+ *
+ * Carrier skill = 70% dribbling + 30% ball shielding (gute Dribbler dominieren)
+ * Tackler skill = tackling
+ * Base 45% (leichter Vorteil Ballführer), verschoben um 0.7% pro Stat-Punkt Differenz
+ * Confidence beider Spieler + Fitness des Ballführers fließen ein.
+ *
+ * Beispiel: Elite-Dribbler (95/80) vs. Durchschnittsverteidiger (70):
+ *   carrierSkill=90.5, diff=-20.5 → base 0.307 → Dribbler gewinnt ~70%
  */
-function calculateTackleWinChance(tackler: PlayerData, carrier: PlayerData): number {
-  const diff = tackler.stats.tackling - carrier.stats.ballShielding
-  const chance = 0.5 + diff * 0.005
-  return Math.max(0.1, Math.min(0.9, chance))
+export function calculateTackleWinChance(tackler: PlayerData, carrier: PlayerData): number {
+  const carrierSkill = carrier.stats.dribbling * 0.7 + carrier.stats.ballShielding * 0.3
+  const diff = tackler.stats.tackling - carrierSkill
+
+  // Base 45% (leichter Carrier-Vorteil), 0.7% pro Stat-Punkt Differenz
+  let chance = 0.45 + diff * 0.007
+
+  // Confidence: hohe Carrier-Confidence senkt Risiko, hohe Tackler-Confidence erhöht es
+  chance *= getConfidenceModifier(tackler) / getConfidenceModifier(carrier)
+
+  // Fitness: müder Ballführer ist leichter zu stoppen
+  const carrierFitness = 0.7 + (carrier.fitness / 100) * 0.3 // 0.7–1.0
+  chance /= carrierFitness
+
+  return Math.max(0.10, Math.min(0.90, chance))
+}
+
+/**
+ * Calculate dribble risk for a ball carrier moving from `from` to `to`.
+ * Returns 0 if the path doesn't cross any opponent's defensive radius,
+ * otherwise the compounded tackle probability across ALL opponents in the path.
+ * Formula: risk = 1 - ∏(1 - winChance_i)
+ * E.g. 2 opponents at 40% each → 1 - 0.6 × 0.6 = 64%
+ */
+export function calculateDribbleRisk(
+  carrier: PlayerData,
+  from: Position,
+  to: Position,
+  opponents: PlayerData[],
+): number {
+  let survivalChance = 1
+  for (const opp of opponents) {
+    const oppRadius = getTackleRadius(opp)
+    const segDist = pointToSegmentDistance(opp.position, from, to)
+    if (segDist <= oppRadius) {
+      survivalChance *= (1 - calculateTackleWinChance(opp, carrier))
+    }
+  }
+  return survivalChance < 1 ? Math.min(0.95, 1 - survivalChance) : 0
 }

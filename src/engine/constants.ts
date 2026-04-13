@@ -52,13 +52,13 @@ export const MOVEMENT = {
 export const PASSING = {
   BASE_RADIUS: 60,      // Base pass radius (% of pitch)
   MIN_FACTOR: 0.5,
-  STAT_WEIGHT: 0.01,    // longPassing stat weight
+  STAT_WEIGHT: 0.01,    // highPassing stat weight
   RECEIVE_RADIUS: 3,    // How close ball must land to receiver
 } as const
 
 // --- Interception ---
 export const INTERCEPTION = {
-  GOALKEEPER_RADIUS: 12, // TW intercept radius
+  GOALKEEPER_RADIUS: 3,  // TW save radius (must be in the shot line)
   DEFENDER_RADIUS: 6,    // IV, LV, RV
   MIDFIELDER_RADIUS: 5,  // ZDM, LM, RM, OM
   FORWARD_RADIUS: 4,     // ST
@@ -102,10 +102,11 @@ export const PLAYER_DEFAULTS: Record<string, number> = {
   pacing: 70,
   finishing: 70,
   shortPassing: 70,
-  longPassing: 70,
+  highPassing: 70,
   tackling: 70,
   defensiveRadius: 70,
   ballShielding: 70,
+  dribbling: 70,
   quality: 70,
 } as const
 

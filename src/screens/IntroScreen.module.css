@@ -20,39 +20,58 @@
   width: 120px;
   height: 120px;
   animation: float 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 20px var(--accent-glow));
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+  0%, 100% { transform: translateY(0); filter: drop-shadow(0 0 20px var(--accent-glow)); }
+  50% { transform: translateY(-10px); filter: drop-shadow(0 0 30px var(--accent-glow-strong)); }
 }
 
 .title {
   font-size: var(--text-4xl);
   font-weight: 900;
-  letter-spacing: 0.12em;
-  background: linear-gradient(135deg, var(--accent), var(--team1));
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--accent) 0%, #88ffbb 40%, var(--accent) 80%);
+  background-size: 200% auto;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  animation: shimmerText 4s linear infinite;
+}
+
+@keyframes shimmerText {
+  0% { background-position: 0% center; }
+  100% { background-position: 200% center; }
 }
 
 .subtitle {
-  font-size: var(--text-lg);
-  color: var(--text-secondary);
-  font-weight: 400;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
 }
 
 .playBtn {
   margin-top: var(--space-xl);
-  min-width: 200px;
-  font-size: var(--text-xl);
-  letter-spacing: 0.1em;
+  min-width: 220px;
+  font-size: var(--text-lg);
+  letter-spacing: 0.12em;
 }
 
 .bg {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at 50% 80%, rgba(0, 200, 83, 0.08) 0%, transparent 60%),
-              radial-gradient(ellipse at 20% 20%, rgba(30, 107, 53, 0.1) 0%, transparent 50%);
+  background:
+    radial-gradient(ellipse at 50% 80%, rgba(0, 255, 106, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 20% 20%, rgba(0, 255, 106, 0.03) 0%, transparent 40%),
+    radial-gradient(ellipse at 80% 30%, rgba(0, 255, 106, 0.02) 0%, transparent 40%);
+  animation: bgPulse 6s ease-in-out infinite;
+}
+
+@keyframes bgPulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
 }

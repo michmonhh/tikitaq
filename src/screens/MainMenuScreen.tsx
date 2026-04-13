@@ -1,11 +1,14 @@
+import { useState } from 'react'
 import { useUIStore } from '../stores/uiStore'
 import { useAuthStore } from '../stores/authStore'
 import { Button } from '../components/Button'
+import { TeamEditor } from '../components/TeamEditor'
 import styles from './MainMenuScreen.module.css'
 
 export function MainMenuScreen() {
   const navigate = useUIStore(s => s.navigate)
   const { user, username, signOut } = useAuthStore()
+  const [showEditor, setShowEditor] = useState(false)
 
   const menuItems = [
     { label: 'QUICK GAME', screen: 'quick-game' as const, description: 'Play vs AI' },
@@ -38,6 +41,13 @@ export function MainMenuScreen() {
           </button>
         ))}
       </nav>
+
+      {/* Editor button — remove this block to remove the editor */}
+      <button className={styles.editorBtn} onClick={() => setShowEditor(true)}>
+        Edit Teams
+      </button>
+      <TeamEditor open={showEditor} onClose={() => setShowEditor(false)} />
+      {/* End editor block */}
 
       {user && (
         <div className={styles.userBar}>

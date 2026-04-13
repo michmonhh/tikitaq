@@ -11,7 +11,7 @@ export interface PlayerStats {
   pacing: number
   finishing: number
   shortPassing: number
-  longPassing: number
+  highPassing: number
   tackling: number
   defensiveRadius: number
   ballShielding: number

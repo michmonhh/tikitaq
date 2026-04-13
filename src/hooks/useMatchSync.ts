@@ -140,6 +140,7 @@ export function useMatchSync(matchId: string | undefined, userId: string | undef
         hasActed: false,
         hasMoved: false,
         hasReceivedPass: false,
+        tackleLocked: p.tackleLocked ?? false,
       })),
       ball: newState.ball,
       score: newState.score,
@@ -147,8 +148,10 @@ export function useMatchSync(matchId: string | undefined, userId: string | undef
       gameTime: newState.gameTime,
       half: newState.half,
       phase: newState.phase,
-      passUsedThisTurn: false,
+      passesThisTurn: 0,
       ballOwnerChangedThisTurn: false,
+      mustPass: false,
+      lastSetPiece: null,
     }
 
     const { error: updateError } = await supabase

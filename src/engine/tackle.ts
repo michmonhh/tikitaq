@@ -1,46 +1,160 @@
-import type { PlayerData, GameEvent } from './types'
+import type { PlayerData, GameEvent, TeamSide } from './types'
 import type { TackleEncounter } from './movement'
+import { name } from './playerName'
+import { getConfidenceModifier } from './confidence'
+import { PITCH } from './constants'
+import * as T from '../data/tickerTexts'
 
 export interface TackleResult {
-  won: boolean
+  outcome: 'won' | 'lost' | 'foul'
+  inPenaltyArea: boolean   // Foul im Strafraum → Elfmeter
   winner: PlayerData
   loser: PlayerData
+  card?: 'yellow' | 'red' | null
   event: GameEvent
 }
 
 /**
- * Resolve a tackle encounter. The defender has a probability-based chance
- * of winning the ball from the attacker.
+ * Prüft ob eine Position im Strafraum eines Teams liegt.
+ * Der Strafraum des verteidigenden Teams ist relevant für Elfmeter.
+ */
+function isInDefenderPenaltyArea(attackerPos: { x: number; y: number }, defenderTeam: TeamSide): boolean {
+  if (attackerPos.x < PITCH.PENALTY_AREA_LEFT || attackerPos.x > PITCH.PENALTY_AREA_RIGHT) return false
+  // Team 1 verteidigt unten (y=100), Team 2 verteidigt oben (y=0)
+  if (defenderTeam === 1) return attackerPos.y >= (100 - PITCH.PENALTY_AREA_DEPTH)
+  return attackerPos.y <= PITCH.PENALTY_AREA_DEPTH
+}
+
+/**
+ * Resolve a tackle encounter with three possible outcomes:
+ * - Won: defender cleanly takes the ball
+ * - Lost: attacker shields and keeps possession
+ * - Foul: defender commits a foul (determined by aggression/quality/confidence)
+ *
+ * Foul probability factors:
+ * - High tackling + high quality → clean tackles, fewer fouls
+ * - Low tackling + high aggression → more fouls
+ * - Low confidence → panicky, reckless tackles
+ * - Low fitness → sloppy challenges
+ * - Im Strafraum: +50% höhere Foulwahrscheinlichkeit (hektische Situation)
  */
 export function resolveTackle(encounter: TackleEncounter): TackleResult {
+  const { defender, attacker, winProbability } = encounter
+
+  // Prüfe ob der Zweikampf im Strafraum des Verteidigers stattfindet
+  const inPenaltyArea = isInDefenderPenaltyArea(attacker.position, defender.team)
+
+  // Calculate foul probability — höher im Strafraum
+  let foulChance = calculateFoulChance(defender, attacker)
+  if (inPenaltyArea) {
+    foulChance *= 1.5  // 50% höhere Foulrate im 16er
+    foulChance = Math.min(0.45, foulChance)
+  }
+
   const roll = Math.random()
-  const won = roll < encounter.winProbability
+
+  if (roll < foulChance) {
+    // FOUL committed by the defender
+    const card = determineCard(defender, foulChance)
+    const cardSuffix = card === 'red' ? ' RED CARD!' : card === 'yellow' ? ' Yellow card.' : ''
+    const penaltySuffix = inPenaltyArea ? ' Elfmeter!' : ''
+
+    return {
+      outcome: 'foul',
+      inPenaltyArea,
+      winner: attacker,  // Fouled player "wins" (gets free kick / penalty)
+      loser: defender,   // Fouler
+      card,
+      event: {
+        type: inPenaltyArea ? 'penalty' : (card === 'red' ? 'red_card' : card === 'yellow' ? 'yellow_card' : 'foul'),
+        playerId: defender.id,
+        targetId: attacker.id,
+        position: attacker.position,
+        message: `Foul by ${name(defender)} on ${name(attacker)}!${cardSuffix}${penaltySuffix}`,
+      },
+    }
+  }
+
+  // No foul — resolve normally
+  const tackleRoll = Math.random()
+  const won = tackleRoll < winProbability
 
   if (won) {
     return {
-      won: true,
-      winner: encounter.defender,
-      loser: encounter.attacker,
+      outcome: 'won',
+      inPenaltyArea: false,
+      winner: defender,
+      loser: attacker,
+      card: null,
       event: {
         type: 'tackle_won',
-        playerId: encounter.defender.id,
-        targetId: encounter.attacker.id,
-        position: encounter.defender.position,
-        message: `Tackle won by ${encounter.defender.positionLabel}!`,
+        playerId: defender.id,
+        targetId: attacker.id,
+        position: defender.position,
+        message: T.tickerTackleWon(name(defender), name(attacker)),
       },
     }
   }
 
   return {
-    won: false,
-    winner: encounter.attacker,
-    loser: encounter.defender,
+    outcome: 'lost',
+    inPenaltyArea: false,
+    winner: attacker,
+    loser: defender,
+    card: null,
     event: {
       type: 'tackle_lost',
-      playerId: encounter.defender.id,
-      targetId: encounter.attacker.id,
-      position: encounter.attacker.position,
-      message: `${encounter.attacker.positionLabel} shields the ball!`,
+      playerId: defender.id,
+      targetId: attacker.id,
+      position: attacker.position,
+      message: T.tickerTackleLost(name(attacker), name(defender)),
     },
   }
+}
+
+/**
+ * Calculate the probability that a tackle results in a foul.
+ * Range: ~5% (clean, skilled defender) to ~30% (reckless, unskilled).
+ */
+function calculateFoulChance(defender: PlayerData, attacker: PlayerData): number {
+  // Base foul rate
+  let foulRate = 0.12
+
+  // Low tackling skill → more fouls
+  foulRate += (100 - defender.stats.tackling) * 0.001
+
+  // Low quality → more clumsy
+  foulRate += (100 - defender.stats.quality) * 0.0005
+
+  // Low confidence → panicky, reckless
+  const confMod = getConfidenceModifier(defender)
+  if (confMod < 1.0) foulRate += (1.0 - confMod) * 0.1
+
+  // Low fitness → sloppy
+  if (defender.fitness < 50) {
+    foulRate += (50 - defender.fitness) * 0.002
+  }
+
+  // High dribbling of attacker makes it harder to tackle cleanly
+  foulRate += (attacker.stats.dribbling / 100) * 0.05
+
+  // Clamp
+  return Math.max(0.03, Math.min(0.35, foulRate))
+}
+
+/**
+ * Determine if a foul results in a card.
+ * Higher foul chance (reckless) → more likely to get carded.
+ */
+function determineCard(defender: PlayerData, foulChance: number): 'yellow' | 'red' | null {
+  const cardRoll = Math.random()
+
+  // Red card: very rare, only for extremely reckless fouls
+  if (foulChance > 0.25 && cardRoll < 0.05) return 'red'
+
+  // Yellow card: proportional to how reckless the foul was
+  const yellowChance = foulChance * 1.5 // ~5-50% chance of yellow given a foul
+  if (cardRoll < yellowChance) return 'yellow'
+
+  return null
 }

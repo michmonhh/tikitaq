@@ -51,13 +51,38 @@ export function clampToPitch(pos: Position): Position {
   }
 }
 
-/** Clamp a position to a circle around an origin. */
+/**
+ * Distance matching the visual circle on the canvas.
+ * The canvas draws circles using toScreenDistance which averages X/Y scale.
+ * Pitch aspect is 2:3 (width:height), so scaleX < scaleY.
+ * This function weights dx/dy to match the on-screen circle.
+ */
+export function visualDistance(a: Position, b: Position): number {
+  // Pitch is rendered at 2:3 aspect, so pitchW/pitchH = 2/3
+  // scaleX = pitchW/100, scaleY = pitchH/100
+  // avgScale = (scaleX + scaleY) / 2
+  // In game coords: screenDist = sqrt((dx*scaleX)^2 + (dy*scaleY)^2)
+  // But the circle uses avgScale for radius, so we need:
+  // sqrt((dx*scaleX/avgScale)^2 + (dy*scaleY/avgScale)^2) <= radius
+  const pitchRatio = 2 / 3 // pitchW / pitchH
+  const avgFactor = (pitchRatio + 1) / 2 // average of pitchRatio and 1
+  const wx = pitchRatio / avgFactor
+  const wy = 1 / avgFactor
+  const dx = (a.x - b.x) * wx
+  const dy = (a.y - b.y) * wy
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
+/**
+ * Clamp a position to a circle around an origin.
+ * Uses visualDistance so the constraint matches the circle drawn on screen.
+ */
 export function clampToRadius(
   pos: Position,
   origin: Position,
   radius: number
 ): Position {
-  const dist = distance(pos, origin)
+  const dist = visualDistance(pos, origin)
   if (dist <= radius) return pos
 
   const ratio = radius / dist
@@ -71,11 +96,13 @@ export function clampToRadius(
 
 export function getMovementRadius(player: PlayerData): number {
   const factor = MOVEMENT.MIN_FACTOR + player.stats.pacing * MOVEMENT.STAT_WEIGHT
-  return MOVEMENT.BASE_RADIUS * factor
+  // Fitness reduces movement: at 100% fitness = full radius, at 5% = 50% radius
+  const fitnessFactor = 0.5 + (player.fitness / 100) * 0.5
+  return MOVEMENT.BASE_RADIUS * factor * fitnessFactor
 }
 
 export function getPassRadius(player: PlayerData): number {
-  const factor = PASSING.MIN_FACTOR + player.stats.longPassing * PASSING.STAT_WEIGHT
+  const factor = PASSING.MIN_FACTOR + player.stats.highPassing * PASSING.STAT_WEIGHT
   return PASSING.BASE_RADIUS * factor
 }
 

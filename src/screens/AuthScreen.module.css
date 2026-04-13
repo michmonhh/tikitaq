@@ -8,18 +8,21 @@
 
 .card {
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
   padding: var(--space-2xl);
   width: 100%;
   max-width: 400px;
+  box-shadow: var(--shadow-lg);
 }
 
 .title {
   font-size: var(--text-2xl);
-  font-weight: 700;
+  font-weight: 800;
   text-align: center;
   margin-bottom: var(--space-xl);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .form {
@@ -36,8 +39,10 @@
 
 .label {
   font-size: var(--text-sm);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .input {
@@ -46,8 +51,10 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
+  font-family: var(--font-sans);
   font-size: var(--text-base);
-  transition: border-color var(--transition-fast);
+  font-weight: 500;
+  transition: all var(--transition-fast);
 }
 
 .input:focus {
@@ -60,6 +67,7 @@
   color: var(--danger);
   font-size: var(--text-sm);
   text-align: center;
+  font-weight: 600;
 }
 
 .toggle {
@@ -68,8 +76,12 @@
   text-align: center;
   margin-top: var(--space-lg);
   font-size: var(--text-sm);
+  font-weight: 600;
   color: var(--text-secondary);
   transition: color var(--transition-fast);
+  cursor: pointer;
+  background: transparent;
+  border: none;
 }
 
 .toggle:hover {

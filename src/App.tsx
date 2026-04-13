@@ -1,5 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { useUIStore } from './stores/uiStore'
+
+const TestMenu = import.meta.env.DEV
+  ? lazy(() => import('./debug/TestMenu').then(m => ({ default: m.TestMenu })))
+  : null
 import { useAuthStore } from './stores/authStore'
 import { IntroScreen } from './screens/IntroScreen'
 import { MainMenuScreen } from './screens/MainMenuScreen'
@@ -39,20 +43,28 @@ export default function App() {
     return <AuthScreen />
   }
 
+  let content: React.ReactNode
   switch (screen) {
     case 'intro':
-      return <IntroScreen />
+      content = <IntroScreen />; break
     case 'auth':
-      return <AuthScreen />
+      content = <AuthScreen />; break
     case 'main-menu':
-      return <MainMenuScreen />
+      content = <MainMenuScreen />; break
     case 'quick-game':
-      return <QuickGameScreen />
+      content = <QuickGameScreen />; break
     case 'duel':
-      return <DuelScreen />
+      content = <DuelScreen />; break
     case 'match':
-      return <MatchScreen />
+      content = <MatchScreen />; break
     default:
-      return <IntroScreen />
+      content = <IntroScreen />
   }
+
+  return (
+    <>
+      {TestMenu && <Suspense>{<TestMenu />}</Suspense>}
+      {content}
+    </>
+  )
 }

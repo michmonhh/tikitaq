@@ -1,5 +1,8 @@
-import type { PlayerData, GameState, ShootAction, GameEvent, TeamSide } from './types'
-import { distance } from './geometry'
+import type { PlayerData, GameState, ShootAction, GameEvent, TeamSide, Position, PenaltyDirection, PenaltyState } from './types'
+import { name } from './playerName'
+import { getConfidenceModifier } from './confidence'
+import * as T from '../data/tickerTexts'
+import { distance, rawDistance, pointToSegmentDistance, getInterceptRadius } from './geometry'
 import { SHOOTING, PITCH } from './constants'
 import { getGoalkeeper } from './formation'
 
@@ -16,17 +19,12 @@ export function isInGoalZone(target: { x: number; y: number }, attackingTeam: Te
   const xOk = target.x >= SHOOTING.GOAL_ZONE_X_LEFT && target.x <= SHOOTING.GOAL_ZONE_X_RIGHT
 
   if (attackingTeam === 1) {
-    // Team 1 attacks top goal (y → 0)
     return xOk && target.y <= SHOOTING.GOAL_ZONE_Y_TOP
   } else {
-    // Team 2 attacks bottom goal (y → 100)
     return xOk && target.y >= SHOOTING.GOAL_ZONE_Y_BOTTOM
   }
 }
 
-/**
- * Get the center of the goal being attacked.
- */
 function getGoalCenter(attackingTeam: TeamSide): { x: number; y: number } {
   return {
     x: PITCH.CENTER_X,
@@ -35,27 +33,103 @@ function getGoalCenter(attackingTeam: TeamSide): { x: number; y: number } {
 }
 
 /**
- * Calculate the probability that the goalkeeper saves the shot.
- * Factors: keeper quality, shooter finishing, distance to goal.
+ * Calculate the distance from a position to the goal in "meters" (game units).
+ * Uses raw distance (no aspect ratio) since we're measuring actual field distance.
+ */
+function distanceToGoal(pos: Position, attackingTeam: TeamSide): number {
+  const goalCenter = getGoalCenter(attackingTeam)
+  return rawDistance(pos, goalCenter)
+}
+
+/**
+ * Prüft ob eine Position im gegnerischen Strafraum liegt.
+ */
+function isInPenaltyArea(pos: Position, attackingTeam: TeamSide): boolean {
+  if (pos.x < PITCH.PENALTY_AREA_LEFT || pos.x > PITCH.PENALTY_AREA_RIGHT) return false
+  if (attackingTeam === 1) return pos.y <= PITCH.PENALTY_AREA_DEPTH
+  return pos.y >= (100 - PITCH.PENALTY_AREA_DEPTH)
+}
+
+/**
+ * Calculate the base chance of the shot being on target (not saved, just accurate).
+ * Distance curve + explicit penalty area bonus:
+ * - < 10 units (inside 6yd box): ~80-92% base
+ * - 10-20 units (penalty area): ~60-80% base
+ * - 20-30 units (edge of box): drops sharply, ~20-50%
+ * - > 30 units (long range): low, ~6-20%
+ * - Inside 16er: +10% flat bonus (belohnt Geduld im Aufbauspiel)
+ */
+export function calculateShotAccuracy(
+  shooter: PlayerData,
+  fromPos: Position,
+  attackingTeam: TeamSide
+): number {
+  const dist = distanceToGoal(fromPos, attackingTeam)
+  const finishing = shooter.stats.finishing / 100 // 0.0 - 1.0
+
+  // Base accuracy from distance (before finishing modifier)
+  let baseAccuracy: number
+  if (dist < 10) {
+    // Very close: 80-92%
+    baseAccuracy = 0.92 - dist * 0.012
+  } else if (dist < 20) {
+    // Penalty area range: 60-80%
+    baseAccuracy = 0.80 - (dist - 10) * 0.02
+  } else if (dist < 30) {
+    // Edge of box / outside: drops sharply 20-50%
+    baseAccuracy = 0.50 - (dist - 20) * 0.03
+  } else {
+    // Long range: low
+    baseAccuracy = Math.max(0.06, 0.20 - (dist - 30) * 0.01)
+  }
+
+  // Bonus für Schüsse aus dem Strafraum: belohnt Geduld und gutes Kombinationsspiel
+  if (isInPenaltyArea(fromPos, attackingTeam)) {
+    baseAccuracy += 0.10
+  }
+
+  // Finishing stat modulates: low finishing reduces, high finishing boosts
+  const accuracy = baseAccuracy * (0.6 + finishing * 0.5) * getConfidenceModifier(shooter)
+  return Math.max(0.05, Math.min(0.95, accuracy))
+}
+
+/**
+ * Check if the keeper is in the shot line.
+ */
+function isKeeperInShotLine(
+  shooter: PlayerData,
+  keeper: PlayerData,
+  goalCenter: { x: number; y: number }
+): boolean {
+  const saveRadius = getInterceptRadius(keeper)
+  const distToLine = pointToSegmentDistance(keeper.position, shooter.position, goalCenter)
+  return distToLine <= saveRadius
+}
+
+/**
+ * Calculate save probability IF the keeper is in the shot line.
  */
 function calculateSaveProbability(
   shooter: PlayerData,
-  keeper: PlayerData | undefined,
+  keeper: PlayerData,
   goalCenter: { x: number; y: number }
 ): number {
-  if (!keeper) return 0 // No keeper = always scores
-
   const keeperBonus = keeper.stats.quality * SHOOTING.KEEPER_QUALITY_WEIGHT
   const shooterBonus = shooter.stats.finishing * SHOOTING.SHOOTER_FINISHING_WEIGHT
   const distFromGoal = distance(shooter.position, goalCenter)
   const distancePenalty = distFromGoal * SHOOTING.DISTANCE_PENALTY
 
-  const saveChance = SHOOTING.BASE_SAVE_CHANCE + keeperBonus - shooterBonus + distancePenalty
-  return Math.max(0.05, Math.min(0.95, saveChance))
+  const distToLine = pointToSegmentDistance(keeper.position, shooter.position, goalCenter)
+  const saveRadius = getInterceptRadius(keeper)
+  const positionBonus = (1 - distToLine / saveRadius) * 0.15
+
+  const saveChance = SHOOTING.BASE_SAVE_CHANCE + keeperBonus - shooterBonus + distancePenalty + positionBonus
+  return Math.max(0.05, Math.min(0.90, saveChance))
 }
 
 /**
  * Execute a shot action.
+ * Two-phase: first check accuracy (is the shot on target?), then check save.
  */
 export function applyShot(
   action: ShootAction,
@@ -67,23 +141,40 @@ export function applyShot(
   const goalCenter = getGoalCenter(attackingTeam)
   const keeper = getGoalkeeper(state.players, defendingTeam)
 
-  const saveProbability = calculateSaveProbability(shooter, keeper, goalCenter)
-  const roll = Math.random()
-
-  if (roll < saveProbability && keeper) {
+  // Phase 1: Is the shot on target?
+  const accuracy = calculateShotAccuracy(shooter, shooter.position, attackingTeam)
+  if (Math.random() > accuracy) {
     return {
       scored: false,
-      savedBy: keeper,
+      savedBy: null,
       event: {
-        type: 'shot_saved',
+        type: 'shot_missed',
         playerId: shooter.id,
-        targetId: keeper.id,
         position: goalCenter,
-        message: `Save! ${keeper.positionLabel} stops ${shooter.positionLabel}`,
+        message: T.tickerMiss(name(shooter)),
       },
     }
   }
 
+  // Phase 2: Shot is on target — can keeper save?
+  if (keeper && isKeeperInShotLine(shooter, keeper, goalCenter)) {
+    const saveProbability = calculateSaveProbability(shooter, keeper, goalCenter)
+    if (Math.random() < saveProbability) {
+      return {
+        scored: false,
+        savedBy: keeper,
+        event: {
+          type: 'shot_saved',
+          playerId: shooter.id,
+          targetId: keeper.id,
+          position: goalCenter,
+          message: T.tickerSave(name(shooter), name(keeper)),
+        },
+      }
+    }
+  }
+
+  // GOAL!
   return {
     scored: true,
     savedBy: null,
@@ -91,7 +182,118 @@ export function applyShot(
       type: 'shot_scored',
       playerId: shooter.id,
       position: goalCenter,
-      message: `GOAL! ${shooter.positionLabel} scores!`,
+      message: T.tickerGoal(name(shooter)),
     },
   }
+}
+
+// ══════════════════════════════════════════
+//  Elfmeter-Auflösung
+// ══════════════════════════════════════════
+
+export interface PenaltyResult {
+  outcome: 'scored' | 'saved' | 'missed'
+  /** Wenn gehalten: Abpraller-Position (Ball wird dort frei abgelegt) */
+  reboundPos: Position | null
+  event: GameEvent
+}
+
+/**
+ * Löst einen Elfmeter auf.
+ *
+ * Regeln:
+ * - 10% Fehlschuss (Ball geht ins Aus → Abstoß)
+ * - Schuss ≠ TW-Richtung → Tor
+ * - Schuss = TW-Richtung → Haltechance basierend auf TW-Qualität
+ *   - Gehalten → Ball prallt ab (frei im Umkreis ~5-8 Einheiten)
+ *   - Nicht gehalten → Tor
+ */
+export function resolvePenalty(
+  penalty: PenaltyState,
+  shooter: PlayerData,
+  keeper: PlayerData,
+): PenaltyResult {
+  const shootDir = penalty.shooterChoice!
+  const keepDir = penalty.keeperChoice!
+  const goalY = penalty.shooterTeam === 1 ? PITCH.GOAL_TOP_Y : PITCH.GOAL_BOTTOM_Y
+  const goalCenter: Position = { x: PITCH.CENTER_X, y: goalY }
+
+  // 10% Fehlschuss — Ball geht drüber/daneben
+  if (Math.random() < 0.10) {
+    return {
+      outcome: 'missed',
+      reboundPos: null,
+      event: {
+        type: 'penalty_missed',
+        playerId: shooter.id,
+        position: goalCenter,
+        message: `${name(shooter)} setzt den Elfmeter neben das Tor!`,
+      },
+    }
+  }
+
+  // Schuss geht in eine andere Richtung als der TW → TOR
+  if (shootDir !== keepDir) {
+    return {
+      outcome: 'scored',
+      reboundPos: null,
+      event: {
+        type: 'penalty_scored',
+        playerId: shooter.id,
+        position: goalCenter,
+        message: `TOR! ${name(shooter)} verwandelt den Elfmeter!`,
+      },
+    }
+  }
+
+  // Schuss = TW-Richtung → Haltechance basierend auf TW-Qualität
+  // TW quality 60 → 40% halten, quality 80 → 55%, quality 95 → 65%
+  const saveChance = 0.20 + (keeper.stats.quality / 100) * 0.50
+  // Finishing des Schützen verringert die Haltechance leicht
+  const adjustedSaveChance = Math.max(0.15, saveChance - (shooter.stats.finishing / 100) * 0.15)
+
+  if (Math.random() < adjustedSaveChance) {
+    // GEHALTEN — Ball prallt ab
+    const reboundAngle = (Math.random() * Math.PI) - (Math.PI / 2) // -90° bis +90°
+    const reboundDist = 5 + Math.random() * 4 // 5-9 Einheiten vom Tor
+    const penaltySpotY = penalty.shooterTeam === 1 ? PITCH.PENALTY_SPOT_TOP_Y : PITCH.PENALTY_SPOT_BOTTOM_Y
+    const toward = penalty.shooterTeam === 1 ? 1 : -1
+    const reboundPos: Position = {
+      x: Math.max(5, Math.min(95, PITCH.CENTER_X + Math.cos(reboundAngle) * reboundDist * 2)),
+      y: Math.max(3, Math.min(97, penaltySpotY + toward * reboundDist)),
+    }
+
+    return {
+      outcome: 'saved',
+      reboundPos,
+      event: {
+        type: 'penalty_saved',
+        playerId: keeper.id,
+        targetId: shooter.id,
+        position: goalCenter,
+        message: `${name(keeper)} hält den Elfmeter von ${name(shooter)}!`,
+      },
+    }
+  }
+
+  // TW in der richtigen Ecke, aber nicht gehalten → TOR
+  return {
+    outcome: 'scored',
+    reboundPos: null,
+    event: {
+      type: 'penalty_scored',
+      playerId: shooter.id,
+      position: goalCenter,
+      message: `TOR! ${name(shooter)} verwandelt den Elfmeter!`,
+    },
+  }
+}
+
+/** KI wählt Elfmeter-Richtung (für Schuss oder TW) */
+export function aiChoosePenaltyDirection(): PenaltyDirection {
+  const r = Math.random()
+  // 40% links, 20% mitte, 40% rechts
+  if (r < 0.4) return 'left'
+  if (r < 0.6) return 'center'
+  return 'right'
 }

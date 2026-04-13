@@ -1,8 +1,9 @@
 import { Camera } from './Camera'
 import { VISUAL } from '../engine/constants'
 import type { PlayerData, TeamSide, GameState } from '../engine/types'
-import { getMovementRadius, getPassRadius, getTackleRadius, getInterceptRadius } from '../engine/geometry'
+import { getMovementRadius, getPassRadius, getTackleRadius, getInterceptRadius, distance } from '../engine/geometry'
 import { getOffsideLine } from '../engine/passing'
+import { calculateTackleWinChance } from '../engine/movement'
 
 export type DragMode = 'move' | 'pass' | null
 
@@ -87,6 +88,88 @@ export class OverlayRenderer {
     ctx.restore()
   }
 
+  /**
+   * Draw a dribbling heatmap showing how likely the player is to beat
+   * each opponent at various positions within movement range.
+   * Green = safe to dribble, Red = high risk of losing the ball.
+   */
+  drawDribblingHeatmap(ctx: CanvasRenderingContext2D, player: PlayerData, opponents: PlayerData[]) {
+    const radius = getMovementRadius(player)
+    const origin = this.camera.toScreen(player.origin.x, player.origin.y)
+    const screenR = this.camera.toScreenDistance(radius)
+
+    // Higher resolution grid for smoother appearance
+    const steps = 22
+    const cellSize = (screenR * 2) / steps
+    const heatmapSize = Math.ceil(screenR * 2) + 2
+
+    // Render heatmap to offscreen canvas for blur
+    const offCanvas = document.createElement('canvas')
+    offCanvas.width = heatmapSize
+    offCanvas.height = heatmapSize
+    const offCtx = offCanvas.getContext('2d')
+    if (!offCtx) return
+
+    const cx = heatmapSize / 2
+    const cy = heatmapSize / 2
+
+    for (let gx = 0; gx < steps; gx++) {
+      for (let gy = 0; gy < steps; gy++) {
+        const lx = -screenR + gx * cellSize + cellSize / 2
+        const ly = -screenR + gy * cellSize + cellSize / 2
+
+        // Inside circle check
+        if (lx * lx + ly * ly > screenR * screenR) continue
+
+        // Game coords for this cell
+        const gamePos = this.camera.toGame(origin.x + lx, origin.y + ly)
+
+        // Engine-konsistente Risiko-Berechnung: kumuliert über alle Gegner
+        let survivalChance = 1
+        for (const opp of opponents) {
+          const oppRadius = getTackleRadius(opp)
+          const dist = distance(gamePos, opp.position)
+          if (dist <= oppRadius) {
+            // Voll im Radius → voller Zweikampf
+            survivalChance *= (1 - calculateTackleWinChance(opp, player))
+          } else if (dist <= oppRadius * 1.5) {
+            // Übergangszone: sanfter Gradient zum Rand
+            const blend = (dist - oppRadius) / (oppRadius * 0.5)
+            const partialRisk = calculateTackleWinChance(opp, player) * (1 - blend)
+            survivalChance *= (1 - partialRisk)
+          }
+        }
+
+        const safety = survivalChance
+        const r = Math.round(255 * (1 - safety))
+        const g = Math.round(255 * safety * 0.7)
+        offCtx.fillStyle = `rgba(${r}, ${g}, 30, 0.45)`
+        offCtx.fillRect(cx + lx - cellSize / 2, cy + ly - cellSize / 2, cellSize, cellSize)
+      }
+    }
+
+    // Draw blurred heatmap onto main canvas, clipped to movement circle
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(origin.x, origin.y, screenR, 0, Math.PI * 2)
+    ctx.clip()
+    ctx.filter = 'blur(6px)'
+    ctx.drawImage(offCanvas, origin.x - cx, origin.y - cy)
+    ctx.filter = 'none'
+    ctx.restore()
+
+    // Movement range border
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(origin.x, origin.y, screenR, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'
+    ctx.lineWidth = 1.5
+    ctx.setLineDash([4, 4])
+    ctx.stroke()
+    ctx.setLineDash([])
+    ctx.restore()
+  }
+
   drawOffsideLine(ctx: CanvasRenderingContext2D, state: GameState) {
     const attackingTeam = state.currentTurn
     const defendingTeam: TeamSide = attackingTeam === 1 ? 2 : 1
@@ -149,7 +232,7 @@ export class OverlayRenderer {
     const pos = this.camera.toScreen(position.x, position.y)
 
     ctx.save()
-    const fontSize = Math.max(12, 16 * this.camera.scale)
+    const fontSize = Math.max(12, 16 * this.camera.baseScale)
     ctx.font = `bold ${fontSize}px system-ui, -apple-system, sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'bottom'

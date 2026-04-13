@@ -25,21 +25,26 @@ export class PitchRenderer {
   }
 
   private drawField(ctx: CanvasRenderingContext2D) {
-    const b = this.camera.bounds
+    // Use toScreen to get the zoomed pitch area
+    const tl = this.camera.toScreen(0, 0)
+    const br = this.camera.toScreen(100, 100)
+    const fieldW = br.x - tl.x
+    const fieldH = br.y - tl.y
+
     // Gradient for depth
-    const grad = ctx.createLinearGradient(b.x, b.y, b.x, b.y + b.height)
+    const grad = ctx.createLinearGradient(tl.x, tl.y, tl.x, tl.y + fieldH)
     grad.addColorStop(0, '#1e6b35')
     grad.addColorStop(0.5, '#2d8a4e')
     grad.addColorStop(1, '#1e6b35')
     ctx.fillStyle = grad
-    ctx.fillRect(b.x, b.y, b.width, b.height)
+    ctx.fillRect(tl.x, tl.y, fieldW, fieldH)
 
     // Mow stripes
     const stripeCount = 12
-    const stripeH = b.height / stripeCount
+    const stripeH = fieldH / stripeCount
     ctx.fillStyle = 'rgba(255, 255, 255, 0.03)'
     for (let i = 0; i < stripeCount; i += 2) {
-      ctx.fillRect(b.x, b.y + i * stripeH, b.width, stripeH)
+      ctx.fillRect(tl.x, tl.y + i * stripeH, fieldW, stripeH)
     }
   }
 

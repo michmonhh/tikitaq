@@ -1,6 +1,10 @@
 import { Camera } from './Camera'
 import { VISUAL } from '../engine/constants'
-import type { BallData } from '../engine/types'
+import type { BallData, PlayerData } from '../engine/types'
+
+// Ball offset from carrier (in game units) — to the right and slightly below
+const BALL_OFFSET_X = 2.5
+const BALL_OFFSET_Y = 1.5
 
 export class BallRenderer {
   private camera: Camera
@@ -9,10 +13,35 @@ export class BallRenderer {
     this.camera = camera
   }
 
-  draw(ctx: CanvasRenderingContext2D, ball: BallData, isDragging: boolean, dragPos?: { x: number; y: number }) {
-    const gamePos = isDragging && dragPos ? dragPos : ball.position
+  /** Get the visual position of the ball (offset from carrier if owned). */
+  getBallDisplayPos(ball: BallData, carrier?: PlayerData | null, carrierDragPos?: { x: number; y: number } | null): { x: number; y: number } {
+    if (carrier) {
+      const base = carrierDragPos ?? carrier.position
+      return { x: base.x + BALL_OFFSET_X, y: base.y + BALL_OFFSET_Y }
+    }
+    return ball.position
+  }
+
+  draw(
+    ctx: CanvasRenderingContext2D,
+    ball: BallData,
+    isDragging: boolean,
+    dragPos?: { x: number; y: number },
+    carrier?: PlayerData | null,
+    carrierDragPos?: { x: number; y: number } | null,
+    ballAnimPos?: { x: number; y: number } | null,
+  ) {
+    let gamePos: { x: number; y: number }
+    if (isDragging && dragPos) {
+      gamePos = dragPos
+    } else if (ballAnimPos) {
+      // Ball ist im Flug (Pass/Schuss-Animation)
+      gamePos = ballAnimPos
+    } else {
+      gamePos = this.getBallDisplayPos(ball, carrier, carrierDragPos)
+    }
     const pos = this.camera.toScreen(gamePos.x, gamePos.y)
-    const r = VISUAL.BALL_RADIUS * this.camera.scale
+    const r = VISUAL.BALL_RADIUS * this.camera.baseScale
 
     ctx.save()
 

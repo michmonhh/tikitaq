@@ -1,8 +1,10 @@
 import { type ButtonHTMLAttributes } from 'react'
 import styles from './Button.module.css'
 
+type ButtonVariant = 'primary' | 'primaryPulse' | 'secondary' | 'ghost' | 'danger' | 'waiting' | 'ready' | 'processing'
+
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  variant?: ButtonVariant
   size?: 'sm' | 'md' | 'lg'
   fullWidth?: boolean
 }

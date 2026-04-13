@@ -17,14 +17,20 @@
 
 .backBtn {
   font-size: var(--text-sm);
-  color: var(--text-secondary);
+  font-weight: 600;
+  color: var(--text-muted);
   transition: color var(--transition-fast);
+  cursor: pointer;
+  background: transparent;
+  border: none;
 }
-.backBtn:hover { color: var(--text-primary); }
+.backBtn:hover { color: var(--accent); }
 
 .title {
   font-size: var(--text-2xl);
-  font-weight: 700;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .matchup {
@@ -45,30 +51,41 @@
   border: 2px solid var(--border);
   border-radius: var(--radius-lg);
   min-width: 160px;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-normal);
+  cursor: pointer;
+  position: relative;
 }
 
 .teamSlot:hover {
-  border-color: var(--tc, var(--border-light));
-  transform: translateY(-2px);
+  border-color: var(--tc, var(--border-active));
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 20px rgba(0, 255, 106, 0.06);
+}
+
+.teamSlot:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .teamLogo {
   width: 64px;
   height: 64px;
   object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
 }
 
 .teamName {
   font-size: var(--text-lg);
-  font-weight: 700;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .teamRole {
   font-size: var(--text-xs);
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
+  font-weight: 700;
 }
 
 .vs {
@@ -76,10 +93,11 @@
   font-weight: 900;
   color: var(--text-muted);
   letter-spacing: 0.05em;
+  text-shadow: 0 0 10px rgba(0, 255, 106, 0.1);
 }
 
 .playBtn {
-  min-width: 240px;
-  font-size: var(--text-xl);
-  letter-spacing: 0.1em;
+  min-width: 260px;
+  font-size: var(--text-lg);
+  letter-spacing: 0.12em;
 }
