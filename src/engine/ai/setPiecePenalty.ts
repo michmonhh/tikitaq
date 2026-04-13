@@ -30,7 +30,8 @@ export function repositionForPenalty(
   // "Away from goal" direction
   const awayDir = shooterTeam === 1 ? 1 : -1
 
-  const teamPlayers = state.players.filter(p => p.team === team)
+  type SetPiecePlayer = { id: string; positionLabel: string; team: TeamSide; position: Position }
+  const teamPlayers: SetPiecePlayer[] = state.players.filter(p => p.team === team)
 
   // Arc slots along penalty area edge
   const arcSlots: Position[] = [
@@ -160,7 +161,7 @@ function positionDefenderPlayer(
   arcSlots: Position[],
   penaltyEdgeY: number,
   awayDir: number,
-  team: 1 | 2,
+  _team: 1 | 2,
   keeperChoice?: PenaltyDirection | null,
 ) {
   // Cover bias: field players emphasize the side the keeper DOESN'T cover

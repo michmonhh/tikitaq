@@ -677,7 +677,7 @@ export function decidePositioning(
 // ══════════════════════════════════════════
 
 function goalkeeperPosition(
-  player: PlayerData,
+  _player: PlayerData,
   state: GameState,
   team: TeamSide,
   plan: TeamPlan | null,

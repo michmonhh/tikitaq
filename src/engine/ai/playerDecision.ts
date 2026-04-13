@@ -177,8 +177,8 @@ function generateOptions(
   carrier: PlayerData,
   state: GameState,
   team: TeamSide,
-  plan: TeamPlan | null,
-  fieldReading: FieldReading | null,
+  _plan: TeamPlan | null,
+  _fieldReading: FieldReading | null,
 ): BallOption[] {
   const options: BallOption[] = []
   const opponents = state.players.filter(p => p.team !== team)
@@ -498,7 +498,7 @@ function evaluateAdvance(
 /** Ball behaupten — weicht vom nächsten Gegner aus */
 function evaluateHold(
   carrier: PlayerData,
-  team: TeamSide,
+  _team: TeamSide,
   opponents: PlayerData[],
 ): BallOption {
   let closestDist = Infinity

@@ -1,9 +1,5 @@
-import { useEffect, lazy, Suspense } from 'react'
+import { useEffect } from 'react'
 import { useUIStore } from './stores/uiStore'
-
-const TestMenu = import.meta.env.DEV
-  ? lazy(() => import('./debug/TestMenu').then(m => ({ default: m.TestMenu })))
-  : null
 import { useAuthStore } from './stores/authStore'
 import { IntroScreen } from './screens/IntroScreen'
 import { MainMenuScreen } from './screens/MainMenuScreen'
@@ -61,10 +57,6 @@ export default function App() {
       content = <IntroScreen />
   }
 
-  return (
-    <>
-      {TestMenu && <Suspense>{<TestMenu />}</Suspense>}
-      {content}
-    </>
-  )
+  return <>{content}</>
+
 }

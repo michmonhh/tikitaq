@@ -407,7 +407,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       // Track stats + ticker
       let trackedPlayers = newPlayers
-      const foulingTeam = tacklerTeam
       if (tackleResult.outcome === 'foul') {
         // Track foul + cards
         const cardStats: Partial<import('../engine/types').TeamMatchStats> = { fouls: 1 }
@@ -616,7 +615,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     let ballOwnerChanged = state.ballOwnerChangedThisTurn
 
     // Mark passer: hasPassed=true, hasActed only if they already moved
-    const passer = state.players.find(p => p.id === passerId)
     newPlayers = newPlayers.map(p => {
       if (p.id !== passerId) return p
       const doneAfterPass = p.hasMoved // Already moved → now fully done

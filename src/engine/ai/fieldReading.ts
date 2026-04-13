@@ -33,8 +33,6 @@ import type { FieldReading } from './types'
  *   4 = ganz rechts  (80–100)
  */
 
-const COL_EDGES = [0, 20, 40, 60, 80, 100]
-
 // Team 1 verteidigt unten (y=100), greift oben an (y=0)
 // → eigenes Tor-Drittel = y 80-100, gegnerisches = y 0-20
 const ROW_EDGES_TEAM1 = [100, 80, 60, 40, 20, 0]  // absteigend
@@ -145,7 +143,7 @@ function calcCentralCongestion(oppGrid: number[][], totalOpponents: number): num
 }
 
 /** Berechnet den Abstand zwischen Gegner-Abwehrlinie und Gegner-Mittelfeldlinie (in %) */
-function calcGapBetweenLines(opponents: PlayerData[], team: TeamSide): number {
+function calcGapBetweenLines(opponents: PlayerData[], _team: TeamSide): number {
   // Gegner-Verteidiger und -Mittelfeldspieler identifizieren
   const defLabels = ['IV', 'LV', 'RV']
   const midLabels = ['ZDM', 'LM', 'RM', 'OM']

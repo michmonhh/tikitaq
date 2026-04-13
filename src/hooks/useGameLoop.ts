@@ -156,7 +156,6 @@ export function useGameLoop(
       const storeSnap = useGameStore.getState()
       const gameState = storeSnap.state
       const drag = storeSnap.drag
-      const eventMessage = storeSnap.eventMessage
       const overlayLabel = storeSnap.overlayLabel
       const overlayColor = storeSnap.overlayColor
 

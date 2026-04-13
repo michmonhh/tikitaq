@@ -1,4 +1,4 @@
-import type { PlayerData, GameState, MoveAction, GameEvent } from './types'
+import type { PlayerData, Position, GameState, MoveAction, GameEvent } from './types'
 import { name } from './playerName'
 import { getConfidenceModifier } from './confidence'
 import * as T from '../data/tickerTexts'

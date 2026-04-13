@@ -146,7 +146,7 @@ function calculateFoulChance(defender: PlayerData, attacker: PlayerData): number
  * Determine if a foul results in a card.
  * Higher foul chance (reckless) → more likely to get carded.
  */
-function determineCard(defender: PlayerData, foulChance: number): 'yellow' | 'red' | null {
+function determineCard(_defender: PlayerData, foulChance: number): 'yellow' | 'red' | null {
   const cardRoll = Math.random()
 
   // Red card: very rare, only for extremely reckless fouls

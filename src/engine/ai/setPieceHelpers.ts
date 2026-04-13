@@ -2,7 +2,7 @@
  * Shared helpers for set-piece positioning.
  */
 
-import type { PlayerData, Position, PlayerAction, TeamSide } from '../types'
+import type { Position, PlayerAction, TeamSide } from '../types'
 import { PITCH } from '../constants'
 
 /** Goal-line y for the team's OWN goal (the end they defend). */
@@ -65,7 +65,7 @@ export function isMidfielder(label: string): boolean {
 }
 
 /** Build a move action for a player. */
-export function moveAction(player: PlayerData, target: Position): PlayerAction {
+export function moveAction(player: { id: string }, target: Position): PlayerAction {
   return { type: 'move', playerId: player.id, target: clamp(target) }
 }
 

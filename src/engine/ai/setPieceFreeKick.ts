@@ -59,7 +59,7 @@ function formWall(
 
 export function positionOffensiveFreekick(
   players: PlayerData[],
-  opponents: PlayerData[],
+  _opponents: PlayerData[],
   team: TeamSide,
   ballPos: Position,
 ): PlayerAction[] {

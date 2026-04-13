@@ -11,7 +11,7 @@ import type {
   DefenseStrategy, AttackStrategy, TransitionBehavior, MatchMemory,
 } from './types'
 import { calculateIdentity, compareStrength, widenConfidenceRange } from './identity'
-import { getWorking, getAvoiding } from './memory'
+import { getAvoiding } from './memory'
 
 // ══════════════════════════════════════════
 //  Gültige Strategie-Kombinationen
@@ -207,7 +207,6 @@ export function reviewStrategy(
   memory: MatchMemory,
 ): { newStrategy: StrategyCombo; tickerMessage: string } | null {
   const stats = team === 1 ? state.matchStats.team1 : state.matchStats.team2
-  const oppStats = team === 1 ? state.matchStats.team2 : state.matchStats.team1
   const score = team === 1 ? state.score : { team1: state.score.team2, team2: state.score.team1 }
 
   // Confidence-Rahmen weiten bei Führung/Rückstand
@@ -217,14 +216,9 @@ export function reviewStrategy(
 
   // Performance-Indikatoren
   const ownShots = stats.shotsOnTarget + stats.shotsOff
-  const oppShots = oppStats.shotsOnTarget + oppStats.shotsOff
-  const totalTurns = state.totalTurns.team1 + state.totalTurns.team2
-  const possession = totalTurns > 0 ? stats.possession / Math.max(1, totalTurns) : 0.5
-  const passAccuracy = stats.passesTotal > 0 ? stats.passesCompleted / stats.passesTotal : 0.5
 
   // Memory-Erkenntnisse
   const avoiding = getAvoiding(memory)
-  const working = getWorking(memory)
 
   // Strategie-Probleme erkennen
   let needsChange = false

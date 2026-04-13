@@ -16,17 +16,8 @@ interface Animation {
 /** Linear (Standard für Spieler) */
 const linear: EasingFn = t => t
 
-/** Ease-in: langsamer Start, schnelles Ende (Ball beschleunigt) */
-const easeIn: EasingFn = t => t * t
-
-/** Ease-out: schneller Start, langsames Ende (Ball bremst ab) */
-const easeOut: EasingFn = t => 1 - (1 - t) * (1 - t)
-
 /** Ease-out-quint: noch stärkeres Abbremsen (t⁵) */
 const easeOutQuint: EasingFn = t => 1 - (1 - t) ** 5
-
-/** Ease-in-out: sanfter Start und Ende */
-const easeInOut: EasingFn = t => t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2
 
 // ── Ball-Animationsdauer nach Distanz ──────────────────────────────
 

@@ -71,7 +71,7 @@ export function positionOffensiveCorner(
 
 export function positionDefensiveCorner(
   players: PlayerData[],
-  opponents: PlayerData[],
+  _opponents: PlayerData[],
   team: TeamSide,
   cornerPos: Position,
 ): PlayerAction[] {

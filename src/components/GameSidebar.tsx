@@ -30,7 +30,6 @@ export function GameSidebar({ team1Name, team2Name, team1Color, team2Color, onBa
   const isFreeKick = state.phase === 'free_kick'
   const isCorner = state.phase === 'corner'
   const isThrowIn = state.phase === 'throw_in'
-  const isSetupPhase = isKickoff || isFreeKick || isCorner || isThrowIn
 
   const selectedPlayer = selectedPlayerId
     ? state.players.find(p => p.id === selectedPlayerId)

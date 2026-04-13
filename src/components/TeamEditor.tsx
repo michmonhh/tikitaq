@@ -88,8 +88,6 @@ export function TeamEditor({ open, onClose }: TeamEditorProps) {
     setSaved(true)
   }
 
-  const team = TEAMS.find(t => t.id === selectedTeamId)
-
   return (
     <Modal open={open} onClose={onClose} title="Team Editor">
       <div className={styles.editor}>

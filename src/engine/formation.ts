@@ -1,6 +1,6 @@
 import type { PlayerData, TeamSide, PlayerStats, PlayerGameStats } from './types'
 import { PLAYER_DEFAULTS } from './constants'
-import { TEAM_ROSTERS, type PlayerTemplate } from '../data/players'
+import type { PlayerTemplate } from '../data/players'
 import { getEffectiveRoster } from '../data/teamOverrides'
 
 interface FormationSlot {
