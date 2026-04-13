@@ -19,6 +19,8 @@ const GAME_UNIT_TO_METERS = 0.865
 export function GameSidebar({ team1Name, team2Name, team1Color, team2Color, onBack }: GameSidebarProps) {
   const state = useGameStore(s => s.state)
   const selectedPlayerId = useGameStore(s => s.selectedPlayerId)
+  const isDuel = useGameStore(s => s.isDuel)
+  const localTeam = useGameStore(s => s.localTeam)
   const [activeTab, setActiveTab] = useState<SidebarTab>('stats')
 
   if (!state) return null
@@ -34,25 +36,36 @@ export function GameSidebar({ team1Name, team2Name, team1Color, team2Color, onBa
     ? state.players.find(p => p.id === selectedPlayerId)
     : null
 
+  // Scoreboard order: local team on top (mirrors the pitch perspective)
+  const mirrored = localTeam === 2
+  const topName  = mirrored ? team2Name  : team1Name
+  const topColor = mirrored ? team2Color : team1Color
+  const topScore = mirrored ? state.score.team2 : state.score.team1
+  const topTurn  = mirrored ? !isTeam1Turn : isTeam1Turn
+  const botName  = mirrored ? team1Name  : team2Name
+  const botColor = mirrored ? team1Color : team2Color
+  const botScore = mirrored ? state.score.team1 : state.score.team2
+  const botTurn  = mirrored ? isTeam1Turn : !isTeam1Turn
+
   return (
     <div className={styles.sidebar}>
       <button className={styles.backBtn} onClick={onBack}>&larr; Back</button>
 
       {/* Scoreboard */}
       <div className={styles.scoreboard}>
-        <div className={`${styles.team} ${isTeam1Turn ? styles.activeTurn : ''}`}>
-          <div className={styles.teamDot} style={{ background: team1Color }} />
-          <span className={styles.teamName}>{team1Name}</span>
-          <span className={styles.score}>{state.score.team1}</span>
+        <div className={`${styles.team} ${topTurn ? styles.activeTurn : ''}`}>
+          <div className={styles.teamDot} style={{ background: topColor }} />
+          <span className={styles.teamName}>{topName}</span>
+          <span className={styles.score}>{topScore}</span>
         </div>
         <div className={styles.divider}>
           <span className={styles.time}>{state.gameTime}'</span>
           <span className={styles.half}>{state.half === 1 ? '1st' : '2nd'} Half</span>
         </div>
-        <div className={`${styles.team} ${!isTeam1Turn ? styles.activeTurn : ''}`}>
-          <div className={styles.teamDot} style={{ background: team2Color }} />
-          <span className={styles.teamName}>{team2Name}</span>
-          <span className={styles.score}>{state.score.team2}</span>
+        <div className={`${styles.team} ${botTurn ? styles.activeTurn : ''}`}>
+          <div className={styles.teamDot} style={{ background: botColor }} />
+          <span className={styles.teamName}>{botName}</span>
+          <span className={styles.score}>{botScore}</span>
         </div>
       </div>
 
@@ -71,24 +84,24 @@ export function GameSidebar({ team1Name, team2Name, team1Color, team2Color, onBa
             <button className={`${styles.tab} ${activeTab === 'stats' ? styles.activeTab : ''}`} onClick={() => setActiveTab('stats')}>Stats</button>
             <button className={`${styles.tab} ${activeTab === 'ticker' ? styles.activeTab : ''}`} onClick={() => setActiveTab('ticker')}>Ticker</button>
             <button className={`${styles.tab} ${activeTab === 'bench' ? styles.activeTab : ''}`} onClick={() => setActiveTab('bench')}>Bench</button>
-            <button className={`${styles.tab} ${activeTab === 'rules' ? styles.activeTab : ''}`} onClick={() => setActiveTab('rules')}>Rules</button>
+            {!isDuel && <button className={`${styles.tab} ${activeTab === 'rules' ? styles.activeTab : ''}`} onClick={() => setActiveTab('rules')}>Rules</button>}
           </div>
           <div className={styles.tabContent}>
             {activeTab === 'stats' && (
               <StatsPanel
-                stats1={state.matchStats.team1}
-                stats2={state.matchStats.team2}
-                team1Name={team1Name}
-                team2Name={team2Name}
-                team1Color={team1Color}
-                team2Color={team2Color}
-                turns1={state.totalTurns.team1}
-                turns2={state.totalTurns.team2}
+                stats1={mirrored ? state.matchStats.team2 : state.matchStats.team1}
+                stats2={mirrored ? state.matchStats.team1 : state.matchStats.team2}
+                team1Name={topName}
+                team2Name={botName}
+                team1Color={topColor}
+                team2Color={botColor}
+                turns1={mirrored ? state.totalTurns.team2 : state.totalTurns.team1}
+                turns2={mirrored ? state.totalTurns.team1 : state.totalTurns.team2}
               />
             )}
             {activeTab === 'ticker' && <TickerPanel ticker={state.ticker} />}
             {activeTab === 'bench' && <BenchPanel />}
-            {activeTab === 'rules' && <RulesPanel />}
+            {!isDuel && activeTab === 'rules' && <RulesPanel />}
           </div>
         </>
       )}
@@ -96,7 +109,7 @@ export function GameSidebar({ team1Name, team2Name, team1Color, team2Color, onBa
       {state.phase === 'full_time' && (
         <div className={styles.gameOver}>
           <h3>Full Time</h3>
-          <p>{state.score.team1} - {state.score.team2}</p>
+          <p>{topScore} - {botScore}</p>
         </div>
       )}
     </div>

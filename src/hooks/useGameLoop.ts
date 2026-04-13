@@ -43,6 +43,9 @@ export function useGameLoop(
     if (!canvas || !container) return
 
     const camera = cameraRef.current
+    // Mirror view for Team 2 so they play "from the bottom"
+    const localTeamInit = useGameStore.getState().localTeam
+    camera.mirror = localTeamInit === 2
     pitchRendererRef.current = new PitchRenderer(camera)
     playerRendererRef.current = new PlayerRenderer(camera)
     if (teamColors) {
@@ -428,6 +431,8 @@ export function useGameLoop(
           penaltyMode = s.penaltyState.shooterTeam === (s.localTeam ?? 1) ? 'shooter' : 'keeper'
         }
         inputRef.current.updateGameState(s.state.players, s.state.ball, s.state.currentTurn, s.localTeam, isSetup, s.state.mustPass, penaltyMode)
+        // Keep mirror in sync with localTeam
+        camera.mirror = s.localTeam === 2
       }
     }
     syncInput()

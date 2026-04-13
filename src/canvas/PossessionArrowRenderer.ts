@@ -99,7 +99,9 @@ export class PossessionArrowRenderer {
     const center = this.camera.toScreen(50, gameY)
     const hw = HALF_W * this.camera.scale
     const hh = HALF_H * this.camera.scale
-    const flipY = this.direction === 'up' ? 1 : -1
+    // Chevron shape is drawn in screen-space; mirror flips the visual orientation
+    let flipY = this.direction === 'up' ? 1 : -1
+    if (this.camera.mirror) flipY = -flipY
 
     ctx.beginPath()
     ctx.moveTo(

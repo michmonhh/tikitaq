@@ -17,6 +17,9 @@ export class Camera {
   private panCX = 50   // viewport center in game coords (0-100)
   private panCY = 50
 
+  // Mirror mode: when true, the view is flipped 180° so Team 2 plays "from the bottom"
+  private _mirror = false
+
   resize(width: number, height: number) {
     this.canvasWidth = width
     this.canvasHeight = height
@@ -41,17 +44,22 @@ export class Camera {
     this.clampPan()
   }
 
-  /** Convert game position (0-100) to canvas pixels, accounting for zoom & pan. */
+  /** Convert game position (0-100) to canvas pixels, accounting for zoom, pan & mirror. */
   toScreen(gameX: number, gameY: number): { x: number; y: number } {
-    const x = this.pitchX + this.pitchW / 2 + (gameX - this.panCX) * (this.pitchW / 100) * this.zoomLevel
-    const y = this.pitchY + this.pitchH / 2 + (gameY - this.panCY) * (this.pitchH / 100) * this.zoomLevel
+    // Mirror: flip both axes so Team 2 plays "from the bottom"
+    const gx = this._mirror ? 100 - gameX : gameX
+    const gy = this._mirror ? 100 - gameY : gameY
+    const x = this.pitchX + this.pitchW / 2 + (gx - this.panCX) * (this.pitchW / 100) * this.zoomLevel
+    const y = this.pitchY + this.pitchH / 2 + (gy - this.panCY) * (this.pitchH / 100) * this.zoomLevel
     return { x, y }
   }
 
-  /** Convert canvas pixels to game position (0-100), accounting for zoom & pan. */
+  /** Convert canvas pixels to game position (0-100), accounting for zoom, pan & mirror. */
   toGame(screenX: number, screenY: number): { x: number; y: number } {
-    const x = this.panCX + (screenX - this.pitchX - this.pitchW / 2) * 100 / (this.pitchW * this.zoomLevel)
-    const y = this.panCY + (screenY - this.pitchY - this.pitchH / 2) * 100 / (this.pitchH * this.zoomLevel)
+    let x = this.panCX + (screenX - this.pitchX - this.pitchW / 2) * 100 / (this.pitchW * this.zoomLevel)
+    let y = this.panCY + (screenY - this.pitchY - this.pitchH / 2) * 100 / (this.pitchH * this.zoomLevel)
+    // Mirror: flip back to game coords
+    if (this._mirror) { x = 100 - x; y = 100 - y }
     return { x, y }
   }
 
@@ -133,4 +141,8 @@ export class Camera {
 
   get width() { return this.canvasWidth }
   get height() { return this.canvasHeight }
+
+  /** Enable/disable 180° mirror mode (Team 2 perspective). */
+  set mirror(on: boolean) { this._mirror = on }
+  get mirror(): boolean { return this._mirror }
 }
