@@ -200,6 +200,8 @@ export function useGameLoop(
 
       if (activePlayer && drag.dragPosition && !isSetupPhase && !isPenaltyPhase) {
         const opponents = gameState.players.filter(p => p.team !== activePlayer.team)
+        // Gegner, die den Ball gerade verloren haben, können in diesem Zug nicht tackeln → aus Tackle-Visualisierung ausblenden
+        const activeTacklers = opponents.filter(p => !p.cannotTackle)
         if (gameState.ball.ownerId === activePlayer.id && inputStateRef.current.dragTarget?.type === 'ball') {
           overlayRendererRef.current?.drawPassRange(ctx, activePlayer)
           overlayRendererRef.current?.drawInterceptRanges(ctx, opponents)
@@ -212,10 +214,10 @@ export function useGameLoop(
           const isDribbling = gameState.ball.ownerId === activePlayer.id
           if (isDribbling) {
             // Dribbling: show heatmap instead of tackle radii
-            overlayRendererRef.current?.drawDribblingHeatmap(ctx, activePlayer, opponents)
+            overlayRendererRef.current?.drawDribblingHeatmap(ctx, activePlayer, activeTacklers)
           } else {
             overlayRendererRef.current?.drawMovementRange(ctx, activePlayer)
-            overlayRendererRef.current?.drawTackleRanges(ctx, opponents)
+            overlayRendererRef.current?.drawTackleRanges(ctx, activeTacklers)
           }
           // Abseitslinie auch beim Bewegen anzeigen
           if (gameState.lastSetPiece !== 'corner') {

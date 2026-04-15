@@ -45,6 +45,7 @@ export interface PlayerData {
   hasPassed: boolean      // Has passed this turn (passer can still move after)
   hasReceivedPass: boolean // Received a pass (can still move if hasn't moved yet)
   tackleLocked: boolean   // Locked after losing a tackle (can't move until own turn ends)
+  cannotTackle: boolean   // Lost ball in tackle: blocked from tackling during opponent's next turn
 }
 
 export interface BallData {

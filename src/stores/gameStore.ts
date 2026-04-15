@@ -393,7 +393,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           if (p.id === tackleResult.winner.id)
             return adjustConfidence({ ...p, hasActed: true, gameStats: { ...p.gameStats, tacklesWon: p.gameStats.tacklesWon + 1 } }, 'tackle_won')
           if (p.id === tackleResult.loser.id)
-            return adjustConfidence({ ...p, hasActed: true, tackleLocked: applyTackleLock, gameStats: { ...p.gameStats, tacklesLost: p.gameStats.tacklesLost + 1 } }, 'tackle_lost')
+            return adjustConfidence({ ...p, hasActed: true, tackleLocked: applyTackleLock, cannotTackle: true, gameStats: { ...p.gameStats, tacklesLost: p.gameStats.tacklesLost + 1 } }, 'tackle_lost')
           return p
         })
       } else {

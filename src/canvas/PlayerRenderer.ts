@@ -96,6 +96,18 @@ export class PlayerRenderer {
       ctx.stroke()
     }
 
+    // Cannot-tackle marker: gestrichelter oranger Ring, wenn der Spieler in diesem
+    // Gegnerzug nach Ballverlust keinen Zweikampf führen darf.
+    if (player.cannotTackle && !highlighted) {
+      ctx.beginPath()
+      ctx.arc(pos.x, pos.y, r + 3, 0, Math.PI * 2)
+      ctx.strokeStyle = 'rgba(255, 140, 0, 0.9)'
+      ctx.lineWidth = 1.5
+      ctx.setLineDash([3, 3])
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
+
     // Position label
     ctx.globalAlpha = isDimmed ? 0.5 : 1
     const fontSize = Math.max(8, r * 0.7)

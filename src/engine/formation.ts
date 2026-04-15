@@ -84,6 +84,7 @@ function createPlayer(
     hasPassed: false,
     hasReceivedPass: false,
     tackleLocked: false,
+    cannotTackle: false,
   }
 }
 

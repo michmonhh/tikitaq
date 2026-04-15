@@ -90,6 +90,9 @@ function resetPlayersForNewTurn(players: PlayerData[], endingTeam?: TeamSide): P
       hasReceivedPass: false,
       // Tackle lock: clear for the ending team (or all on kickoff)
       tackleLocked: (endingTeam == null || p.team === endingTeam) ? false : p.tackleLocked,
+      // Cannot-tackle: clear at end of opponent's turn (or on kickoff). The player lost the ball
+      // in a tackle and sits out the opponent's next turn — flag drops once that turn ends.
+      cannotTackle: (endingTeam == null || p.team !== endingTeam) ? false : p.cannotTackle,
       origin: { ...p.position },
     }
   })

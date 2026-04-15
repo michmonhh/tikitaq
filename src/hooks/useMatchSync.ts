@@ -136,6 +136,7 @@ export function useMatchSync(matchId: string | undefined, userId: string | undef
         hasPassed: false,
         hasReceivedPass: false,
         tackleLocked: p.tackleLocked,
+        cannotTackle: p.cannotTackle,
       })),
       ball: newState.ball,
       score: newState.score,
@@ -186,6 +187,7 @@ function deserializeState(gs: SerializedMatchState): GameState {
     players: gs.players.map(p => ({
       ...p,
       tackleLocked: p.tackleLocked ?? false,
+      cannotTackle: p.cannotTackle ?? false,
       hasPassed: p.hasPassed ?? false,
     })),
   }

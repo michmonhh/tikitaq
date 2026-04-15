@@ -77,7 +77,7 @@ export function applyMove(
     ? opponents.find(p => p.id === state.ball.ownerId)
     : null
 
-  if (ballCarrier) {
+  if (ballCarrier && !updatedPlayer.cannotTackle) {
     const tackleRadius = getTackleRadius(updatedPlayer)
     const distToCarrier = distance(target, ballCarrier.position)
 
@@ -96,6 +96,8 @@ export function applyMove(
     const threats: { opp: PlayerData; segDist: number; winChance: number }[] = []
 
     for (const opp of opponents) {
+      // Gegner, die gerade den Ball im Zweikampf verloren haben, dürfen nicht tackeln
+      if (opp.cannotTackle) continue
       const oppRadius = getTackleRadius(opp)
       const segDist = pointToSegmentDistance(opp.position, player.origin, target)
       if (segDist <= oppRadius) {
