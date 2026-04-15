@@ -22,6 +22,7 @@ export function GameSidebar({ team1Name, team2Name, team1Color, team2Color, onBa
   const isDuel = useGameStore(s => s.isDuel)
   const localTeam = useGameStore(s => s.localTeam)
   const [activeTab, setActiveTab] = useState<SidebarTab>('stats')
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   if (!state) return null
 
@@ -46,71 +47,99 @@ export function GameSidebar({ team1Name, team2Name, team1Color, team2Color, onBa
   const botScore = mirrored ? state.score.team1 : state.score.team2
   const botTurn  = mirrored ? isTeam1Turn : !isTeam1Turn
 
+  const turnLabel = isKickoff ? 'Kickoff' : isFreeKick ? 'Free Kick' : isCorner ? 'Corner' : isThrowIn ? 'Throw In' : `${isTeam1Turn ? team1Name : team2Name}'s Turn`
+  const turnColor = isTeam1Turn ? team1Color : team2Color
+
   return (
-    <div className={styles.sidebar}>
-      <button className={styles.backBtn} onClick={onBack}>&larr; Back</button>
-
-      {/* Scoreboard */}
-      <div className={styles.scoreboard}>
-        <div className={`${styles.team} ${topTurn ? styles.activeTurn : ''}`}>
+    <div className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''}`}>
+      {/* Mobile: collapsed scorebar — tap to expand */}
+      <div className={styles.mobileScorebar} onClick={() => setMobileOpen(!mobileOpen)}>
+        <div className={styles.scorebarTeam}>
           <div className={styles.teamDot} style={{ background: topColor }} />
-          <span className={styles.teamName}>{topName}</span>
-          <span className={styles.score}>{topScore}</span>
+          <span className={styles.scorebarName}>{topName}</span>
+          <span className={styles.scorebarScore}>{topScore}</span>
         </div>
-        <div className={styles.divider}>
-          <span className={styles.time}>{state.gameTime}'</span>
-          <span className={styles.half}>{state.half === 1 ? '1st' : '2nd'} Half</span>
+        <div className={styles.scorebarCenter}>
+          <span className={styles.scorebarTime}>{state.gameTime}'</span>
+          <span className={styles.scorebarTurn} style={{ background: turnColor }}>{turnLabel}</span>
         </div>
-        <div className={`${styles.team} ${botTurn ? styles.activeTurn : ''}`}>
+        <div className={styles.scorebarTeam}>
+          <span className={styles.scorebarScore}>{botScore}</span>
+          <span className={styles.scorebarName}>{botName}</span>
           <div className={styles.teamDot} style={{ background: botColor }} />
-          <span className={styles.teamName}>{botName}</span>
-          <span className={styles.score}>{botScore}</span>
         </div>
+        <div className={`${styles.scorebarChevron} ${mobileOpen ? styles.scorebarChevronOpen : ''}`}>▲</div>
       </div>
 
-      <div className={styles.turnInfo}>
-        <div className={styles.turnBadge} style={{ background: isTeam1Turn ? team1Color : team2Color }}>
-          {isKickoff ? 'Kickoff' : isFreeKick ? 'Free Kick' : isCorner ? 'Corner' : isThrowIn ? 'Throw In' : `${isTeam1Turn ? team1Name : team2Name}'s Turn`}
+      {/* Desktop: always visible / Mobile: only when expanded */}
+      <div className={styles.sidebarBody}>
+        <button className={styles.backBtn} onClick={onBack}>&larr; Back</button>
+
+        {/* Scoreboard */}
+        <div className={styles.scoreboard}>
+          <div className={`${styles.team} ${topTurn ? styles.activeTurn : ''}`}>
+            <div className={styles.teamDot} style={{ background: topColor }} />
+            <span className={styles.teamName}>{topName}</span>
+            <span className={styles.score}>{topScore}</span>
+          </div>
+          <div className={styles.divider}>
+            <span className={styles.time}>{state.gameTime}'</span>
+            <span className={styles.half}>{state.half === 1 ? '1st' : '2nd'} Half</span>
+          </div>
+          <div className={`${styles.team} ${botTurn ? styles.activeTurn : ''}`}>
+            <div className={styles.teamDot} style={{ background: botColor }} />
+            <span className={styles.teamName}>{botName}</span>
+            <span className={styles.score}>{botScore}</span>
+          </div>
         </div>
+
+        <div className={styles.turnInfo}>
+          <div className={styles.turnBadge} style={{ background: turnColor }}>
+            {turnLabel}
+          </div>
+        </div>
+
+        {/* Content area */}
+        {selectedPlayer ? (
+          <PlayerPanel player={selectedPlayer} />
+        ) : (
+          <>
+            <div className={styles.tabs}>
+              <button className={`${styles.tab} ${activeTab === 'stats' ? styles.activeTab : ''}`} onClick={() => setActiveTab('stats')}>Stats</button>
+              <button className={`${styles.tab} ${activeTab === 'ticker' ? styles.activeTab : ''}`} onClick={() => setActiveTab('ticker')}>Ticker</button>
+              <button className={`${styles.tab} ${activeTab === 'bench' ? styles.activeTab : ''}`} onClick={() => setActiveTab('bench')}>Bench</button>
+              {!isDuel && <button className={`${styles.tab} ${activeTab === 'rules' ? styles.activeTab : ''}`} onClick={() => setActiveTab('rules')}>Rules</button>}
+            </div>
+            <div className={styles.tabContent}>
+              {activeTab === 'stats' && (
+                <StatsPanel
+                  stats1={mirrored ? state.matchStats.team2 : state.matchStats.team1}
+                  stats2={mirrored ? state.matchStats.team1 : state.matchStats.team2}
+                  team1Name={topName}
+                  team2Name={botName}
+                  team1Color={topColor}
+                  team2Color={botColor}
+                  turns1={mirrored ? state.totalTurns.team2 : state.totalTurns.team1}
+                  turns2={mirrored ? state.totalTurns.team1 : state.totalTurns.team2}
+                />
+              )}
+              {activeTab === 'ticker' && <TickerPanel ticker={state.ticker} />}
+              {activeTab === 'bench' && <BenchPanel />}
+              {!isDuel && activeTab === 'rules' && <RulesPanel />}
+            </div>
+          </>
+        )}
+
+        {state.phase === 'full_time' && (
+          <div className={styles.gameOver}>
+            <h3>Full Time</h3>
+            <p>{topScore} - {botScore}</p>
+          </div>
+        )}
       </div>
 
-      {/* Content area */}
-      {selectedPlayer ? (
-        <PlayerPanel player={selectedPlayer} />
-      ) : (
-        <>
-          <div className={styles.tabs}>
-            <button className={`${styles.tab} ${activeTab === 'stats' ? styles.activeTab : ''}`} onClick={() => setActiveTab('stats')}>Stats</button>
-            <button className={`${styles.tab} ${activeTab === 'ticker' ? styles.activeTab : ''}`} onClick={() => setActiveTab('ticker')}>Ticker</button>
-            <button className={`${styles.tab} ${activeTab === 'bench' ? styles.activeTab : ''}`} onClick={() => setActiveTab('bench')}>Bench</button>
-            {!isDuel && <button className={`${styles.tab} ${activeTab === 'rules' ? styles.activeTab : ''}`} onClick={() => setActiveTab('rules')}>Rules</button>}
-          </div>
-          <div className={styles.tabContent}>
-            {activeTab === 'stats' && (
-              <StatsPanel
-                stats1={mirrored ? state.matchStats.team2 : state.matchStats.team1}
-                stats2={mirrored ? state.matchStats.team1 : state.matchStats.team2}
-                team1Name={topName}
-                team2Name={botName}
-                team1Color={topColor}
-                team2Color={botColor}
-                turns1={mirrored ? state.totalTurns.team2 : state.totalTurns.team1}
-                turns2={mirrored ? state.totalTurns.team1 : state.totalTurns.team2}
-              />
-            )}
-            {activeTab === 'ticker' && <TickerPanel ticker={state.ticker} />}
-            {activeTab === 'bench' && <BenchPanel />}
-            {!isDuel && activeTab === 'rules' && <RulesPanel />}
-          </div>
-        </>
-      )}
-
-      {state.phase === 'full_time' && (
-        <div className={styles.gameOver}>
-          <h3>Full Time</h3>
-          <p>{topScore} - {botScore}</p>
-        </div>
-      )}
+      {/* Mobile backdrop */}
+      {mobileOpen && <div className={styles.mobileBackdrop} onClick={() => setMobileOpen(false)} />}
     </div>
   )
 }

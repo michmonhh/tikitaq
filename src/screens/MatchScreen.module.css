@@ -87,7 +87,7 @@
   letter-spacing: 0.08em;
 }
 
-/* Mobile: stack vertically */
+/* Mobile: stack vertically, canvas takes full space */
 @media (max-width: 768px) {
   .container {
     flex-direction: column;
@@ -100,7 +100,7 @@
 
   .actionOverlay,
   .aiOverlay {
-    bottom: var(--space-sm);
+    bottom: 52px;
     right: var(--space-sm);
   }
 }

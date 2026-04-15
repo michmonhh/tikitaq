@@ -138,13 +138,26 @@ export function DuelScreen() {
         status: 'active',
       })
 
-    if (!matchError) {
-      await supabase.from('invitations').delete().eq('id', invite.id)
+    if (matchError) {
+      setError(`Accept failed: ${matchError.message}`)
+      return
     }
+
+    const { error: delError } = await supabase.from('invitations').delete().eq('id', invite.id)
+    if (delError) {
+      setError(`Delete invite failed: ${delError.message}`)
+    }
+    // Optimistic UI update
+    setInvitations(prev => prev.filter(i => i.id !== invite.id))
   }
 
   const declineInvite = async (invite: Invitation) => {
-    await supabase.from('invitations').delete().eq('id', invite.id)
+    const { error: delError } = await supabase.from('invitations').delete().eq('id', invite.id)
+    if (delError) {
+      setError(`Decline failed: ${delError.message}`)
+      return
+    }
+    setInvitations(prev => prev.filter(i => i.id !== invite.id))
   }
 
   const quitMatch = async () => {
