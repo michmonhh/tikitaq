@@ -69,12 +69,19 @@ export function MatchScreen() {
       return () => clearTimeout(timer)
     }
 
-    // AI has a set piece — reposition then auto-confirm for player to see
+    // AI has a set piece — show setup to player, then let player reposition defenders.
+    // Read CURRENT store state at fire time (not the stale React closure) so that
+    // any defender repositioning the user already made is not overwritten.
     if (state.phase === 'free_kick' || state.phase === 'corner' || state.phase === 'throw_in') {
       const timer = setTimeout(() => {
-        // AI repositions its players for the set piece
-        const aiActions = repositionForSetPiece(state, 2, state.phase as 'free_kick' | 'corner' | 'throw_in')
-        let updatedPlayers = [...state.players]
+        const currentState = useGameStore.getState().state
+        if (!currentState) return
+        // Bail if phase changed in the meantime (e.g. user already confirmed)
+        if (currentState.phase !== 'free_kick' && currentState.phase !== 'corner' && currentState.phase !== 'throw_in') return
+
+        // Apply any remaining AI repositioning on top of the current player positions
+        const aiActions = repositionForSetPiece(currentState, 2, currentState.phase as 'free_kick' | 'corner' | 'throw_in')
+        let updatedPlayers = [...currentState.players]
         for (const action of aiActions) {
           if (action.type === 'move') {
             updatedPlayers = updatedPlayers.map(p =>
@@ -84,9 +91,9 @@ export function MatchScreen() {
             )
           }
         }
-        // Update state with AI positions, keep set piece phase for player to reposition
+        // Flip currentTurn to 1 so the user can reposition their defenders before clicking Bereit
         useGameStore.setState({
-          state: { ...state, players: updatedPlayers, currentTurn: 1 as TeamSide },
+          state: { ...currentState, players: updatedPlayers, currentTurn: 1 as TeamSide },
         })
       }, 800)
       return () => clearTimeout(timer)
@@ -103,7 +110,7 @@ export function MatchScreen() {
   const isCorner = state?.phase === 'corner'
   const isThrowIn = state?.phase === 'throw_in'
   const isPenalty = state?.phase === 'penalty'
-  const isSetupPhase = isKickoff || isFreeKick || isCorner || isThrowIn
+  const isSetPiece = isFreeKick || isCorner || isThrowIn
   const isFullTime = state?.phase === 'full_time'
   const isPlayerTurn = state && state.currentTurn === 1 && state.phase === 'playing'
 
@@ -111,6 +118,18 @@ export function MatchScreen() {
   const localTeam = useGameStore(s => s.localTeam)
   const isShooter = isPenalty && penaltyState?.shooterTeam === localTeam
   const isPenaltyKeeper = isPenalty && penaltyState && !isShooter
+
+  // Determine if user is attacker in a set piece (owns the ball via their team).
+  // When user is attacker the "Free Kick / Corner / Throw In" confirm button is
+  // hidden — the user simply drags the ball to pass directly. The button is
+  // still shown as "Bereit" when user is defender (to acknowledge the AI's
+  // set piece setup) and for the kickoff (both teams).
+  const userTeam: TeamSide = localTeam ?? 1
+  const ballOwnerTeam = state?.ball.ownerId
+    ? state.players.find(p => p.id === state.ball.ownerId)?.team ?? null
+    : null
+  const userIsSetPieceAttacker = isSetPiece && ballOwnerTeam === userTeam
+  const showSetPieceButton = isKickoff || (isSetPiece && !userIsSetPieceAttacker)
 
   // Determine if player has made any moves this turn
   const hasMoved = state ? state.players.some(p => p.team === 1 && p.hasMoved) : false
@@ -139,9 +158,9 @@ export function MatchScreen() {
               <Button variant="primaryPulse" onClick={confirmPenaltyDefense} className={styles.actionBtn}>
                 Bereit
               </Button>
-            ) : isPenalty ? null : isSetupPhase ? (
+            ) : isPenalty ? null : showSetPieceButton ? (
               <Button variant="primaryPulse" onClick={confirmKickoff} className={styles.actionBtn}>
-                {isKickoff ? 'Kickoff' : isFreeKick ? 'Free Kick' : isCorner ? 'Corner' : 'Throw In'}
+                {isKickoff ? 'Kickoff' : 'Bereit'}
               </Button>
             ) : isPlayerTurn ? (
               <Button

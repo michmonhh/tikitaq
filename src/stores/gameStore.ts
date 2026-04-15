@@ -645,7 +645,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       newBall = { position: { ...result.interceptedBy.position }, ownerId: result.interceptedBy.id }
       ballOwnerChanged = true
     } else if (result.event.type === 'offside') {
-      // Abseits → Freistoß an der Stelle, wo der Ball gespielt wurde
+      // Abseits → Freistoß an der Position des abseits-stehenden Empfängers (FIFA Law 12)
       const defendingTeam: TeamSide = state.currentTurn === 1 ? 2 : 1
       const fkPos = result.event.position ?? newBall.position
       const fkBallPos = { x: fkPos.x, y: fkPos.y }
@@ -736,6 +736,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
           newBall = { position: { ...throwPos }, ownerId: null }
         }
 
+        // Reposition both teams for the set piece (no "Throw In" button — user
+        // passes directly, so defenders need sensible default positioning).
+        for (const team of [1 as TeamSide, 2 as TeamSide]) {
+          const spState = { ...state, players: newPlayers, ball: newBall }
+          const spActions = repositionForSetPiece(spState, team, 'throw_in')
+          for (const action of spActions) {
+            if (action.type === 'move') {
+              newPlayers = newPlayers.map(p =>
+                p.id === action.playerId
+                  ? { ...p, position: { ...action.target }, origin: { ...action.target } }
+                  : p
+              )
+            }
+          }
+        }
+        enforceCrossTeamSpacing(newPlayers, new Set(taker ? [taker.id] : []))
+
         // Track stats + ticker, then transition to throw_in phase
         let trackedState = { ...state, players: newPlayers, ball: newBall }
         trackedState = updateTeamStats(trackedState, state.currentTurn, s => ({
@@ -746,12 +763,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
         set({
           state: {
             ...trackedState,
+            players: trackedState.players.map(p => ({
+              ...p,
+              hasActed: false,
+              hasMoved: p.id === taker?.id, // Taker is pre-marked → after passing, hasActed=true
+              hasPassed: false,
+              hasReceivedPass: false,
+              origin: { ...p.position },
+            })),
             phase: 'throw_in',
             currentTurn: opposingTeam,
             passesThisTurn: 0,
             ballOwnerChangedThisTurn: false,
             mustPass: false,
-            lastSetPiece: null,
+            lastSetPiece: 'throw_in',
             lastEvent: result.event,
           },
           drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
@@ -777,6 +802,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
           newBall = { position: { ...cornerPos }, ownerId: null }
         }
 
+        // Reposition both teams for the corner (no "Corner" button — user
+        // passes directly, so defenders need sensible default positioning).
+        for (const team of [1 as TeamSide, 2 as TeamSide]) {
+          const spState = { ...state, players: newPlayers, ball: newBall }
+          const spActions = repositionForSetPiece(spState, team, 'corner')
+          for (const action of spActions) {
+            if (action.type === 'move') {
+              newPlayers = newPlayers.map(p =>
+                p.id === action.playerId
+                  ? { ...p, position: { ...action.target }, origin: { ...action.target } }
+                  : p
+              )
+            }
+          }
+        }
+        enforceCrossTeamSpacing(newPlayers, new Set(taker ? [taker.id] : []))
+
         // Track stats + ticker, then transition to corner phase
         let trackedState = { ...state, players: newPlayers, ball: newBall }
         trackedState = updateTeamStats(trackedState, state.currentTurn, s => ({
@@ -788,12 +830,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
         set({
           state: {
             ...trackedState,
+            players: trackedState.players.map(p => ({
+              ...p,
+              hasActed: false,
+              hasMoved: p.id === taker?.id, // Taker is pre-marked → after passing, hasActed=true
+              hasPassed: false,
+              hasReceivedPass: false,
+              origin: { ...p.position },
+            })),
             phase: 'corner',
             currentTurn: attackingTeam,
             passesThisTurn: 0,
             ballOwnerChangedThisTurn: false,
             mustPass: false,
-            lastSetPiece: null,
+            lastSetPiece: 'corner',
             lastEvent: result.event,
           },
           drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
@@ -830,9 +880,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }))
     trackedState = addTicker(trackedState, result.event.message, result.event.type, passingTeam)
 
+    // If this pass was executed from a standard (free_kick / corner /
+    // throw_in), the set piece is now over — transition to 'playing'. The
+    // user no longer clicks a dedicated confirm button; the first pass from
+    // the taker ends the standard automatically. Kickoff keeps its explicit
+    // "Kickoff" button and is not handled here.
+    const wasSetPiecePhase = trackedState.phase === 'free_kick'
+      || trackedState.phase === 'corner'
+      || trackedState.phase === 'throw_in'
+    const nextPhase: GamePhase = wasSetPiecePhase ? 'playing' : trackedState.phase
+
     set({
       state: {
         ...trackedState,
+        phase: nextPhase,
         passesThisTurn: state.passesThisTurn + 1,
         ballOwnerChangedThisTurn: ballOwnerChanged,
         mustPass: false,
@@ -1053,9 +1114,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const isSetPiece = isSetPiecePhase(state.phase)
     const takerId = isSetPiece ? state.ball.ownerId : null
 
-    // AI repositions in response to player's setup (if player takes the set piece)
+    // Determine which team actually has the ball (the real set-piece taker's team).
+    // MatchScreen may have temporarily set currentTurn=1 so the user can reposition
+    // their defenders while the AI has the ball — we must not trust state.currentTurn here.
+    const ballOwnerPlayer = state.ball.ownerId
+      ? state.players.find(p => p.id === state.ball.ownerId)
+      : null
+    const trueTurn: TeamSide = ballOwnerPlayer?.team ?? state.currentTurn
+    const userHasBall = trueTurn === 1
+
+    // AI repositions in response to player's setup — only when the USER is taking
+    // the set piece (ball belongs to team 1). When AI has the ball, both teams are
+    // already positioned from the foul/offside handler; no repositioning needed.
     let updatedPlayers = state.players
-    if (isVsAI && isSetPiece) {
+    if (isVsAI && isSetPiece && userHasBall) {
       const aiTeam: TeamSide = 2
       const setPiecePhase = state.phase as 'free_kick' | 'corner' | 'throw_in'
       const aiActions = repositionForSetPiece(
@@ -1095,6 +1167,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ...state,
         players,
         phase: 'playing',
+        currentTurn: trueTurn, // Always the ball-owner's team, regardless of the MatchScreen hack
         passesThisTurn: 0,
         ballOwnerChangedThisTurn: false,
         mustPass: true, // Ball carrier must pass before anyone else can move

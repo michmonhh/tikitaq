@@ -396,7 +396,7 @@ export function applyPass(
     }
 
     if (caughtOffside) {
-      // Freistoß an der Ballposition (wo der Pass gespielt wurde), nicht beim Empfänger
+      // Freistoß an der Position des abseits-stehenden Empfängers (FIFA Law 12)
       return {
         success: false, passType: 'ground', interceptedBy: null, receiver,
         ballLandingPos: null, outOfBounds: null, receiverNewPosition: null,
@@ -404,7 +404,7 @@ export function applyPass(
           type: 'offside',
           playerId: passer.id,
           targetId: receiver.id,
-          position: passer.position,
+          position: receiver.position,
           message: T.tickerOffside(name(receiver)),
         },
       }

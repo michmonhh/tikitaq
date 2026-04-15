@@ -426,12 +426,16 @@ export function useGameLoop(
       const s = useGameStore.getState()
       if (s.state && inputRef.current) {
         const isSetup = ['kickoff', 'free_kick', 'corner', 'throw_in'].includes(s.state.phase)
+        // Standards (free_kick / corner / throw_in) allow the attacker to drag
+        // the ball directly to pass — no confirm button. Kickoff keeps its
+        // explicit button.
+        const allowDirectPassInSetPiece = ['free_kick', 'corner', 'throw_in'].includes(s.state.phase)
         // Penalty mode: determine if player is shooter or keeper
         let penaltyMode: 'shooter' | 'keeper' | null = null
         if (s.state.phase === 'penalty' && s.penaltyState) {
           penaltyMode = s.penaltyState.shooterTeam === (s.localTeam ?? 1) ? 'shooter' : 'keeper'
         }
-        inputRef.current.updateGameState(s.state.players, s.state.ball, s.state.currentTurn, s.localTeam, isSetup, s.state.mustPass, penaltyMode)
+        inputRef.current.updateGameState(s.state.players, s.state.ball, s.state.currentTurn, s.localTeam, isSetup, s.state.mustPass, penaltyMode, allowDirectPassInSetPiece)
         // Keep mirror in sync with localTeam
         camera.mirror = s.localTeam === 2
       }

@@ -39,7 +39,12 @@ export class InputHandler {
   private ball: BallData = { position: { x: 50, y: 50 }, ownerId: null }
   private currentTeam: 1 | 2 = 1
   private localTeam: 1 | 2 | null = null // For duel mode
-  private isKickoffPhase = false
+  private isKickoffPhase = false // True for any set piece phase (kickoff + standards)
+  // True only for standards (free_kick/corner/throw_in). Standards allow the
+  // attacker to drag the ball directly to pass, skipping the confirm button.
+  // Kickoff keeps its explicit "Kickoff" button so the pre-marked-taker rule
+  // stays intact.
+  private allowDirectPassInSetPiece = false
   private mustPass = false
   private penaltyMode: 'shooter' | 'keeper' | null = null
   private pointerDownPos: Position | null = null // For tap detection
@@ -85,12 +90,13 @@ export class InputHandler {
     canvas.style.touchAction = 'none' // Prevent scroll on touch
   }
 
-  updateGameState(players: PlayerData[], ball: BallData, currentTeam: 1 | 2, localTeam?: 1 | 2 | null, isKickoffPhase?: boolean, mustPass?: boolean, penaltyMode?: 'shooter' | 'keeper' | null) {
+  updateGameState(players: PlayerData[], ball: BallData, currentTeam: 1 | 2, localTeam?: 1 | 2 | null, isKickoffPhase?: boolean, mustPass?: boolean, penaltyMode?: 'shooter' | 'keeper' | null, allowDirectPassInSetPiece?: boolean) {
     this.players = players
     this.ball = ball
     this.currentTeam = currentTeam
     this.localTeam = localTeam ?? null
     this.isKickoffPhase = isKickoffPhase ?? false
+    this.allowDirectPassInSetPiece = allowDirectPassInSetPiece ?? false
     this.mustPass = mustPass ?? false
     this.penaltyMode = penaltyMode ?? null
   }
@@ -123,11 +129,10 @@ export class InputHandler {
     const isTouch = e.pointerType === 'touch'
     const hitRadius = isTouch ? 8 : 6
 
-    // Must pass: only allow ball interaction, no player movement
-    // Exception: during set pieces the defending team can still reposition
-    const isDefendingSetPiece = this.mustPass && this.isKickoffPhase &&
-      this.localTeam != null && this.localTeam !== this.currentTeam
-    if (this.mustPass && !isDefendingSetPiece) {
+    // Must pass (playing phase right after kickoff): only ball interaction
+    // allowed for the active team, no player movement. Set piece phases are
+    // handled below so the taker can still reposition teammates freely.
+    if (this.mustPass && !this.isKickoffPhase) {
       const ballOwner = this.ball.ownerId
         ? this.players.find(p => p.id === this.ball.ownerId)
         : null
@@ -198,11 +203,38 @@ export class InputHandler {
       return
     }
 
-    // During kickoff/set piece phase: only own team players can be repositioned, no ball
+    // During kickoff / set piece phase: both sides can reposition own players.
+    // The attacking side may additionally drag the ball to execute the pass
+    // directly (no explicit "Free Kick" button — the first pass from the taker
+    // ends the set piece phase automatically).
     if (this.isKickoffPhase) {
       const activeTeam = this.localTeam ?? this.currentTeam
+      const isAttacker = this.localTeam == null || this.localTeam === this.currentTeam
+
+      const ballOwner = this.ball.ownerId
+        ? this.players.find(p => p.id === this.ball.ownerId)
+        : null
+      const ballDisplayPos = ballOwner
+        ? { x: ballOwner.position.x + 2.5, y: ballOwner.position.y + 1.5 }
+        : this.ball.position
+
+      // Attacker: drag ball to pass (only for standards, not kickoff — kickoff
+      // still needs the explicit "Kickoff" button to preserve the pre-marked
+      // taker rule).
+      if (this.allowDirectPassInSetPiece && isAttacker && ballOwner && ballOwner.team === this.currentTeam) {
+        const distToBall = rawDistance(pos, ballDisplayPos)
+        if (distToBall < hitRadius) {
+          this.state.isDragging = true
+          this.state.dragTarget = { type: 'ball' }
+          this.state.dragPosition = pos
+          this.onChange(this.state)
+          return
+        }
+      }
+
+      // Both sides: drag own non-taker players to reposition
       const ownPlayer = this.findClosestPlayer(pos, activeTeam, hitRadius)
-      if (ownPlayer) {
+      if (ownPlayer && ownPlayer.id !== this.ball.ownerId) {
         this.state.isDragging = true
         this.state.dragTarget = { type: 'player', player: ownPlayer }
         this.state.dragPosition = pos
