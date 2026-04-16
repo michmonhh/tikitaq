@@ -29,19 +29,28 @@ src/
   debug/                   Dev-Tools (TestMenu, testScenarios) — ungetrackt,
                            in tsconfig.app.json excluded, nicht im Prod-Build
   engine/                  Pure Spiel-Logik (keine React/DOM-Imports)
-    ai/                    KI: index (Orchestrator), teamPlan, playerDecision,
-                           positioning, fieldReading, identity, memory,
-                           setPiece/setPieceCorner/setPieceFreeKick/
-                           setPiecePenalty/setPieceThrowIn/setPieceHelpers
+    ai/                    KI-Einstieg: index.ts (Orchestrator)
+      positioning.ts       Dispatcher → positioning/ Submodule:
+                             config, state, roles, anticipation,
+                             threats, gegenpress, marking,
+                             offensive, defensive
+      playerDecision.ts    Dispatcher → playerDecision/ Submodule:
+                             types, helpers, evaluators, scoring
+      teamPlan, fieldReading, identity, memory, types
+      setPiece + setPieceCorner/FreeKick/Penalty/ThrowIn/Helpers
     geometry, constants, types, movement, passing, shooting, tackle,
     turn, formation, confidence, playerName
   hooks/                   useGameLoop (bindet canvas+input+store),
                            useCanvas (Resize), useMatchSync (Supabase)
   lib/supabase.ts          Supabase-Client
   screens/                 Intro, Auth, MainMenu, QuickGame, Duel, Match
-  stores/                  gameStore (Match-State),
-                           authStore (Supabase-Auth),
-                           uiStore (Screen-Routing)
+  stores/                  Zustand-Stores (ein Store pro Domäne)
+    gameStore.ts           Orchestrator: State-Init + triviale Actions
+    gameStore/             Action-Factories (make<Action>(set, get)):
+                             types, helpers, move, pass, shoot,
+                             turn, penalty, ai
+    authStore.ts           Supabase-Auth
+    uiStore.ts             Screen-Routing
   styles/                  reset.css, variables.css
 ```
 
@@ -50,7 +59,7 @@ src/
 `main.tsx → App.tsx → Screen` — Routing via `uiStore.screen`.
 Match-Flow: `MatchScreen → useGameLoop(canvasRef) → gameStore` (State) + `canvas/*` (Render) + `InputHandler` (Pointer/Touch) + `engine/*` (Pure Logik) + `engine/ai/*` (KI-Entscheidungen). Animator sequenziert Übergänge.
 
-Zustand-Store-Muster: Actions mutieren immutable über `set(state => …)`. Pure Engine-Funktionen erhalten `GameState`, geben neuen `GameState` oder Result-Objekt zurück — Store verdrahtet nur.
+Zustand-Store-Muster: Actions mutieren immutable über `set(state => …)`. Pure Engine-Funktionen erhalten `GameState`, geben neuen `GameState` oder Result-Objekt zurück — Store verdrahtet nur. Größere Actions (`gameStore/*`) liegen als Factories `make<Action>(set, get)` in Submodulen; die Hauptdatei `gameStore.ts` ist nur noch Init + Wiring + triviale Actions.
 
 ## Build & Verifikation
 
@@ -89,7 +98,7 @@ CLI-Simulatoren für KI-Tuning unter `scripts/` (ungetrackt, via `tsx scripts/<f
 
 ## Laufende Arbeit
 
-- **Code-Cleanup läuft:** siehe `Handoff.md` (Strategie in 4 Phasen). Phase 1 (Dead Code + archivierte Verzeichnisse) erledigt, Phase 2 (diese Datei) in Arbeit, Phase 3 (Splits von `gameStore.ts`, `ai/positioning.ts`, `ai/playerDecision.ts`) steht an.
+- **Code-Cleanup läuft:** siehe `Handoff.md` (Strategie in 4 Phasen). Phase 1 (Dead Code + archivierte Verzeichnisse), Phase 2 (CLAUDE.md), Phase 3 (Splits von `ai/playerDecision.ts`, `ai/positioning.ts`, `stores/gameStore.ts`) sind erledigt. Phase 4 (optional: `scripts/→tools/`, `src/debug/` mit DEV-Guard) steht noch.
 - **KI-Neuaufbau** nach Plan unter `~/.claude/plans/snuggly-frolicking-cray.md` (Drei-Schichten-Modell: Mannschaftsplan → Spielerentscheidung → Positionierung + Memory-Service). `src/engine/ai/` ist bereits der aktive Ersatz und teilweise aufgebaut.
 
 ## Ungetrackte Dateien im Baum
