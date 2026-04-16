@@ -1,22 +1,13 @@
 import { Camera } from './Camera'
 import type { PlayerData, BallData, Position } from '../engine/types'
 import { rawDistance } from '../engine/geometry'
+import type {
+  InputState, InputCallback, DragEndCallback, TapCallback,
+} from './input/types'
+import { pickDragTarget, findClosestPlayerAnyTeam } from './input/pickers'
 
-export type DragTarget =
-  | { type: 'player'; player: PlayerData }
-  | { type: 'ball' }
-  | null
-
-export interface InputState {
-  isDragging: boolean
-  dragTarget: DragTarget
-  dragPosition: Position | null  // Current drag position in game coords
-  pointerDown: boolean
-}
-
-type InputCallback = (state: InputState) => void
-type DragEndCallback = (target: DragTarget, position: Position) => void
-type TapCallback = (player: PlayerData | null) => void
+// Re-exports for existing call sites (useGameLoop imports these from InputHandler).
+export type { DragTarget, InputState } from './input/types'
 
 /**
  * Handles pointer/touch input on the canvas and converts
@@ -71,7 +62,7 @@ export class InputHandler {
     canvas: HTMLCanvasElement,
     onChange: InputCallback,
     onDragEnd: DragEndCallback,
-    onTap: TapCallback
+    onTap: TapCallback,
   ) {
     this.camera = camera
     this.canvas = canvas
@@ -125,156 +116,25 @@ export class InputHandler {
     this.state.pointerDown = true
     this.pointerDownPos = pos // Save for tap detection
 
-    // Determine what was clicked: player or ball
     const isTouch = e.pointerType === 'touch'
     const hitRadius = isTouch ? 8 : 6
 
-    // Must pass (playing phase right after kickoff): only ball interaction
-    // allowed for the active team, no player movement. Set piece phases are
-    // handled below so the taker can still reposition teammates freely.
-    if (this.mustPass && !this.isKickoffPhase) {
-      const ballOwner = this.ball.ownerId
-        ? this.players.find(p => p.id === this.ball.ownerId)
-        : null
-      const ballDisplayPos = ballOwner
-        ? { x: ballOwner.position.x + 2.5, y: ballOwner.position.y + 1.5 }
-        : this.ball.position
+    const target = pickDragTarget({
+      pos,
+      players: this.players,
+      ball: this.ball,
+      currentTeam: this.currentTeam,
+      localTeam: this.localTeam,
+      hitRadius,
+      isKickoffPhase: this.isKickoffPhase,
+      allowDirectPassInSetPiece: this.allowDirectPassInSetPiece,
+      mustPass: this.mustPass,
+      penaltyMode: this.penaltyMode,
+    })
 
-      if (ballOwner && ballOwner.team === this.currentTeam) {
-        const distToBall = rawDistance(pos, ballDisplayPos)
-        if (distToBall < hitRadius) {
-          this.state.isDragging = true
-          this.state.dragTarget = { type: 'ball' }
-          this.state.dragPosition = pos
-          this.onChange(this.state)
-          return
-        }
-      }
-      this.tryStartPan(e)
-      return
-    }
-
-    // Penalty mode: both sides can reposition own players freely
-    if (this.penaltyMode) {
-      if (this.penaltyMode === 'shooter') {
-        // Ball dragging (to shoot) or player repositioning
-        const activeTeam = this.localTeam ?? this.currentTeam
-        const ballOwner = this.ball.ownerId
-          ? this.players.find(p => p.id === this.ball.ownerId)
-          : null
-        const ballDisplayPos = ballOwner
-          ? { x: ballOwner.position.x + 2.5, y: ballOwner.position.y + 1.5 }
-          : this.ball.position
-
-        const canClickBall = ballOwner && ballOwner.team === activeTeam
-        const distToBall = canClickBall ? rawDistance(pos, ballDisplayPos) : Infinity
-
-        // Check ball first
-        if (distToBall < hitRadius) {
-          this.state.isDragging = true
-          this.state.dragTarget = { type: 'ball' }
-          this.state.dragPosition = pos
-          this.onChange(this.state)
-          return
-        }
-
-        // Otherwise allow dragging own players (except ball carrier)
-        const clickedPlayer = this.findClosestPlayer(pos, activeTeam, hitRadius)
-        if (clickedPlayer && clickedPlayer.id !== this.ball.ownerId) {
-          this.state.isDragging = true
-          this.state.dragTarget = { type: 'player', player: clickedPlayer }
-          this.state.dragPosition = pos
-          this.onChange(this.state)
-          return
-        }
-      } else {
-        // Keeper: allow dragging any own team player (free positioning)
-        const activeTeam = this.localTeam ?? this.currentTeam
-        const clickedPlayer = this.findClosestPlayer(pos, activeTeam, hitRadius)
-        if (clickedPlayer) {
-          this.state.isDragging = true
-          this.state.dragTarget = { type: 'player', player: clickedPlayer }
-          this.state.dragPosition = pos
-          this.onChange(this.state)
-          return
-        }
-      }
-      this.tryStartPan(e)
-      return
-    }
-
-    // During kickoff / set piece phase: both sides can reposition own players.
-    // The attacking side may additionally drag the ball to execute the pass
-    // directly (no explicit "Free Kick" button — the first pass from the taker
-    // ends the set piece phase automatically).
-    if (this.isKickoffPhase) {
-      const activeTeam = this.localTeam ?? this.currentTeam
-      const isAttacker = this.localTeam == null || this.localTeam === this.currentTeam
-
-      const ballOwner = this.ball.ownerId
-        ? this.players.find(p => p.id === this.ball.ownerId)
-        : null
-      const ballDisplayPos = ballOwner
-        ? { x: ballOwner.position.x + 2.5, y: ballOwner.position.y + 1.5 }
-        : this.ball.position
-
-      // Attacker: drag ball to pass (only for standards, not kickoff — kickoff
-      // still needs the explicit "Kickoff" button to preserve the pre-marked
-      // taker rule).
-      if (this.allowDirectPassInSetPiece && isAttacker && ballOwner && ballOwner.team === this.currentTeam) {
-        const distToBall = rawDistance(pos, ballDisplayPos)
-        if (distToBall < hitRadius) {
-          this.state.isDragging = true
-          this.state.dragTarget = { type: 'ball' }
-          this.state.dragPosition = pos
-          this.onChange(this.state)
-          return
-        }
-      }
-
-      // Both sides: drag own non-taker players to reposition
-      const ownPlayer = this.findClosestPlayer(pos, activeTeam, hitRadius)
-      if (ownPlayer && ownPlayer.id !== this.ball.ownerId) {
-        this.state.isDragging = true
-        this.state.dragTarget = { type: 'player', player: ownPlayer }
-        this.state.dragPosition = pos
-        this.onChange(this.state)
-        return
-      }
-      this.tryStartPan(e)
-      return
-    }
-
-    const activeTeam = this.localTeam ?? this.currentTeam
-
-    // Find closest player on active team
-    const clickablePlayer = this.findClosestPlayer(pos, activeTeam, hitRadius)
-    const distToPlayer = clickablePlayer ? rawDistance(pos, clickablePlayer.position) : Infinity
-
-    // Find ball (visually offset from carrier)
-    const ballOwner = this.ball.ownerId
-      ? this.players.find(p => p.id === this.ball.ownerId)
-      : null
-
-    const ballDisplayPos = ballOwner
-      ? { x: ballOwner.position.x + 2.5, y: ballOwner.position.y + 1.5 }
-      : this.ball.position
-
-    const canClickBall = ballOwner && ballOwner.team === this.currentTeam
-    const distToBall = canClickBall ? rawDistance(pos, ballDisplayPos) : Infinity
-
-    // Pick whichever is closer to the click
-    if (distToBall < hitRadius && distToBall < distToPlayer) {
+    if (target) {
       this.state.isDragging = true
-      this.state.dragTarget = { type: 'ball' }
-      this.state.dragPosition = pos
-      this.onChange(this.state)
-      return
-    }
-
-    if (clickablePlayer && !clickablePlayer.hasActed && distToPlayer < hitRadius) {
-      this.state.isDragging = true
-      this.state.dragTarget = { type: 'player', player: clickablePlayer }
+      this.state.dragTarget = target
       this.state.dragPosition = pos
       this.onChange(this.state)
       return
@@ -365,7 +225,7 @@ export class InputHandler {
           return
         }
         // Single tap — find any player near tap position (either team)
-        const tappedPlayer = this.findClosestPlayerAnyTeam(upPos, 6)
+        const tappedPlayer = findClosestPlayerAnyTeam(this.players, upPos, 6)
         this.onTap(tappedPlayer)
       }
       this.state.pointerDown = false
@@ -478,37 +338,6 @@ export class InputHandler {
     const cx = (pts[0].x + pts[1].x) / 2 - rect.left
     const cy = (pts[0].y + pts[1].y) / 2 - rect.top
     return this.camera.toGame(cx, cy)
-  }
-
-  private findClosestPlayer(pos: Position, team: 1 | 2, maxDist: number): PlayerData | null {
-    let closest: PlayerData | null = null
-    let closestDist = maxDist
-
-    for (const player of this.players) {
-      if (player.team !== team) continue
-      const dist = rawDistance(pos, player.position)
-      if (dist < closestDist) {
-        closestDist = dist
-        closest = player
-      }
-    }
-
-    return closest
-  }
-
-  private findClosestPlayerAnyTeam(pos: Position, maxDist: number): PlayerData | null {
-    let closest: PlayerData | null = null
-    let closestDist = maxDist
-
-    for (const player of this.players) {
-      const dist = rawDistance(pos, player.position)
-      if (dist < closestDist) {
-        closestDist = dist
-        closest = player
-      }
-    }
-
-    return closest
   }
 
   destroy() {
