@@ -24,6 +24,8 @@ src/
   components/              UI-Bausteine (Button, Modal, TeamCard,
                            TeamEditor, TeamSelector, GameSidebar)
                            → jeweils .tsx + .module.css
+                           GameSidebar/ splittet in Panels (Player,
+                             Stats, Ticker, Bench, Rules) + widgets
   data/                    Statische Daten (teams, players, tickerTexts,
                            teamOverrides)
   debug/                   Dev-Tools (TestMenu, testScenarios) — ungetrackt,
@@ -32,23 +34,30 @@ src/
     ai/                    KI-Einstieg: index.ts (Orchestrator)
       positioning.ts       Dispatcher → positioning/ Submodule:
                              config, state, roles, anticipation,
-                             threats, gegenpress, marking,
-                             offensive, defensive
+                             threats (→ threats/ dangerousSpace+predict+nearest),
+                             gegenpress, marking, offensive, defensive
       playerDecision.ts    Dispatcher → playerDecision/ Submodule:
-                             types, helpers, evaluators, scoring
+                             types, helpers, scoring,
+                             evaluators (→ evaluators/ shoot+pass+dribble+
+                               advance+hold+throughBall)
       teamPlan, fieldReading, identity, memory, types
       setPiece + setPieceCorner/FreeKick/Penalty/ThrowIn/Helpers
-    geometry, constants, types, movement, passing, shooting, tackle,
-    turn, formation, confidence, playerName
-  hooks/                   useGameLoop (bindet canvas+input+store),
+    geometry, constants, types, movement, shooting, tackle,
+    turn, formation, confidence, playerName,
+    passing                Shim → passing/ (mechanics, offside, applyPass)
+  hooks/                   useGameLoop (bindet canvas+input+store) →
+                             useGameLoop/ (renderFrame, constrainDragPos,
+                             riskLabel, overlayLabel),
                            useCanvas (Resize), useMatchSync (Supabase)
   lib/supabase.ts          Supabase-Client
   screens/                 Intro, Auth, MainMenu, QuickGame, Duel, Match
   stores/                  Zustand-Stores (ein Store pro Domäne)
     gameStore.ts           Orchestrator: State-Init + triviale Actions
     gameStore/             Action-Factories (make<Action>(set, get)):
-                             types, helpers, move, pass, shoot,
-                             turn, penalty, ai
+                             types, helpers, pass, shoot,
+                             turn, penalty, ai,
+                             move (→ move/ clampers+tacklePenalty+
+                               tackleFreeKick)
     authStore.ts           Supabase-Auth
     uiStore.ts             Screen-Routing
   styles/                  reset.css, variables.css
@@ -92,13 +101,13 @@ CLI-Simulatoren für KI-Tuning unter `scripts/` (ungetrackt, via `tsx scripts/<f
 
 - **Set-Piece-Phasen** (`free_kick`/`corner`/`throw_in`): Direkt-Pass durch den Ausführenden, kein Button. `kickoff` behält expliziten Button. Ausführender-Team wird über `ballOwnerId` bestimmt, nicht über `currentTurn` (MatchScreen kann das für UI-Zwecke temporär flippen — siehe `confirmKickoff`-Kommentar).
 - **Abseits-Freistoß** an Empfänger-Position (FIFA Law 12).
-- **Pass-Logik:** `applyPass()` in `engine/passing.ts` ist Single-Entry. Interception/Offside/Out-of-Bounds/Through-Ball sind dort zentralisiert.
+- **Pass-Logik:** `applyPass()` ist Single-Entry (aus `engine/passing` importierbar — `passing.ts` ist ein Shim auf `passing/applyPass.ts`). Interception/Offside/Out-of-Bounds/Through-Ball sind in `passing/` zentralisiert (`mechanics`, `offside`, `applyPass`).
 - **KI-Einstieg:** `engine/ai/index.ts` (`executeAITurn`, `getAIReasoning`, `initAIPlan`, `getAITickerMessages`).
 - **Feldkoordinaten:** `y=0` ist Team-2-Tor, `y=100` ist Team-1-Tor. Pitch-Grenzen in `engine/constants.ts` (PITCH).
 
 ## Laufende Arbeit
 
-- **Code-Cleanup läuft:** siehe `Handoff.md` (Strategie in 4 Phasen). Phase 1 (Dead Code + archivierte Verzeichnisse), Phase 2 (CLAUDE.md), Phase 3 (Splits von `ai/playerDecision.ts`, `ai/positioning.ts`, `stores/gameStore.ts`) sind erledigt. Phase 4 (optional: `scripts/→tools/`, `src/debug/` mit DEV-Guard) steht noch.
+- **Code-Cleanup läuft:** siehe `Handoff.md` (Strategie in 4 Phasen). Phase 1 (Dead Code + archivierte Verzeichnisse), Phase 2 (CLAUDE.md), Phase 3 (Splits von `ai/playerDecision.ts`, `ai/positioning.ts`, `stores/gameStore.ts`) sind erledigt. Zusätzliche Hotspot-Splits (alle per Re-Export-Shim, Call-Sites unverändert): `engine/passing.ts` → `passing/`, `components/GameSidebar.tsx` → `GameSidebar/`, `hooks/useGameLoop.ts` → `useGameLoop/`, `stores/gameStore/move.ts` → `move/`, `ai/playerDecision/evaluators.ts` → `evaluators/`, `ai/positioning/threats.ts` → `threats/`. Phase 4 (optional: `scripts/→tools/`, `src/debug/` mit DEV-Guard) steht noch.
 - **KI-Neuaufbau** nach Plan unter `~/.claude/plans/snuggly-frolicking-cray.md` (Drei-Schichten-Modell: Mannschaftsplan → Spielerentscheidung → Positionierung + Memory-Service). `src/engine/ai/` ist bereits der aktive Ersatz und teilweise aufgebaut.
 
 ## Ungetrackte Dateien im Baum
