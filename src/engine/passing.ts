@@ -19,9 +19,9 @@ function scatterBallPosition(target: Position, maxScatter: number = 8): Position
   }
 }
 
-export type PassType = 'ground' | 'high'
+type PassType = 'ground' | 'high'
 
-export interface PassResult {
+interface PassResult {
   success: boolean
   passType: PassType
   interceptedBy: PlayerData | null
@@ -30,16 +30,6 @@ export interface PassResult {
   outOfBounds: 'throw_in' | 'corner' | null
   receiverNewPosition: Position | null  // Through ball: receiver runs here on success
   event: GameEvent
-}
-
-/**
- * Validate that a pass is possible.
- */
-export function canPass(player: PlayerData, state: GameState): boolean {
-  if (player.team !== state.currentTurn) return false
-  if (state.ball.ownerId !== player.id) return false
-  if (state.passesThisTurn >= 2) return false // Max 2 passes per turn
-  return true
 }
 
 /**
@@ -98,7 +88,7 @@ export function isPassLaneBlocked(
  * Check if any opponent can intercept a ground pass.
  * Only applies to ground passes.
  */
-export function checkInterception(
+function checkInterception(
   passer: PlayerData,
   target: Position,
   opponents: PlayerData[]
@@ -274,7 +264,7 @@ export function isOffside(
  *
  * Nutzt origin (Rundenstart-Position) für die Berechnung.
  */
-export function throughBallOffsideProbability(
+function throughBallOffsideProbability(
   receiver: PlayerData,
   defendingTeam: TeamSide,
   players: PlayerData[],
