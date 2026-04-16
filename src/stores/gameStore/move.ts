@@ -1,13 +1,12 @@
-import type { GameEvent, GameState, Position, TeamSide, TeamMatchStats } from '../../engine/types'
+import type { GameEvent, GameState, TeamMatchStats } from '../../engine/types'
 import { applyMove } from '../../engine/movement'
 import { resolveTackle } from '../../engine/tackle'
-import { repositionForSetPiece, repositionForPenalty } from '../../engine/ai/setPiece'
-import { enforceCrossTeamSpacing } from '../../engine/ai/setPieceHelpers'
 import { adjustConfidence } from '../../engine/confidence'
-import { aiChoosePenaltyDirection } from '../../engine/shooting'
-import { PITCH } from '../../engine/constants'
 import { addTicker, updateTeamStats, isSetPiecePhase } from './helpers'
 import type { GameStore, StoreSet, StoreGet } from './types'
+import { clampKickoffTarget, clampPenaltyTarget, clampSetPieceTarget } from './move/clampers'
+import { handleFoulPenalty } from './move/tacklePenalty'
+import { handleFoulFreeKick } from './move/tackleFreeKick'
 
 export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePlayer'] {
   return (playerId, target) => {
@@ -21,28 +20,11 @@ export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePla
     // During AI turn (currentTurn !== localTeam), AI must be able to move its own team
     if (localTeam && movingPlayer.team !== localTeam && state.currentTurn === localTeam) return
 
-    // During kickoff: free positioning in own half
+    // --- Set-piece-like repositioning phases: kickoff / penalty / free_kick / corner / throw_in ---
     if (state.phase === 'kickoff') {
       if (state.ball.ownerId === playerId) return // Ball carrier stays at center
 
-      const clampedTarget = { ...target }
-      if (movingPlayer.team === 1) clampedTarget.y = Math.max(50, Math.min(97, clampedTarget.y))
-      else clampedTarget.y = Math.max(3, Math.min(50, clampedTarget.y))
-      clampedTarget.x = Math.max(4, Math.min(96, clampedTarget.x))
-
-      // Non-kicking team can't enter the center circle
-      if (movingPlayer.team !== state.currentTurn) {
-        const dx = clampedTarget.x - 50
-        const dy = clampedTarget.y - 50
-        const dist = Math.sqrt(dx * dx + dy * dy)
-        const minDist = 9.65
-        if (dist < minDist) {
-          const angle = Math.atan2(dy, dx)
-          clampedTarget.x = 50 + Math.cos(angle) * minDist
-          clampedTarget.y = 50 + Math.sin(angle) * minDist
-        }
-      }
-
+      const clampedTarget = clampKickoffTarget(movingPlayer, target, state.currentTurn)
       const newPlayers = state.players.map(p =>
         p.id === playerId ? { ...p, position: { ...clampedTarget }, origin: { ...clampedTarget } } : p
       )
@@ -54,24 +36,11 @@ export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePla
       return
     }
 
-    // During penalty: defending team can reposition freely, TW on goal line
     if (state.phase === 'penalty') {
       // Shooter (ball carrier) can't be moved
       if (state.ball.ownerId === playerId) return
 
-      let clampedTarget: Position
-      if (movingPlayer.positionLabel === 'TW') {
-        // TW constrained to goal line
-        const goalLineY = movingPlayer.team === 1 ? 97 : 3
-        clampedTarget = { x: Math.max(32, Math.min(68, target.x)), y: goalLineY }
-      } else {
-        // Free positioning (like set piece)
-        clampedTarget = {
-          x: Math.max(4, Math.min(96, target.x)),
-          y: Math.max(3, Math.min(97, target.y)),
-        }
-      }
-
+      const clampedTarget = clampPenaltyTarget(movingPlayer, target)
       const newPlayers = state.players.map(p =>
         p.id === playerId ? { ...p, position: { ...clampedTarget }, origin: { ...clampedTarget } } : p
       )
@@ -83,18 +52,11 @@ export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePla
       return
     }
 
-    // During set piece phases (free kick, corner, throw-in): free positioning
     if (isSetPiecePhase(state.phase)) {
-      const player = state.players.find(p => p.id === playerId)
-      if (!player) return
       // Set piece taker (ball carrier) can't be moved
       if (state.ball.ownerId === playerId) return
 
-      const clampedTarget = {
-        x: Math.max(4, Math.min(96, target.x)),
-        y: Math.max(3, Math.min(97, target.y)),
-      }
-
+      const clampedTarget = clampSetPieceTarget(target)
       const newPlayers = state.players.map(p =>
         p.id === playerId ? { ...p, position: { ...clampedTarget }, origin: { ...clampedTarget } } : p
       )
@@ -106,6 +68,7 @@ export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePla
       return
     }
 
+    // --- Playing phase ---
     // Must pass first after kickoff — no movement allowed during playing phase
     if (state.mustPass) return
 
@@ -179,16 +142,15 @@ export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePla
         newBall = { ...newBall, ownerId: tackleResult.winner.id, position: { ...tackleResult.winner.position } }
         ballOwnerChanged = true
 
-        // Update players
+        // Update players (fouler card stats + confidence)
         newPlayers = newPlayers.map(p => {
           if (p.id === tackleResult.loser.id) {
-            // Fouler: update card stats
-            const updatedPlayer = adjustConfidence({ ...p, hasActed: true }, 'tackle_lost')
+            const updated = adjustConfidence({ ...p, hasActed: true }, 'tackle_lost')
             return {
-              ...updatedPlayer,
+              ...updated,
               gameStats: {
-                ...updatedPlayer.gameStats,
-                tacklesLost: updatedPlayer.gameStats.tacklesLost + 1,
+                ...updated.gameStats,
+                tacklesLost: updated.gameStats.tacklesLost + 1,
               },
             }
           }
@@ -218,7 +180,6 @@ export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePla
       }
 
       // Track stats + ticker
-      const trackedPlayers = newPlayers
       if (tackleResult.outcome === 'foul') {
         // Track foul + cards
         const cardStats: Partial<TeamMatchStats> = { fouls: 1 }
@@ -228,7 +189,7 @@ export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePla
       }
 
       // Build final state for tackle
-      let tackleState: GameState = { ...state, players: trackedPlayers, ball: newBall, lastEvent, ballOwnerChangedThisTurn: ballOwnerChanged, tackleAttemptedThisTurn: true }
+      let tackleState: GameState = { ...state, players: newPlayers, ball: newBall, lastEvent, ballOwnerChangedThisTurn: ballOwnerChanged, tackleAttemptedThisTurn: true }
 
       tackleState = updateTeamStats(tackleState, tacklerTeam, s => ({
         tacklesWon: s.tacklesWon + (tackleResult.outcome === 'won' ? 1 : 0),
@@ -242,146 +203,27 @@ export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePla
       if (foulOccurred) {
         if (tackleResult.inPenaltyArea) {
           // ELFMETER — Foul im Strafraum
-          const fouledTeam: TeamSide = tacklerTeam === 1 ? 2 : 1
-          const penaltySpotY = fouledTeam === 1 ? PITCH.PENALTY_SPOT_TOP_Y : PITCH.PENALTY_SPOT_BOTTOM_Y
-
-          // Finde den ST des fouled teams (Schütze) und den TW des fouling teams (Keeper)
-          const shooter = tackleState.players.find(p => p.team === fouledTeam && p.positionLabel === 'ST')
-          const keeper = tackleState.players.find(p => p.team === tacklerTeam && p.positionLabel === 'TW')
-          if (!shooter || !keeper) {
-            // Fallback: kein ST/TW gefunden → normaler Freistoß für gefoultes Team
+          const { newState, newPenaltyState } = handleFoulPenalty(tackleState, tacklerTeam, get().localTeam)
+          if (newPenaltyState === null) {
+            // Fallback path: no ST/TW → free kick for fouled team
             set({
-              state: {
-                ...tackleState,
-                phase: 'free_kick',
-                currentTurn: fouledTeam,
-                mustPass: true,
-                lastSetPiece: 'free_kick',
-                passesThisTurn: 0,
-                ballOwnerChangedThisTurn: false,
-              },
+              state: newState,
               drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
               selectedPlayerId: null,
             })
             return
           }
-
-          // Ball auf den Elfmeterpunkt, ST bekommt den Ball
-          const penaltyBall = { ...tackleState.ball, position: { x: PITCH.CENTER_X, y: penaltySpotY }, ownerId: shooter.id }
-
-          // ST auf den Elfmeterpunkt positionieren
-          let penaltyPlayers = tackleState.players.map(p => {
-            if (p.id === shooter.id) {
-              return { ...p, position: { x: PITCH.CENTER_X, y: penaltySpotY }, origin: { x: PITCH.CENTER_X, y: penaltySpotY } }
-            }
-            if (p.id === keeper.id) {
-              // TW auf die Torlinie, zentral
-              const goalY = tacklerTeam === 1 ? 100 : 0
-              return { ...p, position: { x: PITCH.CENTER_X, y: goalY + (tacklerTeam === 1 ? -2 : 2) }, origin: { x: PITCH.CENTER_X, y: goalY + (tacklerTeam === 1 ? -2 : 2) } }
-            }
-            return p
-          })
-
-          // AI pre-commits keeper direction when defending team is AI-controlled
-          const localTeam = get().localTeam
-          const aiDefending = !localTeam || localTeam === fouledTeam
-          const keeperDir = aiDefending ? aiChoosePenaltyDirection() : null
-
-          // Position both teams — pass keeperChoice to defending team for strategic setup
-          const defTeam: TeamSide = fouledTeam === 1 ? 2 : 1
-          for (const team of [1 as TeamSide, 2 as TeamSide]) {
-            const repoActions = repositionForPenalty(
-              { ...tackleState, players: penaltyPlayers, ball: penaltyBall },
-              team, fouledTeam, shooter.id, keeper.id,
-              false, // not reactive at initial setup
-              team === defTeam ? keeperDir : undefined,
-            )
-            for (const action of repoActions) {
-              if (action.type === 'move') {
-                penaltyPlayers = penaltyPlayers.map(p =>
-                  p.id === action.playerId
-                    ? { ...p, position: { ...action.target }, origin: { ...action.target } }
-                    : p
-                )
-              }
-            }
-          }
-
-          // Final cross-team spacing enforcement
-          enforceCrossTeamSpacing(penaltyPlayers, new Set([shooter.id, keeper.id]))
-
           set({
-            state: { ...tackleState, players: penaltyPlayers, ball: penaltyBall, phase: 'penalty' },
-            penaltyState: {
-              shooterTeam: fouledTeam,
-              shooterId: shooter.id,
-              keeperId: keeper.id,
-              shooterChoice: null,
-              keeperChoice: keeperDir,
-            },
+            state: newState,
+            penaltyState: newPenaltyState,
             drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
             selectedPlayerId: null,
           })
         } else {
           // Normaler Freistoß — gefoultes Team bekommt den Ball
-          const fouledTeam: TeamSide = tacklerTeam === 1 ? 2 : 1
-          const fkPos = tackleResult.winner.position
-          const fkBallPos = { x: fkPos.x, y: fkPos.y }
-
-          // FK-Taker: Spieler dessen origin am nächsten zur Foul-Stelle liegt
-          let fkPlayers = tackleState.players
-          const fkTaker = fkPlayers
-            .filter(p => p.team === fouledTeam && p.positionLabel !== 'TW')
-            .sort((a, b) => {
-              const da = Math.sqrt((a.origin.x - fkBallPos.x) ** 2 + (a.origin.y - fkBallPos.y) ** 2)
-              const db = Math.sqrt((b.origin.x - fkBallPos.x) ** 2 + (b.origin.y - fkBallPos.y) ** 2)
-              return da - db
-            })[0]
-
-          if (fkTaker) {
-            fkPlayers = fkPlayers.map(p =>
-              p.id === fkTaker.id
-                ? { ...p, position: { ...fkBallPos }, origin: { ...fkBallPos } }
-                : p
-            )
-          }
-          const fkBall = { position: { ...fkBallPos }, ownerId: fkTaker?.id ?? null }
-
-          // Beide Teams aufstellen
-          for (const team of [1 as TeamSide, 2 as TeamSide]) {
-            const spState = { ...tackleState, players: fkPlayers, ball: fkBall }
-            const spActions = repositionForSetPiece(spState, team, 'free_kick')
-            for (const action of spActions) {
-              if (action.type === 'move') {
-                fkPlayers = fkPlayers.map(p =>
-                  p.id === action.playerId
-                    ? { ...p, position: { ...action.target }, origin: { ...action.target } }
-                    : p
-                )
-              }
-            }
-          }
-          enforceCrossTeamSpacing(fkPlayers, new Set(fkTaker ? [fkTaker.id] : []))
-
+          const fkState = handleFoulFreeKick(tackleState, tackleResult, tacklerTeam)
           set({
-            state: {
-              ...tackleState,
-              players: fkPlayers.map(p => ({
-                ...p,
-                hasActed: false,
-                hasMoved: p.id === fkTaker?.id,
-                hasPassed: false,
-                hasReceivedPass: false,
-                origin: { ...p.position },
-              })),
-              ball: fkBall,
-              phase: 'free_kick',
-              currentTurn: fouledTeam,
-              passesThisTurn: 0,
-              ballOwnerChangedThisTurn: false,
-              mustPass: true,
-              lastSetPiece: 'free_kick',
-            },
+            state: fkState,
             drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
             selectedPlayerId: null,
           })
