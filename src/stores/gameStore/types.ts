@@ -30,6 +30,9 @@ export interface GameStore {
   eventTimeout: ReturnType<typeof setTimeout> | null
   overlayLabel: string | null
   overlayColor: string | null
+  // Buffer für Overlay-Events, die während eines KI-Zugs ausgelöst werden —
+  // wird erst nach Abschluss der Ball-Animation sichtbar gemacht.
+  pendingAIOverlay: { message: string; durationMs: number; eventType?: string } | null
 
   // Penalty state
   penaltyState: PenaltyState | null
@@ -39,6 +42,8 @@ export interface GameStore {
     oneTacklePerTurn: boolean
     allowDoublePass: boolean
     tacklingLock: boolean
+    showMovementRadii: boolean
+    showTackleRadii: 'off' | 'dragging' | 'always'
   }
   setGameSetting: <K extends keyof GameStore['gameSettings']>(key: K, value: GameStore['gameSettings'][K]) => void
 
@@ -61,6 +66,7 @@ export interface GameStore {
 
   showEvent: (message: string, durationMs?: number, eventType?: string) => void
   clearEvent: () => void
+  flushAIOverlay: () => void
 
   // For multiplayer sync
   setState: (state: GameState) => void

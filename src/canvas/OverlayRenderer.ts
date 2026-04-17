@@ -32,6 +32,21 @@ export class OverlayRenderer {
     ctx.restore()
   }
 
+  drawOpponentMovementRanges(ctx: CanvasRenderingContext2D, opponents: PlayerData[]) {
+    ctx.save()
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'
+    ctx.lineWidth = 1
+    for (const opp of opponents) {
+      const radius = getMovementRadius(opp)
+      const origin = this.camera.toScreen(opp.origin.x, opp.origin.y)
+      const screenR = this.camera.toScreenDistance(radius)
+      ctx.beginPath()
+      ctx.arc(origin.x, origin.y, screenR, 0, Math.PI * 2)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
   drawPassRange(ctx: CanvasRenderingContext2D, player: PlayerData) {
     const radius = getPassRadius(player)
     const pos = this.camera.toScreen(player.position.x, player.position.y)

@@ -9,7 +9,7 @@ import type { InputState } from '../../canvas/input/types'
 import { useGameStore } from '../../stores/gameStore'
 import { calculateDribbleRisk } from '../../engine/movement'
 import { findReceiver, constrainPass, isPassLaneBlocked, calculatePassSuccess } from '../../engine/passing'
-import type { Position } from '../../engine/types'
+import type { Position, TeamSide } from '../../engine/types'
 import { constrainDragPos } from './constrainDragPos'
 import { drawRiskLabel } from './riskLabel'
 import { drawOverlayLabel } from './overlayLabel'
@@ -44,6 +44,9 @@ export function renderFrame(rf: RenderFrameCtx): boolean {
   const drag = storeSnap.drag
   const overlayLabel = storeSnap.overlayLabel
   const overlayColor = storeSnap.overlayColor
+  const gameSettings = storeSnap.gameSettings
+  const localTeam = storeSnap.localTeam
+  const aiRunning = storeSnap.aiRunning
 
   if (!gameState || camera.width === 0) return false
 
@@ -57,19 +60,24 @@ export function renderFrame(rf: RenderFrameCtx): boolean {
     ? gameState.players.find(p => p.id === gameState.ball.ownerId) ?? null
     : null
   const currentBallTeam = ballOwner?.team ?? null
-  if (
-    currentBallTeam !== null &&
-    prevBallTeamRef.current !== null &&
-    currentBallTeam !== prevBallTeamRef.current
-  ) {
-    // Team 1 attacks upward (y decreasing), Team 2 attacks downward
-    const dir = currentBallTeam === 1 ? 'up' as const : 'down' as const
-    const color = currentBallTeam === 1
-      ? (teamColors?.team1 ?? '#ffffff')
-      : (teamColors?.team2 ?? '#ffffff')
-    arrows?.trigger(dir, color)
+  // Während eines KI-Zugs: Arrow-Trigger unterdrücken und prevBallTeamRef einfrieren,
+  // damit der Pfeil erst nach der Ball-Animation (aiRunning=false) auf dem nächsten
+  // Frame getriggert wird — sonst erscheint er vor der eigentlichen Aktion.
+  if (!aiRunning) {
+    if (
+      currentBallTeam !== null &&
+      prevBallTeamRef.current !== null &&
+      currentBallTeam !== prevBallTeamRef.current
+    ) {
+      // Team 1 attacks upward (y decreasing), Team 2 attacks downward
+      const dir = currentBallTeam === 1 ? 'up' as const : 'down' as const
+      const color = currentBallTeam === 1
+        ? (teamColors?.team1 ?? '#ffffff')
+        : (teamColors?.team2 ?? '#ffffff')
+      arrows?.trigger(dir, color)
+    }
+    if (currentBallTeam !== null) prevBallTeamRef.current = currentBallTeam
   }
-  if (currentBallTeam !== null) prevBallTeamRef.current = currentBallTeam
   arrows?.draw(ctx, performance.now())
 
   // --- Overlays for active player ---
@@ -85,10 +93,12 @@ export function renderFrame(rf: RenderFrameCtx): boolean {
     overlay?.drawPassLine(ctx, activePlayer.position, drag.dragPosition)
   }
 
-  if (activePlayer && drag.dragPosition && !isSetupPhase && !isPenaltyPhase) {
+  const isPlayerDragActive = !!(activePlayer && drag.dragPosition && !isSetupPhase && !isPenaltyPhase)
+  if (isPlayerDragActive && activePlayer) {
     const opponents = gameState.players.filter(p => p.team !== activePlayer.team)
     // Gegner, die den Ball gerade verloren haben, können in diesem Zug nicht tackeln → aus Tackle-Visualisierung ausblenden
     const activeTacklers = opponents.filter(p => !p.cannotTackle)
+    const showTackleHere = gameSettings.showTackleRadii !== 'off'
     if (gameState.ball.ownerId === activePlayer.id && inputState.dragTarget?.type === 'ball') {
       overlay?.drawPassRange(ctx, activePlayer)
       overlay?.drawInterceptRanges(ctx, opponents)
@@ -96,21 +106,39 @@ export function renderFrame(rf: RenderFrameCtx): boolean {
       if (gameState.lastSetPiece !== 'corner') {
         overlay?.drawOffsideLine(ctx, gameState)
       }
-      overlay?.drawPassLine(ctx, activePlayer.position, drag.dragPosition)
+      overlay?.drawPassLine(ctx, activePlayer.position, drag.dragPosition!)
     } else if (inputState.dragTarget?.type === 'player') {
       const isDribbling = gameState.ball.ownerId === activePlayer.id
       if (isDribbling) {
-        // Dribbling: show heatmap instead of tackle radii
+        // Dribbling: heatmap ersetzt Tackle-Ringe visuell; Movement-Ringe kommen per Regel dazu
         overlay?.drawDribblingHeatmap(ctx, activePlayer, activeTacklers)
+        if (gameSettings.showMovementRadii) {
+          overlay?.drawOpponentMovementRanges(ctx, activeTacklers)
+        }
       } else {
-        overlay?.drawMovementRange(ctx, activePlayer)
-        overlay?.drawTackleRanges(ctx, activeTacklers)
+        if (gameSettings.showMovementRadii) {
+          overlay?.drawMovementRange(ctx, activePlayer)
+          overlay?.drawOpponentMovementRanges(ctx, activeTacklers)
+        }
+        if (showTackleHere) {
+          overlay?.drawTackleRanges(ctx, activeTacklers)
+        }
       }
       // Abseitslinie auch beim Bewegen anzeigen
       if (gameState.lastSetPiece !== 'corner') {
         overlay?.drawOffsideLine(ctx, gameState)
       }
     }
+  }
+
+  // "Immer"-Modus für Abwehrradien: Gegner-Tacklekreise auch ohne aktiven Drag
+  if (!isPlayerDragActive && gameSettings.showTackleRadii === 'always'
+      && !isSetupPhase && !isPenaltyPhase) {
+    const oppTeam: TeamSide = localTeam != null
+      ? (localTeam === 1 ? 2 : 1)
+      : (gameState.currentTurn === 1 ? 2 : 1)
+    const persistentOpponents = gameState.players.filter(p => p.team === oppTeam && !p.cannotTackle)
+    overlay?.drawTackleRanges(ctx, persistentOpponents)
   }
 
   // --- Constrain drag position when dragging a player ---
@@ -127,7 +155,6 @@ export function renderFrame(rf: RenderFrameCtx): boolean {
   }
 
   const selectedPlayerId = storeSnap.selectedPlayerId
-  const localTeam = storeSnap.localTeam
   players?.draw(ctx, gameState.players, drag.activePlayerId, playerDragPos, animatedPositions, selectedPlayerId, localTeam, gameState.currentTurn)
 
   // --- Ball rendering: offset from carrier, drag position, or animated flight ---

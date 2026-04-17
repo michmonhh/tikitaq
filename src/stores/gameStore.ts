@@ -31,6 +31,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   eventTimeout: null,
   overlayLabel: null,
   overlayColor: null,
+  pendingAIOverlay: null,
 
   penaltyState: null,
 
@@ -38,6 +39,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     oneTacklePerTurn: false,
     allowDoublePass: true,
     tacklingLock: false,
+    showMovementRadii: true,
+    showTackleRadii: 'dragging',
   },
 
   setGameSetting: (key, value) => set(s => ({
@@ -117,6 +120,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       else if (message.includes('Full Time')) overlay = { label: 'ABPFIFF', color: '#ffffff' }
     }
 
+    // Während eines animierten KI-Zugs: Overlay puffern statt sofort zeigen.
+    // Andernfalls flackert "FOUL"/"TOR" vor der eigentlichen Ball-Animation auf.
+    // flushAIOverlay() im finishTurn löst die Anzeige nachträglich aus.
+    if (get().aiRunning) {
+      set({
+        eventMessage: message,
+        eventTimeout: null,
+        overlayLabel: null,
+        overlayColor: null,
+        pendingAIOverlay: { message, durationMs, eventType },
+      })
+      return
+    }
+
     const timeout = setTimeout(() => {
       set({ eventMessage: null, eventTimeout: null, overlayLabel: null, overlayColor: null })
     }, durationMs)
@@ -126,13 +143,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
       eventTimeout: timeout,
       overlayLabel: overlay?.label ?? null,
       overlayColor: overlay?.color ?? null,
+      pendingAIOverlay: null,
     })
   },
 
   clearEvent: () => {
     const prev = get().eventTimeout
     if (prev) clearTimeout(prev)
-    set({ eventMessage: null, eventTimeout: null, overlayLabel: null, overlayColor: null })
+    set({ eventMessage: null, eventTimeout: null, overlayLabel: null, overlayColor: null, pendingAIOverlay: null })
+  },
+
+  flushAIOverlay: () => {
+    const pending = get().pendingAIOverlay
+    if (!pending) return
+    set({ pendingAIOverlay: null })
+    get().showEvent(pending.message, pending.durationMs, pending.eventType)
   },
 
   setState: (state) => set({ state }),
@@ -146,5 +171,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     eventMessage: null,
     overlayLabel: null,
     overlayColor: null,
+    pendingAIOverlay: null,
   }),
 }))

@@ -60,6 +60,7 @@ export function makeExecuteAIAnimated(set: StoreSet, get: StoreGet): GameStore['
         console.warn('[AI] Safety timeout — forcing aiRunning=false')
         get().endCurrentTurn()
         set({ aiRunning: false })
+        get().flushAIOverlay()
       }
     }, 15000)
 
@@ -71,6 +72,7 @@ export function makeExecuteAIAnimated(set: StoreSet, get: StoreGet): GameStore['
       clearTimeout(safetyTimer)
       get().endCurrentTurn()
       set({ aiRunning: false })
+      get().flushAIOverlay()
       return
     }
 
@@ -111,10 +113,12 @@ export function makeExecuteAIAnimated(set: StoreSet, get: StoreGet): GameStore['
           const currentState = get().state
           if (currentState && isSetPiecePhase(currentState.phase)) {
             set({ aiRunning: false })
+            get().flushAIOverlay()
             return
           }
           try { get().endCurrentTurn() } catch (e) { console.error('[AI] endCurrentTurn crashed:', e) }
           set({ aiRunning: false })
+          get().flushAIOverlay()
         }, estimatedDuration + 50)
         return
       }
@@ -124,10 +128,12 @@ export function makeExecuteAIAnimated(set: StoreSet, get: StoreGet): GameStore['
       // The set piece phase must persist for repositioning
       if (currentState && isSetPiecePhase(currentState.phase)) {
         set({ aiRunning: false })
+        get().flushAIOverlay()
         return
       }
       try { get().endCurrentTurn() } catch (e) { console.error('[AI] endCurrentTurn crashed:', e) }
       set({ aiRunning: false })
+      get().flushAIOverlay()
     }
 
     function executeAction(index: number) {

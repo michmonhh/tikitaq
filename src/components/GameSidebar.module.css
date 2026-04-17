@@ -497,6 +497,36 @@
   transform: translateX(16px);
 }
 
+.ruleCycle {
+  min-width: 56px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--transition-fast), filter var(--transition-fast);
+}
+
+.ruleCycle:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.ruleCycleOn {
+  background: var(--accent);
+  color: #0a0a0a;
+}
+
+.ruleCycleOn:hover {
+  background: var(--accent);
+  filter: brightness(1.1);
+}
+
 /* Game Over */
 .gameOver {
   display: flex;
