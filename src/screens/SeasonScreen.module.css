@@ -1,0 +1,554 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.backBtn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.backBtn:hover {
+  color: var(--text);
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  flex: 1;
+}
+
+.seasonLabel {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tabActive {
+  color: var(--accent, #4caf50);
+  border-bottom-color: var(--accent, #4caf50);
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px 24px;
+}
+
+.error {
+  background: rgba(192, 57, 43, 0.12);
+  border: 1px solid #c0392b;
+  color: #e74c3c;
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.muted {
+  color: var(--text-secondary);
+  font-size: 14px;
+  text-align: center;
+  padding: 40px 16px;
+}
+
+/* Setup Card */
+.setupCard {
+  max-width: 480px;
+  margin: 40px auto;
+  padding: 24px;
+  background: var(--panel, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.setupIntro {
+  color: var(--text-secondary);
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.setupLeagues {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.leagueOption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.leagueOption:not(:disabled):hover {
+  border-color: var(--accent, #4caf50);
+  background: rgba(76, 175, 80, 0.08);
+}
+
+.leagueOption:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.leagueOptionActive {
+  border-color: var(--accent, #4caf50);
+  background: rgba(76, 175, 80, 0.12);
+}
+
+.leagueName {
+  font-weight: 600;
+}
+
+.leagueStatus {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.setupActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.pickedTeam {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(76, 175, 80, 0.08);
+  border: 1px solid rgba(76, 175, 80, 0.4);
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.pickedTeamLogo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+/* Tabelle */
+.standingsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.standingsTable th,
+.standingsTable td {
+  padding: 8px 6px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+}
+
+.standingsTable th {
+  text-align: right;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+
+.colRank {
+  width: 32px;
+  text-align: center !important;
+}
+
+.colTeam {
+  text-align: left !important;
+  width: auto;
+}
+
+.colForm {
+  text-align: center !important;
+  width: 90px;
+}
+
+.teamCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.teamLogoSmall {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.teamNameCell {
+  font-weight: 500;
+}
+
+.userRow {
+  background: rgba(76, 175, 80, 0.08);
+}
+
+.zoneStrip {
+  display: inline-block;
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.formDots {
+  display: inline-flex;
+  gap: 3px;
+  justify-content: center;
+}
+
+.formDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.formW { background: #2ecc71; }
+.formD { background: #f1c40f; }
+.formL { background: #e74c3c; }
+
+/* Zones legend */
+.zonesLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.zoneLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.zoneLegendSwatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* Matchday */
+.matchdayHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+
+.matchdayTitle {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.matchdayNav {
+  display: flex;
+  gap: 4px;
+}
+
+.matchdayNavBtn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.matchdayNavBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.userFixtureCard {
+  padding: 16px;
+  background: rgba(76, 175, 80, 0.08);
+  border: 1px solid rgba(76, 175, 80, 0.4);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.userFixtureLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent, #4caf50);
+  font-weight: 700;
+}
+
+.fixtureRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fixtureSide {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.fixtureSideRight {
+  justify-content: flex-end;
+}
+
+.fixtureTeamName {
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fixtureScore {
+  font-size: 18px;
+  font-weight: 700;
+  min-width: 44px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.fixtureScorePending {
+  color: var(--text-secondary);
+}
+
+.fixtureLogo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.fixtureActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.otherFixtures {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fixtureItem {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.fixtureItemPlayed {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin: 24px 0 10px;
+}
+
+.matchdayFooter {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Ergebnisse (past matchdays) */
+.matchdayGroup {
+  margin-bottom: 20px;
+}
+
+.matchdayGroupTitle {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin: 0 0 6px;
+}
+
+/* Torjäger */
+.scorersList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scorerRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.scorerRank {
+  width: 22px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.scorerName {
+  flex: 1;
+  font-weight: 500;
+}
+
+.scorerTeam {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.scorerGoals {
+  font-weight: 700;
+  font-size: 15px;
+  min-width: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Team tab */
+.teamCard {
+  padding: 20px;
+  background: var(--panel, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  max-width: 420px;
+}
+
+.teamCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.teamCardLogo {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+}
+
+.teamCardName {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.teamCardLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.teamCardStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.teamCardStat {
+  text-align: center;
+}
+
+.teamCardStatValue {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.teamCardStatLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dangerZone {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}

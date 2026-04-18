@@ -1,10 +1,10 @@
-import type { PenaltyState, TeamSide } from '../../engine/types'
+import type { GameState, PenaltyState, TeamSide } from '../../engine/types'
 import { resolvePenalty, aiChoosePenaltyDirection } from '../../engine/shooting'
 import { handleGoalScored } from '../../engine/turn'
 import { repositionForPenalty } from '../../engine/ai/setPiece'
 import { enforceCrossTeamSpacing } from '../../engine/ai/setPieceHelpers'
 import { PITCH } from '../../engine/constants'
-import { addTicker, directionFromX } from './helpers'
+import { addTicker, directionFromX, addGoalLog } from './helpers'
 import { completeShootoutKick } from './shootout'
 import type { GameStore, StoreSet, StoreGet } from './types'
 
@@ -84,7 +84,9 @@ export function makeConfirmPenaltyDefense(set: StoreSet, get: StoreGet): GameSto
             ? { ...p, gameStats: { ...p.gameStats, goalsScored: p.gameStats.goalsScored + 1 } }
             : p,
         )
-        set({ state: { ...newState, players: resultPlayers, ball: { position: ballPos, ownerId: null }, phase: 'penalty' } })
+        let penScoredState: GameState = { ...newState, players: resultPlayers, ball: { position: ballPos, ownerId: null }, phase: 'penalty' }
+        penScoredState = addGoalLog(penScoredState, shooter, 'penalty')
+        set({ state: penScoredState })
         setTimeout(() => {
           const s = get().state
           if (!s) return

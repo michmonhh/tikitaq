@@ -189,6 +189,7 @@ function deserializeState(gs: SerializedMatchState): GameState {
     totalTurns: gs.totalTurns ?? { team1: 0, team2: 0 },
     mustDecide: gs.mustDecide ?? false,
     shootoutState: gs.shootoutState ?? null,
+    goalLog: gs.goalLog ?? [],
     // Ensure player fields exist
     players: gs.players.map(p => ({
       ...p,

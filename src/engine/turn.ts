@@ -333,6 +333,7 @@ export function createInitialGameState(players: PlayerData[], mustDecide = false
     totalTurns: { team1: 0, team2: 0 },
     mustDecide,
     shootoutState: null,
+    goalLog: [],
   }
 
   return setupKickoff(initialState, 1)

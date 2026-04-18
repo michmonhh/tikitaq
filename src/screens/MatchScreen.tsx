@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useGameStore } from '../stores/gameStore'
 import { useAuthStore } from '../stores/authStore'
 import { usePerfectRunStore } from '../stores/perfectRunStore'
+import { useSeasonStore, type GoalEntry } from '../stores/seasonStore'
 import { repositionForSetPiece } from '../engine/ai/setPiece'
 import type { GameState, TeamSide } from '../engine/types'
 import { tally } from '../engine/shootout'
@@ -22,7 +23,10 @@ export function MatchScreen() {
   const goBack = useUIStore(s => s.goBack)
   const userId = useAuthStore(s => s.user?.id)
   const finalizeMatch = usePerfectRunStore(s => s.finalizeMatch)
+  const finishUserMatch = useSeasonStore(s => s.finishUserMatch)
+  const simulateRemainingOfMatchday = useSeasonStore(s => s.simulateRemainingOfMatchday)
   const finalizedRef = useRef(false)
+  const seasonDoneRef = useRef(false)
 
   const team1 = matchConfig ? getTeamById(matchConfig.team1Id) : null
   const team2 = matchConfig ? getTeamById(matchConfig.team2Id) : null
@@ -36,6 +40,7 @@ export function MatchScreen() {
   useEffect(() => {
     if (!matchConfig || !team1 || !team2) return
     finalizedRef.current = false
+    seasonDoneRef.current = false
     initGame(matchConfig.team1Id, matchConfig.team2Id, matchConfig.isVsAI, matchConfig.mustDecide ?? false)
 
     // Duel: determine which team this player controls
@@ -70,6 +75,28 @@ export function MatchScreen() {
       state.shootoutState?.decidedWinner ?? null,
     )
   }, [state?.phase, state?.score.team1, state?.score.team2, state?.shootoutState, matchConfig, userId, finalizeMatch])
+
+  // Saison-Modus: Ergebnis + Torschützen speichern und restliche Partien simulieren.
+  useEffect(() => {
+    if (state?.phase !== 'full_time') return
+    if (!matchConfig?.seasonMatchId || !userId) return
+    if (seasonDoneRef.current) return
+    seasonDoneRef.current = true
+    const scorers: GoalEntry[] = state.goalLog.map(g => ({
+      team: g.team,  // 1 = team1 (home), 2 = team2 (away) — Match-intern konsistent
+      scoringTeamId: g.team === 1 ? matchConfig.team1Id : matchConfig.team2Id,
+      playerName: g.playerName,
+      minute: g.minute,
+      kind: g.kind,
+    }))
+    const homeGoals = state.score.team1
+    const awayGoals = state.score.team2
+    // Reihenfolge wichtig: erst User-Ergebnis persistieren, dann Rest simulieren.
+    ;(async () => {
+      await finishUserMatch(userId, matchConfig.seasonMatchId!, homeGoals, awayGoals, scorers)
+      await simulateRemainingOfMatchday(userId)
+    })()
+  }, [state?.phase, state?.score.team1, state?.score.team2, state?.goalLog, matchConfig, userId, finishUserMatch, simulateRemainingOfMatchday])
 
   // Update localTeam when matchDetails arrive (may load after initGame)
   useEffect(() => {

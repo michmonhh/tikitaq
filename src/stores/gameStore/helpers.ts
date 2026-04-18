@@ -1,6 +1,6 @@
 import type {
   GameState, TeamSide, GameEvent, GamePhase, PlayerData,
-  TickerEntry, TeamMatchStats, PenaltyDirection,
+  TickerEntry, TeamMatchStats, PenaltyDirection, GoalLogEntry,
 } from '../../engine/types'
 
 export function addTicker(
@@ -67,4 +67,20 @@ export function directionFromX(x: number): PenaltyDirection {
 /** Check if a set piece phase */
 export function isSetPiecePhase(phase: GamePhase): boolean {
   return phase === 'free_kick' || phase === 'corner' || phase === 'throw_in' || phase === 'penalty' || phase === 'penalty_kick'
+}
+
+/**
+ * Push eines Tor-Eintrags in `state.goalLog`. Wird nur für reguläre Tore + Elfmeter
+ * aus dem Spiel heraus aufgerufen — NICHT für Elfmeterschießen-Treffer (die zählen
+ * nach FIFA nicht in der Torschützenliste).
+ */
+export function addGoalLog(state: GameState, shooter: PlayerData, kind: GoalLogEntry['kind']): GameState {
+  const entry: GoalLogEntry = {
+    team: shooter.team,
+    playerId: shooter.id,
+    playerName: `${shooter.firstName} ${shooter.lastName}`,
+    minute: state.gameTime,
+    kind,
+  }
+  return { ...state, goalLog: [...state.goalLog, entry] }
 }

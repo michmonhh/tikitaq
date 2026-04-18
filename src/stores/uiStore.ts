@@ -7,6 +7,7 @@ export type Screen =
   | 'quick-game'
   | 'duel'
   | 'perfect-run'
+  | 'season'
   | 'match'
 
 export interface MatchConfig {
@@ -17,6 +18,9 @@ export interface MatchConfig {
   matchId?: string
   // Perfect Run: when set, MatchScreen finalizes the campaign on full_time
   campaignId?: string
+  // Saison-Modus: wenn gesetzt, wird das Ergebnis beim full_time in den Season-Store
+  // geschrieben und die übrigen Matchday-Spiele simuliert.
+  seasonMatchId?: string
   // Wenn true, muss das Spiel entschieden werden — bei Gleichstand nach 90min
   // Verlängerung + ggf. Elfmeterschießen. Default false → Remis ist möglich.
   mustDecide?: boolean
@@ -51,6 +55,7 @@ export const useUIStore = create<UIStore>((set, get) => ({
       case 'quick-game':
       case 'duel':
       case 'perfect-run':
+      case 'season':
         set({ screen: 'main-menu' })
         break
       case 'main-menu':

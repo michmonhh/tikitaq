@@ -6,6 +6,7 @@ import { MainMenuScreen } from './screens/MainMenuScreen'
 import { QuickGameScreen } from './screens/QuickGameScreen'
 import { DuelScreen } from './screens/DuelScreen'
 import { PerfectRunScreen } from './screens/PerfectRunScreen'
+import { SeasonScreen } from './screens/SeasonScreen'
 import { AuthScreen } from './screens/AuthScreen'
 import { MatchScreen } from './screens/MatchScreen'
 
@@ -54,6 +55,8 @@ export default function App() {
       content = <DuelScreen />; break
     case 'perfect-run':
       content = <PerfectRunScreen />; break
+    case 'season':
+      content = <SeasonScreen />; break
     case 'match':
       content = <MatchScreen />; break
     default:

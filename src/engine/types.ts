@@ -1,3 +1,5 @@
+import type { LeagueId } from '../data/leagues'
+
 // --- Core Game Types ---
 
 export type TeamSide = 1 | 2
@@ -120,6 +122,14 @@ export interface TickerEntry {
   team?: TeamSide
 }
 
+export interface GoalLogEntry {
+  team: TeamSide
+  playerId: string
+  playerName: string          // denormalisiert — resistent gegen spätere Roster-Änderungen
+  minute: number              // aus state.gameTime beim Tor
+  kind: 'open_play' | 'penalty' | 'own_goal'
+}
+
 export interface GameState {
   players: PlayerData[]
   ball: BallData
@@ -140,6 +150,7 @@ export interface GameState {
   tackleAttemptedThisTurn: boolean  // For "one tackle per turn" rule
   mustDecide: boolean  // True → bei Gleichstand nach 90min Verlängerung + ggf. Elfmeterschießen (Perfect Run)
   shootoutState: ShootoutState | null  // Nur gesetzt, wenn Elfmeterschießen läuft
+  goalLog: GoalLogEntry[]  // Alle Tore (ohne Shootout-Treffer) — für Saison-Torschützenliste
 }
 
 export type GameEventType =
@@ -212,6 +223,7 @@ export interface Team {
   shortName: string
   color: string
   levels: TeamLevels
+  leagueId: LeagueId
 }
 
 // --- Multiplayer Types ---
@@ -245,4 +257,5 @@ export interface SerializedMatchState {
   totalTurns: { team1: number; team2: number }
   mustDecide: boolean
   shootoutState: ShootoutState | null
+  goalLog?: GoalLogEntry[]
 }

@@ -3,7 +3,7 @@ import { applyShot, calculateShotAccuracy, resolvePenalty, aiChoosePenaltyDirect
 import { handleGoalScored } from '../../engine/turn'
 import { adjustConfidence } from '../../engine/confidence'
 import { PITCH } from '../../engine/constants'
-import { addTicker, updateTeamStats, directionFromX } from './helpers'
+import { addTicker, updateTeamStats, directionFromX, addGoalLog } from './helpers'
 import { completeShootoutKick } from './shootout'
 import type { GameStore, StoreSet, StoreGet } from './types'
 
@@ -103,8 +103,10 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
             : p,
         )
         // Show result briefly, then trigger goal flow
+        let penScoredState: GameState = { ...newState, players: scoringPlayers, ball: { position: ballPos, ownerId: null }, phase: 'penalty' }
+        if (shooter) penScoredState = addGoalLog(penScoredState, shooter, 'penalty')
         set({
-          state: { ...newState, players: scoringPlayers, ball: { position: ballPos, ownerId: null }, phase: 'penalty' },
+          state: penScoredState,
           penaltyState: null,
           drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
         })
@@ -165,10 +167,13 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
     let newState: GameState
 
     if (result.scored) {
+      const shooter = state.players.find(p => p.id === shooterId)
       const updatedPlayers = state.players.map(p =>
         p.id === shooterId ? { ...p, hasActed: true, gameStats: { ...p.gameStats, goalsScored: p.gameStats.goalsScored + 1 } } : p,
       )
-      newState = handleGoalScored({ ...state, players: updatedPlayers }, state.currentTurn)
+      let baseState: GameState = { ...state, players: updatedPlayers }
+      if (shooter) baseState = addGoalLog(baseState, shooter, 'open_play')
+      newState = handleGoalScored(baseState, state.currentTurn)
     } else if (result.event.type === 'shot_missed') {
       // Shot missed (went wide / over goal) → goal kick for defending team
       // Goalkeeper gets the ball inside the goal area (5m-Raum)
