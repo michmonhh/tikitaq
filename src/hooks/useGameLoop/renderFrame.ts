@@ -86,7 +86,7 @@ export function renderFrame(rf: RenderFrameCtx): boolean {
     : null
 
   const isSetupPhase = ['kickoff', 'free_kick', 'corner', 'throw_in'].includes(gameState.phase)
-  const isPenaltyPhase = gameState.phase === 'penalty'
+  const isPenaltyPhase = gameState.phase === 'penalty' || gameState.phase === 'shootout_kick'
 
   // Penalty shooter: show shot line only
   if (isPenaltyPhase && activePlayer && drag.dragPosition && inputState.dragTarget?.type === 'ball') {

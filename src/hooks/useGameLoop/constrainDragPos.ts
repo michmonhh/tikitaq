@@ -18,7 +18,7 @@ export function constrainDragPos(
   dragPos: Position,
   gameState: GameState,
 ): Position | null {
-  const isPenaltyPhase = gameState.phase === 'penalty'
+  const isPenaltyPhase = gameState.phase === 'penalty' || gameState.phase === 'shootout_kick'
   const isSetupPhase = ['kickoff', 'free_kick', 'corner', 'throw_in'].includes(gameState.phase)
 
   if (isPenaltyPhase) {

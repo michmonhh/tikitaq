@@ -5,12 +5,19 @@ import { repositionForPenalty } from '../../engine/ai/setPiece'
 import { enforceCrossTeamSpacing } from '../../engine/ai/setPieceHelpers'
 import { PITCH } from '../../engine/constants'
 import { addTicker, directionFromX } from './helpers'
+import { completeShootoutKick } from './shootout'
 import type { GameStore, StoreSet, StoreGet } from './types'
 
 export function makeConfirmPenaltyDefense(set: StoreSet, get: StoreGet): GameStore['confirmPenaltyDefense'] {
   return () => {
     const { state, penaltyState } = get()
     if (!state || !penaltyState) return
+
+    // Shootout-Variante: kein AI-Reposition, direkt auflösen und nächsten Kick einleiten
+    if (state.phase === 'shootout_kick') {
+      resolveShootoutKick(set, get)
+      return
+    }
 
     // Phase 1: AI repositions its shooting team visibly
     const aiTeam = penaltyState.shooterTeam
@@ -119,4 +126,81 @@ export function makeConfirmPenaltyDefense(set: StoreSet, get: StoreGet): GameSto
       }
     }, 1500) // 1.5s delay: player sees AI repositioning before shot
   }
+}
+
+/**
+ * Führt einen Elfmeterschießen-Schuss aus (Nutzer als Keeper klickt "Bereit",
+ * oder KI als Keeper — in dem Fall ist keeperChoice bereits vorgepickt).
+ * Der Schütze wird hier zufällig per aiChoosePenaltyDirection gewählt —
+ * konsistent mit dem In-Game-Elfmeter, der ebenfalls die Schuss-Richtung
+ * des Schützen nicht vom Nutzer auswählen lässt, wenn über "Bereit" gestartet wird.
+ */
+function resolveShootoutKick(set: StoreSet, get: StoreGet): void {
+  const { state, penaltyState } = get()
+  if (!state || !penaltyState) return
+
+  const keeper = state.players.find(p => p.id === penaltyState.keeperId)
+  const shooter = state.players.find(p => p.id === penaltyState.shooterId)
+  if (!keeper || !shooter) return
+
+  // Keeper-Richtung: aus vorgepickter KI-Wahl ODER aus gezogener Position ableiten
+  const keeperChoice = penaltyState.keeperChoice ?? directionFromX(keeper.position.x)
+  const shooterChoice = aiChoosePenaltyDirection()
+
+  const ps: PenaltyState = { ...penaltyState, shooterChoice, keeperChoice }
+  const result = resolvePenalty(ps, shooter, keeper)
+
+  const team1Label = ps.shooterTeam === 1 ? 'Team 1' : 'Team 2'
+  const tickerMsg = `${team1Label}: ${result.event.message}`
+  const tickerState = addTicker(state, tickerMsg, result.event.type, ps.shooterTeam)
+  get().showEvent(result.event.message, 2500, result.event.type)
+
+  const goalY = ps.shooterTeam === 1 ? PITCH.GOAL_TOP_Y : PITCH.GOAL_BOTTOM_Y
+  const keeperRevealX = keeperChoice === 'left' ? 40 : keeperChoice === 'right' ? 60 : 50
+  const keeperRevealY = keeper.team === 1 ? 97 : 3
+  const shotX = shooterChoice === 'left' ? 42 : shooterChoice === 'right' ? 58 : 50
+
+  let resultPlayers = tickerState.players.map(p =>
+    p.id === ps.keeperId
+      ? { ...p, position: { x: keeperRevealX, y: keeperRevealY }, origin: { x: keeperRevealX, y: keeperRevealY } }
+      : p,
+  )
+
+  const scored = result.outcome === 'scored'
+  if (scored) {
+    const ballPos = { x: shotX, y: goalY + (ps.shooterTeam === 1 ? 1 : -1) }
+    resultPlayers = resultPlayers.map(p =>
+      p.id === ps.shooterId
+        ? { ...p, gameStats: { ...p.gameStats, goalsScored: p.gameStats.goalsScored + 1 } }
+        : p,
+    )
+    set({
+      state: { ...tickerState, players: resultPlayers, ball: { position: ballPos, ownerId: null } },
+      penaltyState: null,
+      drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
+    })
+  } else if (result.outcome === 'saved') {
+    const reboundPos = result.reboundPos!
+    resultPlayers = resultPlayers.map(p =>
+      p.id === ps.keeperId ? { ...p, gameStats: { ...p.gameStats, saves: p.gameStats.saves + 1 } } : p,
+    )
+    set({
+      state: { ...tickerState, players: resultPlayers, ball: { position: reboundPos, ownerId: null } },
+      penaltyState: null,
+      drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
+    })
+  } else {
+    const missX = shotX + (shotX < 50 ? -8 : 8)
+    const missY = goalY + (ps.shooterTeam === 1 ? -3 : 3)
+    set({
+      state: { ...tickerState, players: resultPlayers, ball: { position: { x: missX, y: missY }, ownerId: null } },
+      penaltyState: null,
+      drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
+    })
+  }
+
+  // Nach Visualisierung: Entscheidung / nächster Kick
+  setTimeout(() => {
+    completeShootoutKick(set, get, scored)
+  }, 2500)
 }

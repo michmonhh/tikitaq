@@ -3,7 +3,22 @@ import { endTurn, handleHalfTime } from '../../engine/turn'
 import { repositionForSetPiece } from '../../engine/ai/setPiece'
 import { enforceCrossTeamSpacing } from '../../engine/ai/setPieceHelpers'
 import { addTicker, isSetPiecePhase } from './helpers'
+import { startShootout } from './shootout'
 import type { GameStore, StoreSet, StoreGet } from './types'
+
+/** Liefert passende Ticker-Strings für die Halbzeitpause, abhängig von der kommenden Halbzeit. */
+function halfTimeTickers(nextHalf: number): { tickerBreak: string; tickerKickoff: string } {
+  switch (nextHalf) {
+    case 2:
+      return { tickerBreak: 'Halbzeit', tickerKickoff: 'Anpfiff – 2. Halbzeit' }
+    case 3:
+      return { tickerBreak: 'Ende 2. Halbzeit – Verlängerung folgt', tickerKickoff: 'Anpfiff – Verlängerung (ET1)' }
+    case 4:
+      return { tickerBreak: 'Seitenwechsel Verlängerung', tickerKickoff: 'Anpfiff – Verlängerung (ET2)' }
+    default:
+      return { tickerBreak: 'Pause', tickerKickoff: 'Anpfiff' }
+  }
+}
 
 export function makeEndCurrentTurn(set: StoreSet, get: StoreGet): GameStore['endCurrentTurn'] {
   return () => {
@@ -13,13 +28,14 @@ export function makeEndCurrentTurn(set: StoreSet, get: StoreGet): GameStore['end
 
     const newState = endTurn(state)
 
-    // Check half-time transition
+    // Check half-time transition (auch für Übergänge 2→3 Verlängerung, 3→4 ET-Halbzeit)
     if (newState.phase === 'half_time') {
       let htState = handleHalfTime(newState)
-      htState = addTicker(htState, 'Halbzeit', 'half_time')
-      htState = addTicker(htState, 'Anpfiff – 2. Halbzeit', 'kickoff')
+      const { tickerBreak, tickerKickoff } = halfTimeTickers(newState.half)
+      htState = addTicker(htState, tickerBreak, 'half_time')
+      htState = addTicker(htState, tickerKickoff, 'kickoff')
       set({ state: htState })
-      get().showEvent('Half Time!', 3000)
+      get().showEvent(tickerBreak, 3000)
       return
     }
 
@@ -27,6 +43,12 @@ export function makeEndCurrentTurn(set: StoreSet, get: StoreGet): GameStore['end
       const ftState = addTicker(newState, 'Abpfiff – Spielende', 'half_time')
       set({ state: ftState })
       get().showEvent('Full Time!', 5000)
+      return
+    }
+
+    if (newState.phase === 'shootout') {
+      set({ state: newState })
+      startShootout(set, get)
       return
     }
 

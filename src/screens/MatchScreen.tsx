@@ -1,8 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useGameStore } from '../stores/gameStore'
 import { useAuthStore } from '../stores/authStore'
+import { usePerfectRunStore } from '../stores/perfectRunStore'
 import { repositionForSetPiece } from '../engine/ai/setPiece'
-import type { TeamSide } from '../engine/types'
+import type { GameState, TeamSide } from '../engine/types'
+import { tally } from '../engine/shootout'
 import { useUIStore } from '../stores/uiStore'
 import { useMatchSync } from '../hooks/useMatchSync'
 import { useGameLoop } from '../hooks/useGameLoop'
@@ -19,6 +21,8 @@ export function MatchScreen() {
   const { initGame, endCurrentTurn, confirmKickoff, confirmSetPieceReady, executeAIAnimated, reset, state, isVsAI, aiRunning, penaltyState, confirmPenaltyDefense, setLocalTeam, setDuel } = useGameStore()
   const goBack = useUIStore(s => s.goBack)
   const userId = useAuthStore(s => s.user?.id)
+  const finalizeMatch = usePerfectRunStore(s => s.finalizeMatch)
+  const finalizedRef = useRef(false)
 
   const team1 = matchConfig ? getTeamById(matchConfig.team1Id) : null
   const team2 = matchConfig ? getTeamById(matchConfig.team2Id) : null
@@ -31,7 +35,8 @@ export function MatchScreen() {
 
   useEffect(() => {
     if (!matchConfig || !team1 || !team2) return
-    initGame(matchConfig.team1Id, matchConfig.team2Id, matchConfig.isVsAI)
+    finalizedRef.current = false
+    initGame(matchConfig.team1Id, matchConfig.team2Id, matchConfig.isVsAI, matchConfig.mustDecide ?? false)
 
     // Duel: determine which team this player controls
     if (matchConfig.isDuel) {
@@ -44,7 +49,27 @@ export function MatchScreen() {
     }
 
     return () => reset()
+    // Init runs only when matchConfig/team changes. duelSync.matchDetails + userId
+    // are handled by the dedicated effect below; re-running init on their arrival
+    // would reset the game mid-flight.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchConfig, team1, team2, initGame, reset])
+
+  // Perfect Run: finalize the campaign row + award XP once per match at full_time.
+  useEffect(() => {
+    if (state?.phase !== 'full_time') return
+    if (!matchConfig?.campaignId || !userId) return
+    if (finalizedRef.current) return
+    finalizedRef.current = true
+    finalizeMatch(
+      userId,
+      matchConfig.campaignId,
+      state.score.team1,
+      state.score.team2,
+      matchConfig.team2Id,
+      state.shootoutState?.decidedWinner ?? null,
+    )
+  }, [state?.phase, state?.score.team1, state?.score.team2, state?.shootoutState, matchConfig, userId, finalizeMatch])
 
   // Update localTeam when matchDetails arrive (may load after initGame)
   useEffect(() => {
@@ -55,7 +80,8 @@ export function MatchScreen() {
 
   const team1Color = matchConfig ? getEffectiveColor(matchConfig.team1Id) : '#eada1e'
   const team2Color = matchConfig ? getEffectiveColor(matchConfig.team2Id) : '#e32221'
-  useGameLoop(canvasRef, containerRef, { team1: team1Color, team2: team2Color })
+  const teamColors = useMemo(() => ({ team1: team1Color, team2: team2Color }), [team1Color, team2Color])
+  useGameLoop(canvasRef, containerRef, teamColors)
 
   useEffect(() => {
     if (!state || !isVsAI || state.currentTurn !== 2) return
@@ -98,6 +124,9 @@ export function MatchScreen() {
       }, 800)
       return () => clearTimeout(timer)
     }
+    // Only re-evaluate when turn/phase change — reading full `state` at fire time
+    // (via getState) keeps us off the render loop's treadmill.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.currentTurn, state?.phase, isVsAI, aiRunning, executeAIAnimated])
 
   const handleBack = () => {
@@ -110,14 +139,16 @@ export function MatchScreen() {
   const isCorner = state?.phase === 'corner'
   const isThrowIn = state?.phase === 'throw_in'
   const isPenalty = state?.phase === 'penalty'
+  const isShootoutKick = state?.phase === 'shootout_kick'
   const isSetPiece = isFreeKick || isCorner || isThrowIn
   const isFullTime = state?.phase === 'full_time'
   const isPlayerTurn = state && state.currentTurn === 1 && state.phase === 'playing'
 
-  // Penalty: determine if player is the shooter or keeper
+  // Penalty / Shootout kick: determine if player is the shooter or keeper
   const localTeam = useGameStore(s => s.localTeam)
-  const isShooter = isPenalty && penaltyState?.shooterTeam === localTeam
-  const isPenaltyKeeper = isPenalty && penaltyState && !isShooter
+  const isPenaltyLike = isPenalty || isShootoutKick
+  const isShooter = isPenaltyLike && penaltyState?.shooterTeam === localTeam
+  const isPenaltyKeeper = isPenaltyLike && penaltyState && !isShooter
 
   // Determine if user is attacker in a set piece (owns the ball via their team).
   // When user is attacker the "Free Kick / Corner / Throw In" confirm button is
@@ -142,6 +173,11 @@ export function MatchScreen() {
       <div className={styles.canvasWrapper} ref={containerRef}>
         <canvas ref={canvasRef} className={styles.canvas} />
 
+        {/* Shootout score grid */}
+        {state?.shootoutState && (state.phase === 'shootout' || isShootoutKick || isFullTime) && (
+          <ShootoutOverlay state={state} team1Name={team1?.shortName ?? 'T1'} team2Name={team2?.shortName ?? 'T2'} />
+        )}
+
         {/* AI thinking indicator */}
         {aiRunning && (
           <div className={styles.aiOverlay}>
@@ -161,7 +197,7 @@ export function MatchScreen() {
               <Button variant="primaryPulse" onClick={confirmPenaltyDefense} className={styles.actionBtn}>
                 Bereit
               </Button>
-            ) : isPenalty ? null : showSetPieceButton ? (
+            ) : isPenaltyLike ? null : showSetPieceButton ? (
               <Button
                 variant="primaryPulse"
                 onClick={needsFreeKickReady ? confirmSetPieceReady : confirmKickoff}
@@ -197,6 +233,47 @@ export function MatchScreen() {
         team2Color={team2Color}
         onBack={handleBack}
       />
+    </div>
+  )
+}
+
+function ShootoutOverlay({ state, team1Name, team2Name }: { state: GameState; team1Name: string; team2Name: string }) {
+  const so = state.shootoutState
+  if (!so) return null
+  const { team1Scored, team2Scored } = tally(so)
+  const kicksT1 = so.kicks.filter(k => k.team === 1)
+  const kicksT2 = so.kicks.filter(k => k.team === 2)
+  // Reservierte Slots: mind. 5 für die reguläre Serie, danach dynamisch
+  const slotCount = Math.max(5, Math.max(kicksT1.length, kicksT2.length))
+  return (
+    <div className={styles.shootoutOverlay}>
+      <div className={styles.shootoutTitle}>Elfmeterschießen · Runde {so.round}</div>
+      <div className={styles.shootoutRow}>
+        <span className={styles.shootoutTeamLabel}>{team1Name}</span>
+        <div className={styles.shootoutDots}>
+          {Array.from({ length: slotCount }).map((_, i) => {
+            const k = kicksT1[i]
+            const cls = !k
+              ? styles.shootoutDot
+              : `${styles.shootoutDot} ${k.scored ? styles.shootoutDotScored : styles.shootoutDotMissed}`
+            return <span key={i} className={cls} />
+          })}
+        </div>
+        <span className={styles.shootoutScore}>{team1Scored}</span>
+      </div>
+      <div className={styles.shootoutRow}>
+        <span className={styles.shootoutTeamLabel}>{team2Name}</span>
+        <div className={styles.shootoutDots}>
+          {Array.from({ length: slotCount }).map((_, i) => {
+            const k = kicksT2[i]
+            const cls = !k
+              ? styles.shootoutDot
+              : `${styles.shootoutDot} ${k.scored ? styles.shootoutDotScored : styles.shootoutDotMissed}`
+            return <span key={i} className={cls} />
+          })}
+        </div>
+        <span className={styles.shootoutScore}>{team2Scored}</span>
+      </div>
     </div>
   )
 }

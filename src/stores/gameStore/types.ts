@@ -48,7 +48,7 @@ export interface GameStore {
   setGameSetting: <K extends keyof GameStore['gameSettings']>(key: K, value: GameStore['gameSettings'][K]) => void
 
   // Actions
-  initGame: (team1Id?: number, team2Id?: number, isVsAI?: boolean) => void
+  initGame: (team1Id?: number, team2Id?: number, isVsAI?: boolean, mustDecide?: boolean) => void
   selectPlayer: (playerId: string | null) => void
   setActivePlayer: (playerId: string | null) => void
   setDragBall: (isDragging: boolean, pos?: Position) => void

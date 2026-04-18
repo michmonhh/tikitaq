@@ -91,10 +91,12 @@ export const SHOOTING = {
 
 // --- Turn & Game Flow ---
 export const GAME = {
-  HALF_DURATION: 45,     // Minutes per half
+  HALF_DURATION: 45,     // Minutes per regulation half
+  ET_HALF_DURATION: 15,  // Minutes per extra-time half (IFAB Law 7)
   TOTAL_HALVES: 2,
   MINUTES_PER_TURN: 1,   // Game minutes that pass each turn
   MAX_PASSES_PER_TURN: 1,
+  SHOOTOUT_ROUNDS: 5,    // IFAB Law 10: first five kicks per team
 } as const
 
 // --- Player Defaults ---

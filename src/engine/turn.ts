@@ -1,5 +1,9 @@
-import type { GameState, TeamSide, PlayerData, BallData, TeamMatchStats } from './types'
+import type { GameState, TeamSide, PlayerData, BallData, TeamMatchStats, Half } from './types'
 import { GAME, PITCH } from './constants'
+
+const REGULATION_END = GAME.HALF_DURATION * 2            // 90
+const ET1_END        = REGULATION_END + GAME.ET_HALF_DURATION  // 105
+const ET2_END        = ET1_END + GAME.ET_HALF_DURATION         // 120
 
 export function emptyMatchStats(): TeamMatchStats {
   return {
@@ -17,14 +21,33 @@ export function endTurn(state: GameState): GameState {
   const nextTurn: TeamSide = state.currentTurn === 1 ? 2 : 1
   const newGameTime = state.gameTime + GAME.MINUTES_PER_TURN
 
-  let newHalf = state.half
+  let newHalf: Half = state.half
   let newPhase = state.phase
+
+  const tied = state.score.team1 === state.score.team2
 
   if (state.half === 1 && newGameTime >= GAME.HALF_DURATION) {
     newHalf = 2
     newPhase = 'half_time'
-  } else if (state.half === 2 && newGameTime >= GAME.HALF_DURATION * 2) {
-    newPhase = 'full_time'
+  } else if (state.half === 2 && newGameTime >= REGULATION_END) {
+    // Ende regulärer Spielzeit: Bei Gleichstand + mustDecide → Verlängerung, sonst Abpfiff.
+    if (tied && state.mustDecide) {
+      newHalf = 3
+      newPhase = 'half_time'
+    } else {
+      newPhase = 'full_time'
+    }
+  } else if (state.half === 3 && newGameTime >= ET1_END) {
+    // Ende ET1 → Pause vor ET2
+    newHalf = 4
+    newPhase = 'half_time'
+  } else if (state.half === 4 && newGameTime >= ET2_END) {
+    // Ende ET2: Bei Gleichstand → Elfmeterschießen, sonst Abpfiff.
+    if (tied) {
+      newPhase = 'shootout'
+    } else {
+      newPhase = 'full_time'
+    }
   } else {
     newPhase = 'playing'
   }
@@ -269,19 +292,27 @@ export function handleGoalScored(
 }
 
 /**
- * Handle half-time: swap sides and set up kickoff for Team 2.
+ * Handle half-time pause: set up kickoff for the next half.
+ * - Half 1 → 2: Team 2 stößt an (Seitenwechsel der Regulärzeit)
+ * - Half 2 → 3: Team 1 stößt die Verlängerung an
+ * - Half 3 → 4: Team 2 stößt die zweite ET-Hälfte an
  */
 export function handleHalfTime(state: GameState): GameState {
+  // state.half wurde bereits in endTurn auf die kommende Halbzeit gesetzt
+  const nextHalf: Half = state.half
+  const kickingTeam: TeamSide = (nextHalf === 2 || nextHalf === 4) ? 2 : 1
   return setupKickoff(
-    { ...state, phase: 'playing', half: 2 },
-    2
+    { ...state, phase: 'playing', half: nextHalf },
+    kickingTeam,
   )
 }
 
 /**
  * Create the initial game state for a new match.
+ * @param mustDecide Wenn true, wird bei Unentschieden nach 90min verlängert und
+ * ggf. ein Elfmeterschießen ausgetragen (Perfect Run). Default false → Remis möglich.
  */
-export function createInitialGameState(players: PlayerData[]): GameState {
+export function createInitialGameState(players: PlayerData[], mustDecide = false): GameState {
   const initialState: GameState = {
     players,
     ball: { position: { x: PITCH.CENTER_X, y: PITCH.CENTER_Y }, ownerId: null },
@@ -300,6 +331,8 @@ export function createInitialGameState(players: PlayerData[]): GameState {
     matchStats: { team1: emptyMatchStats(), team2: emptyMatchStats() },
     ticker: [],
     totalTurns: { team1: 0, team2: 0 },
+    mustDecide,
+    shootoutState: null,
   }
 
   return setupKickoff(initialState, 1)

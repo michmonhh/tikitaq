@@ -13,6 +13,7 @@ export function MainMenuScreen() {
   const menuItems = [
     { label: 'QUICK GAME', screen: 'quick-game' as const, description: 'Play vs AI' },
     { label: 'DUEL', screen: 'duel' as const, description: 'Play vs Friends' },
+    { label: 'PERFECT RUN', screen: 'perfect-run' as const, description: 'Beat every team — lose once, it\u2019s over' },
     { label: 'SEASON', screen: 'main-menu' as const, description: 'Coming Soon', disabled: true },
     { label: 'WORLD LEAGUE', screen: 'main-menu' as const, description: 'Coming Soon', disabled: true },
   ]

@@ -49,10 +49,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   selectPlayer: (playerId) => set({ selectedPlayerId: playerId }),
 
-  initGame: (team1Id, team2Id, isVsAI = true) => {
+  initGame: (team1Id, team2Id, isVsAI = true, mustDecide = false) => {
     resetOpponentModel() // Clear opponent learning data for new match
     const players = createFormation(team1Id, team2Id)
-    let state = createInitialGameState(players)
+    let state = createInitialGameState(players, mustDecide)
     // Anstoß-Ticker
     state = addTicker(state, 'Anpfiff – 1. Halbzeit', 'kickoff')
     if (isVsAI) {

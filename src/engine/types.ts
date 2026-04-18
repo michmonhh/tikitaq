@@ -58,7 +58,10 @@ export interface Score {
   team2: number
 }
 
-export type GamePhase = 'playing' | 'kickoff' | 'free_kick' | 'corner' | 'throw_in' | 'penalty' | 'penalty_kick' | 'goal_kick' | 'goal_scored' | 'half_time' | 'full_time'
+export type GamePhase = 'playing' | 'kickoff' | 'free_kick' | 'corner' | 'throw_in' | 'penalty' | 'penalty_kick' | 'goal_kick' | 'goal_scored' | 'half_time' | 'full_time' | 'shootout' | 'shootout_kick'
+
+/** Halbzeit-Nummerierung: 1/2 = Regelspielzeit, 3/4 = Verlängerung (IFAB Law 7) */
+export type Half = 1 | 2 | 3 | 4
 
 /** Elfmeter-Richtung: links/mitte/rechts aus Sicht des Schützen */
 export type PenaltyDirection = 'left' | 'center' | 'right'
@@ -70,6 +73,28 @@ export interface PenaltyState {
   keeperId: string            // TW der verteidigenden Mannschaft
   shooterChoice: PenaltyDirection | null  // Gewählte Schussrichtung
   keeperChoice: PenaltyDirection | null   // Gewählte TW-Position
+}
+
+/** Einzelner Schuss im Elfmeterschießen */
+export interface ShootoutKick {
+  team: TeamSide
+  playerId: string
+  scored: boolean
+}
+
+/**
+ * Elfmeterschießen-Zustand (IFAB Law 10).
+ * - `order[0]` schießt zuerst, `order[1]` zweitens (in jeder Runde).
+ * - Ab Runde 5 (index 4) wird nach jedem Einzelschuss auf Entscheidung geprüft.
+ * - `usedPlayers` verhindert Wiederholung bis alle 11 Spieler geschossen haben.
+ * - `round` zählt die laufende Runde (1-basiert); der Index in `kicks` nicht.
+ */
+export interface ShootoutState {
+  order: [TeamSide, TeamSide]
+  round: number
+  kicks: ShootoutKick[]
+  usedPlayers: { team1: string[]; team2: string[] }
+  decidedWinner: TeamSide | null
 }
 
 export interface TeamMatchStats {
@@ -101,7 +126,7 @@ export interface GameState {
   score: Score
   currentTurn: TeamSide
   gameTime: number
-  half: 1 | 2
+  half: Half
   phase: GamePhase
   passesThisTurn: number
   ballOwnerChangedThisTurn: boolean
@@ -113,6 +138,8 @@ export interface GameState {
   ticker: TickerEntry[]
   totalTurns: { team1: number; team2: number }
   tackleAttemptedThisTurn: boolean  // For "one tackle per turn" rule
+  mustDecide: boolean  // True → bei Gleichstand nach 90min Verlängerung + ggf. Elfmeterschießen (Perfect Run)
+  shootoutState: ShootoutState | null  // Nur gesetzt, wenn Elfmeterschießen läuft
 }
 
 export type GameEventType =
@@ -205,7 +232,7 @@ export interface SerializedMatchState {
   score: Score
   currentTurn: TeamSide
   gameTime: number
-  half: 1 | 2
+  half: Half
   phase: GamePhase
   passesThisTurn: number
   ballOwnerChangedThisTurn: boolean
@@ -216,4 +243,6 @@ export interface SerializedMatchState {
   matchStats: { team1: TeamMatchStats; team2: TeamMatchStats }
   ticker: TickerEntry[]
   totalTurns: { team1: number; team2: number }
+  mustDecide: boolean
+  shootoutState: ShootoutState | null
 }

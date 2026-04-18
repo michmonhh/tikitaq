@@ -153,6 +153,8 @@ export function useMatchSync(matchId: string | undefined, userId: string | undef
       matchStats: newState.matchStats,
       ticker: newState.ticker,
       totalTurns: newState.totalTurns,
+      mustDecide: newState.mustDecide,
+      shootoutState: newState.shootoutState,
     }
 
     const { error: updateError } = await supabase
@@ -185,6 +187,8 @@ function deserializeState(gs: SerializedMatchState): GameState {
     matchStats: gs.matchStats ?? { team1: emptyMatchStats(), team2: emptyMatchStats() },
     ticker: gs.ticker ?? [],
     totalTurns: gs.totalTurns ?? { team1: 0, team2: 0 },
+    mustDecide: gs.mustDecide ?? false,
+    shootoutState: gs.shootoutState ?? null,
     // Ensure player fields exist
     players: gs.players.map(p => ({
       ...p,

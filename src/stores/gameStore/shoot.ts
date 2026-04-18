@@ -4,12 +4,68 @@ import { handleGoalScored } from '../../engine/turn'
 import { adjustConfidence } from '../../engine/confidence'
 import { PITCH } from '../../engine/constants'
 import { addTicker, updateTeamStats, directionFromX } from './helpers'
+import { completeShootoutKick } from './shootout'
 import type { GameStore, StoreSet, StoreGet } from './types'
 
 export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBall'] {
   return (shooterId, target) => {
     const { state, penaltyState } = get()
     if (!state) return
+
+    // ── Shootout kick: user as shooter drags ball to pick direction ──
+    if (state.phase === 'shootout_kick' && penaltyState) {
+      const shooterChoice = directionFromX(target.x)
+      const keeperChoice = penaltyState.keeperChoice ?? aiChoosePenaltyDirection()
+      const ps: PenaltyState = { ...penaltyState, shooterChoice, keeperChoice }
+      const shooter = state.players.find(p => p.id === ps.shooterId)!
+      const keeper = state.players.find(p => p.id === ps.keeperId)!
+      const result = resolvePenalty(ps, shooter, keeper)
+
+      const tickerState = addTicker(state, result.event.message, result.event.type, ps.shooterTeam)
+      get().showEvent(result.event.message, 2500, result.event.type)
+
+      const goalY = ps.shooterTeam === 1 ? PITCH.GOAL_TOP_Y : PITCH.GOAL_BOTTOM_Y
+      const keeperRevealX = keeperChoice === 'left' ? 40 : keeperChoice === 'right' ? 60 : 50
+      const keeperRevealY = keeper.team === 1 ? 97 : 3
+      const shotX = shooterChoice === 'left' ? 42 : shooterChoice === 'right' ? 58 : 50
+
+      let resultPlayers = tickerState.players.map(p =>
+        p.id === ps.keeperId
+          ? { ...p, position: { x: keeperRevealX, y: keeperRevealY }, origin: { x: keeperRevealX, y: keeperRevealY } }
+          : p,
+      )
+
+      const scored = result.outcome === 'scored'
+      let ballPos = state.ball.position
+      if (scored) {
+        ballPos = { x: shotX, y: goalY + (ps.shooterTeam === 1 ? 1 : -1) }
+        resultPlayers = resultPlayers.map(p =>
+          p.id === ps.shooterId
+            ? { ...p, gameStats: { ...p.gameStats, goalsScored: p.gameStats.goalsScored + 1 } }
+            : p,
+        )
+      } else if (result.outcome === 'saved') {
+        ballPos = result.reboundPos!
+        resultPlayers = resultPlayers.map(p =>
+          p.id === ps.keeperId ? { ...p, gameStats: { ...p.gameStats, saves: p.gameStats.saves + 1 } } : p,
+        )
+      } else {
+        const missX = shotX + (shotX < 50 ? -8 : 8)
+        const missY = goalY + (ps.shooterTeam === 1 ? -3 : 3)
+        ballPos = { x: missX, y: missY }
+      }
+
+      set({
+        state: { ...tickerState, players: resultPlayers, ball: { position: ballPos, ownerId: null } },
+        penaltyState: null,
+        drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
+      })
+
+      setTimeout(() => {
+        completeShootoutKick(set, get, scored)
+      }, 2500)
+      return
+    }
 
     // ── Penalty: resolve via drag direction ──
     if (state.phase === 'penalty' && penaltyState) {

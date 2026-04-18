@@ -87,6 +87,80 @@
   letter-spacing: 0.08em;
 }
 
+/* Shootout score grid overlay (top-center of canvas) */
+.shootoutOverlay {
+  position: absolute;
+  top: var(--space-md);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(15, 31, 24, 0.92);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+  box-shadow: var(--shadow-lg);
+}
+
+.shootoutTitle {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.shootoutRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shootoutTeamLabel {
+  width: 46px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+}
+
+.shootoutDots {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+}
+
+.shootoutDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+}
+
+.shootoutDotScored {
+  background: #4caf50;
+  border-color: #4caf50;
+}
+
+.shootoutDotMissed {
+  background: #f44336;
+  border-color: #f44336;
+}
+
+.shootoutScore {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  min-width: 18px;
+  text-align: right;
+}
+
 /* Mobile: stack vertically, canvas takes full space */
 @media (max-width: 768px) {
   .container {
