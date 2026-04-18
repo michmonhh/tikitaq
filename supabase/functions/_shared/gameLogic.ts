@@ -106,7 +106,7 @@ function applyPassAction(state: MatchState, player: PlayerData, action: PlayerAc
   }
 }
 
-function applyShootAction(state: MatchState, player: PlayerData, action: PlayerAction): MatchState {
+function applyShootAction(state: MatchState, player: PlayerData, _action: PlayerAction): MatchState {
   if (state.ball.ownerId !== player.id) throw new Error('Player does not have the ball')
 
   // Simple server-side resolution

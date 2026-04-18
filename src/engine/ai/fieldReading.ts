@@ -67,7 +67,7 @@ export function readField(state: GameState, team: TeamSide): FieldReading {
   // Taktische Erkenntnisse ableiten
   const weakSide = findWeakSide(opponentGrid)
   const centralCongestion = calcCentralCongestion(opponentGrid, opponents.length)
-  const gapBetweenLines = calcGapBetweenLines(opponents, team)
+  const gapBetweenLines = calcGapBetweenLines(opponents)
   const opponentHighLine = checkHighLine(opponents, team)
   const opponentCompact = gapBetweenLines < 15
   const attackDirection = chooseAttackDirection(weakSide, centralCongestion)
@@ -143,7 +143,7 @@ function calcCentralCongestion(oppGrid: number[][], totalOpponents: number): num
 }
 
 /** Berechnet den Abstand zwischen Gegner-Abwehrlinie und Gegner-Mittelfeldlinie (in %) */
-function calcGapBetweenLines(opponents: PlayerData[], _team: TeamSide): number {
+function calcGapBetweenLines(opponents: PlayerData[]): number {
   // Gegner-Verteidiger und -Mittelfeldspieler identifizieren
   const defLabels = ['IV', 'LV', 'RV']
   const midLabels = ['ZDM', 'LM', 'RM', 'OM']

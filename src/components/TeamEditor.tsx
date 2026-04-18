@@ -3,7 +3,7 @@
  * This entire file can be safely deleted to remove the editor.
  * Also remove the button in MainMenuScreen that opens it.
  */
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Modal } from './Modal'
 import { Button } from './Button'
 import { TEAMS } from '../data/teams'
@@ -26,6 +26,16 @@ function saveCustomTeams(data: Record<number, CustomTeamData>) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
+function readTeamData(teamId: number): { color: string; roster: PlayerTemplate[] } {
+  const custom = loadCustomTeams()
+  const team = TEAMS.find(t => t.id === teamId)
+  const customData = custom[teamId]
+  return {
+    color: customData?.color ?? team?.color ?? '#888888',
+    roster: customData?.roster ?? TEAM_ROSTERS[teamId] ?? [],
+  }
+}
+
 const STAT_KEYS: { key: keyof PlayerStats; label: string }[] = [
   { key: 'pacing', label: 'PAC' },
   { key: 'finishing', label: 'FIN' },
@@ -44,20 +54,17 @@ interface TeamEditorProps {
 
 export function TeamEditor({ open, onClose }: TeamEditorProps) {
   const [selectedTeamId, setSelectedTeamId] = useState(0)
-  const [color, setColor] = useState('#dc052d')
-  const [roster, setRoster] = useState<PlayerTemplate[]>([])
+  const [color, setColor] = useState(() => readTeamData(0).color)
+  const [roster, setRoster] = useState<PlayerTemplate[]>(() => readTeamData(0).roster)
   const [saved, setSaved] = useState(false)
 
-  // Load team data when selection changes
-  useEffect(() => {
-    const custom = loadCustomTeams()
-    const team = TEAMS.find(t => t.id === selectedTeamId)
-    const customData = custom[selectedTeamId]
-
-    setColor(customData?.color ?? team?.color ?? '#888888')
-    setRoster(customData?.roster ?? TEAM_ROSTERS[selectedTeamId] ?? [])
+  const handleSelectTeam = (id: number) => {
+    const data = readTeamData(id)
+    setSelectedTeamId(id)
+    setColor(data.color)
+    setRoster(data.roster)
     setSaved(false)
-  }, [selectedTeamId])
+  }
 
   const updatePlayer = (index: number, field: string, value: string | number) => {
     setRoster(prev => prev.map((p, i) => {
@@ -95,7 +102,7 @@ export function TeamEditor({ open, onClose }: TeamEditorProps) {
         <div className={styles.teamSelect}>
           <select
             value={selectedTeamId}
-            onChange={e => setSelectedTeamId(Number(e.target.value))}
+            onChange={e => handleSelectTeam(Number(e.target.value))}
             className={styles.select}
           >
             {TEAMS.map(t => (

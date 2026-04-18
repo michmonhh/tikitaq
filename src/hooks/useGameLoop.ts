@@ -35,6 +35,15 @@ export function useGameLoop(
     dragPosition: null,
     pointerDown: false,
   })
+  // Hold latest teamColors in a ref so the mount effect stays mount-only while
+  // renderFrame/setTeamColors always see current values.
+  const teamColorsRef = useRef(teamColors)
+  useEffect(() => {
+    teamColorsRef.current = teamColors
+    if (teamColors && playerRendererRef.current) {
+      playerRendererRef.current.setTeamColors(teamColors.team1, teamColors.team2)
+    }
+  }, [teamColors])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -47,8 +56,9 @@ export function useGameLoop(
     camera.mirror = localTeamInit === 2
     pitchRendererRef.current = new PitchRenderer(camera)
     playerRendererRef.current = new PlayerRenderer(camera)
-    if (teamColors) {
-      playerRendererRef.current.setTeamColors(teamColors.team1, teamColors.team2)
+    const initialColors = teamColorsRef.current
+    if (initialColors) {
+      playerRendererRef.current.setTeamColors(initialColors.team1, initialColors.team2)
     }
     ballRendererRef.current = new BallRenderer(camera)
     overlayRendererRef.current = new OverlayRenderer(camera)
@@ -95,7 +105,8 @@ export function useGameLoop(
         // Ball-Position VOR der Aktion merken
         const ballFrom = { ...store.state!.ball.position }
 
-        if (isInGoalZone(pos, shooter.team)) {
+        const penaltyLike = gameState.phase === 'penalty' || gameState.phase === 'shootout_kick'
+        if (penaltyLike || isInGoalZone(pos, shooter.team)) {
           store.shootBall(ballOwnerId, pos)
         } else {
           store.passBall(ballOwnerId, pos)
@@ -162,7 +173,7 @@ export function useGameLoop(
           arrows: arrowRendererRef.current,
           prevBallTeamRef,
           inputState: inputStateRef.current,
-          teamColors,
+          teamColors: teamColorsRef.current,
         })
       }
       rafRef.current = requestAnimationFrame(renderLoop)
@@ -182,9 +193,9 @@ export function useGameLoop(
         // klicken, damit die KI defensiv repositioniert.
         const freeKickWaitingForReady = s.state.phase === 'free_kick' && !s.state.setPieceReady
         const allowDirectPassInSetPiece = ['free_kick', 'corner', 'throw_in'].includes(s.state.phase) && !freeKickWaitingForReady
-        // Penalty mode: determine if player is shooter or keeper
+        // Penalty / shootout kick mode: determine if player is shooter or keeper
         let penaltyMode: 'shooter' | 'keeper' | null = null
-        if (s.state.phase === 'penalty' && s.penaltyState) {
+        if ((s.state.phase === 'penalty' || s.state.phase === 'shootout_kick') && s.penaltyState) {
           penaltyMode = s.penaltyState.shooterTeam === (s.localTeam ?? 1) ? 'shooter' : 'keeper'
         }
         inputRef.current.updateGameState(s.state.players, s.state.ball, s.state.currentTurn, s.localTeam, isSetup, s.state.mustPass, penaltyMode, allowDirectPassInSetPiece)
