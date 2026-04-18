@@ -147,6 +147,7 @@ export function useMatchSync(matchId: string | undefined, userId: string | undef
       passesThisTurn: 0,
       ballOwnerChangedThisTurn: false,
       mustPass: false,
+      setPieceReady: true,
       lastSetPiece: null,
       tackleAttemptedThisTurn: false,
       matchStats: newState.matchStats,
@@ -179,6 +180,7 @@ function deserializeState(gs: SerializedMatchState): GameState {
     ...gs,
     lastEvent: null,
     // Backwards compat: fill in fields that older serialized states may lack
+    setPieceReady: gs.setPieceReady ?? true,
     tackleAttemptedThisTurn: gs.tackleAttemptedThisTurn ?? false,
     matchStats: gs.matchStats ?? { team1: emptyMatchStats(), team2: emptyMatchStats() },
     ticker: gs.ticker ?? [],

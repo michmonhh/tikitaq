@@ -52,13 +52,14 @@ export function makeConfirmKickoff(set: StoreSet, get: StoreGet): GameStore['con
       ? state.players.find(p => p.id === state.ball.ownerId)
       : null
     const trueTurn: TeamSide = ballOwnerPlayer?.team ?? state.currentTurn
-    const userHasBall = trueTurn === 1
 
-    // AI repositions in response to player's setup — only when the USER is taking
-    // the set piece (ball belongs to team 1). When AI has the ball, both teams are
-    // already positioned from the foul/offside handler; no repositioning needed.
+    // AI reacts to the user's setup on every "Bereit" click in a set piece.
+    // repositionForSetPiece auto-detects offensive vs defensive from ball ownership:
+    //   - Fall A (user attacker): AI repositions defensively (handled by confirmSetPieceReady)
+    //   - Fall B (user defender): AI repositions offensively (reactive to user's defenders)
+    //     before the AI then takes the free kick in its upcoming turn.
     let updatedPlayers = state.players
-    if (isVsAI && isSetPiece && userHasBall) {
+    if (isVsAI && isSetPiece) {
       const aiTeam: TeamSide = 2
       const setPiecePhase = state.phase as 'free_kick' | 'corner' | 'throw_in'
       const aiActions = repositionForSetPiece(
@@ -102,7 +103,61 @@ export function makeConfirmKickoff(set: StoreSet, get: StoreGet): GameStore['con
         passesThisTurn: 0,
         ballOwnerChangedThisTurn: false,
         mustPass: true, // Ball carrier must pass before anyone else can move
+        setPieceReady: true,
         lastSetPiece: state.phase, // Track which set piece was just confirmed (corners → no offside)
+      },
+    })
+  }
+}
+
+/**
+ * Free-kick Bereit-Klick (Fall A: Nutzer ist Schütze): Nach dem Anfangs-Setup
+ * hat der Nutzer seine Spieler platziert. Auf "Bereit" repositioniert die KI
+ * ihre Verteidiger reaktiv, und setPieceReady wird gesetzt. Die Phase bleibt
+ * 'free_kick' — der Nutzer kann danach noch verschieben und dann den Ball ziehen
+ * (passBall löst den eigentlichen Phasenwechsel auf 'playing' aus).
+ */
+export function makeConfirmSetPieceReady(set: StoreSet, get: StoreGet): GameStore['confirmSetPieceReady'] {
+  return () => {
+    const { state, isVsAI } = get()
+    if (!state || state.phase !== 'free_kick' || state.setPieceReady) return
+    set({ selectedPlayerId: null })
+
+    let updatedPlayers = state.players
+
+    if (isVsAI) {
+      const ballOwnerPlayer = state.ball.ownerId
+        ? state.players.find(p => p.id === state.ball.ownerId)
+        : null
+      const attackerTeam: TeamSide = ballOwnerPlayer?.team ?? state.currentTurn
+      const defenderTeam: TeamSide = attackerTeam === 1 ? 2 : 1
+
+      const aiActions = repositionForSetPiece(
+        { ...state, players: updatedPlayers },
+        defenderTeam,
+        'free_kick',
+      )
+      for (const action of aiActions) {
+        if (action.type === 'move') {
+          updatedPlayers = updatedPlayers.map(p =>
+            p.id === action.playerId
+              ? { ...p, position: { ...action.target }, origin: { ...action.target } }
+              : p,
+          )
+        }
+      }
+
+      const takerId = state.ball.ownerId
+      const fixedIds = new Set<string>()
+      if (takerId) fixedIds.add(takerId)
+      enforceCrossTeamSpacing(updatedPlayers, fixedIds)
+    }
+
+    set({
+      state: {
+        ...state,
+        players: updatedPlayers.map(p => ({ ...p, origin: { ...p.position } })),
+        setPieceReady: true,
       },
     })
   }

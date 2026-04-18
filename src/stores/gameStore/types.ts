@@ -59,6 +59,7 @@ export interface GameStore {
   shootBall: (shooterId: string, target: Position) => void
   endCurrentTurn: () => void
   confirmKickoff: () => void
+  confirmSetPieceReady: () => void
   confirmPenaltyDefense: () => void
   executeAI: () => void
   executeAIAnimated: () => void

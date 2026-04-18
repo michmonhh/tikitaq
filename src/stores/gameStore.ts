@@ -7,7 +7,7 @@ import type { GameStore } from './gameStore/types'
 import { makeMovePlayer } from './gameStore/move'
 import { makePassBall } from './gameStore/pass'
 import { makeShootBall } from './gameStore/shoot'
-import { makeEndCurrentTurn, makeConfirmKickoff } from './gameStore/turn'
+import { makeEndCurrentTurn, makeConfirmKickoff, makeConfirmSetPieceReady } from './gameStore/turn'
 import { makeConfirmPenaltyDefense } from './gameStore/penalty'
 import { makeExecuteAI, makeExecuteAIAnimated } from './gameStore/ai'
 
@@ -80,6 +80,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   shootBall: makeShootBall(set, get),
   endCurrentTurn: makeEndCurrentTurn(set, get),
   confirmKickoff: makeConfirmKickoff(set, get),
+  confirmSetPieceReady: makeConfirmSetPieceReady(set, get),
   confirmPenaltyDefense: makeConfirmPenaltyDefense(set, get),
   executeAI: makeExecuteAI(set, get),
   executeAIAnimated: makeExecuteAIAnimated(set, get),

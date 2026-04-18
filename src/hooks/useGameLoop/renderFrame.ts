@@ -155,7 +155,7 @@ export function renderFrame(rf: RenderFrameCtx): boolean {
   }
 
   const selectedPlayerId = storeSnap.selectedPlayerId
-  players?.draw(ctx, gameState.players, drag.activePlayerId, playerDragPos, animatedPositions, selectedPlayerId, localTeam, gameState.currentTurn)
+  players?.draw(ctx, gameState.players, drag.activePlayerId, playerDragPos, animatedPositions, selectedPlayerId, localTeam, gameState.currentTurn, isSetupPhase)
 
   // --- Ball rendering: offset from carrier, drag position, or animated flight ---
   const isDraggingBall = inputState.dragTarget?.type === 'ball' && drag.dragPosition != null

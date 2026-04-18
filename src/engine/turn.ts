@@ -60,6 +60,7 @@ export function endTurn(state: GameState): GameState {
     passesThisTurn: 0,
     ballOwnerChangedThisTurn: false,
     mustPass: false,
+    setPieceReady: true,
     lastSetPiece: null,
     lastEvent: null,
     tackleAttemptedThisTurn: false,
@@ -243,6 +244,7 @@ export function setupKickoff(state: GameState, kickingTeam: TeamSide): GameState
     passesThisTurn: 0,
     ballOwnerChangedThisTurn: false,
     mustPass: false,
+    setPieceReady: true,
     lastSetPiece: null,
   }
 }
@@ -291,6 +293,7 @@ export function createInitialGameState(players: PlayerData[]): GameState {
     passesThisTurn: 0,
     ballOwnerChangedThisTurn: false,
     mustPass: false,
+    setPieceReady: true,
     lastSetPiece: null,
     lastEvent: null,
     tackleAttemptedThisTurn: false,

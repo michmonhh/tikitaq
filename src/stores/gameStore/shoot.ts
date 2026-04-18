@@ -96,7 +96,7 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
             state: {
               ...s, players: goalKickPlayers,
               ball: { position: { x: 50, y: goalKickY }, ownerId: ps.keeperId },
-              phase: 'free_kick', currentTurn: defTeam, mustPass: true, lastSetPiece: null,
+              phase: 'free_kick', currentTurn: defTeam, mustPass: true, setPieceReady: true, lastSetPiece: null,
             },
           })
         }, 2500)

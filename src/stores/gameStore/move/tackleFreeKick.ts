@@ -69,6 +69,7 @@ export function handleFoulFreeKick(
     passesThisTurn: 0,
     ballOwnerChangedThisTurn: false,
     mustPass: true,
+    setPieceReady: false,
     lastSetPiece: 'free_kick',
   }
 }

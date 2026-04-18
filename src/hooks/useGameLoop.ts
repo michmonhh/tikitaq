@@ -177,8 +177,11 @@ export function useGameLoop(
         const isSetup = ['kickoff', 'free_kick', 'corner', 'throw_in'].includes(s.state.phase)
         // Standards (free_kick / corner / throw_in) allow the attacker to drag
         // the ball directly to pass — no confirm button. Kickoff keeps its
-        // explicit button.
-        const allowDirectPassInSetPiece = ['free_kick', 'corner', 'throw_in'].includes(s.state.phase)
+        // explicit button. Ausnahme Freistoß (Fall A): Solange !setPieceReady,
+        // darf der Ball noch nicht gezogen werden — der Nutzer muss erst "Bereit"
+        // klicken, damit die KI defensiv repositioniert.
+        const freeKickWaitingForReady = s.state.phase === 'free_kick' && !s.state.setPieceReady
+        const allowDirectPassInSetPiece = ['free_kick', 'corner', 'throw_in'].includes(s.state.phase) && !freeKickWaitingForReady
         // Penalty mode: determine if player is shooter or keeper
         let penaltyMode: 'shooter' | 'keeper' | null = null
         if (s.state.phase === 'penalty' && s.penaltyState) {

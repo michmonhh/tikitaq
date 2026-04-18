@@ -16,7 +16,7 @@ export function MatchScreen() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const { matchConfig } = useUIStore()
-  const { initGame, endCurrentTurn, confirmKickoff, executeAIAnimated, reset, state, isVsAI, aiRunning, penaltyState, confirmPenaltyDefense, setLocalTeam, setDuel } = useGameStore()
+  const { initGame, endCurrentTurn, confirmKickoff, confirmSetPieceReady, executeAIAnimated, reset, state, isVsAI, aiRunning, penaltyState, confirmPenaltyDefense, setLocalTeam, setDuel } = useGameStore()
   const goBack = useUIStore(s => s.goBack)
   const userId = useAuthStore(s => s.user?.id)
 
@@ -129,7 +129,10 @@ export function MatchScreen() {
     ? state.players.find(p => p.id === state.ball.ownerId)?.team ?? null
     : null
   const userIsSetPieceAttacker = isSetPiece && ballOwnerTeam === userTeam
-  const showSetPieceButton = isKickoff || (isSetPiece && !userIsSetPieceAttacker)
+  // Fall A: Nutzer-Schütze im Freistoß muss "Bereit" klicken → dann repositioniert die KI
+  // defensiv, setPieceReady=true. Danach (und bei Ecke/Einwurf) kann er direkt passen.
+  const needsFreeKickReady = isFreeKick && userIsSetPieceAttacker && state?.setPieceReady === false
+  const showSetPieceButton = isKickoff || (isSetPiece && !userIsSetPieceAttacker) || needsFreeKickReady
 
   // Determine if player has made any moves this turn
   const hasMoved = state ? state.players.some(p => p.team === 1 && p.hasMoved) : false
@@ -159,7 +162,11 @@ export function MatchScreen() {
                 Bereit
               </Button>
             ) : isPenalty ? null : showSetPieceButton ? (
-              <Button variant="primaryPulse" onClick={confirmKickoff} className={styles.actionBtn}>
+              <Button
+                variant="primaryPulse"
+                onClick={needsFreeKickReady ? confirmSetPieceReady : confirmKickoff}
+                className={styles.actionBtn}
+              >
                 {isKickoff ? 'Kickoff' : 'Bereit'}
               </Button>
             ) : isPlayerTurn ? (

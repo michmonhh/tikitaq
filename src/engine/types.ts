@@ -106,6 +106,7 @@ export interface GameState {
   passesThisTurn: number
   ballOwnerChangedThisTurn: boolean
   mustPass: boolean
+  setPieceReady: boolean  // Free-kick only: true after user-as-attacker clicked Bereit and AI repositioned defensively
   lastSetPiece: GamePhase | null  // Tracks which set piece was just confirmed (for offside rules)
   lastEvent: GameEvent | null
   matchStats: { team1: TeamMatchStats; team2: TeamMatchStats }
@@ -209,6 +210,7 @@ export interface SerializedMatchState {
   passesThisTurn: number
   ballOwnerChangedThisTurn: boolean
   mustPass: boolean
+  setPieceReady: boolean
   lastSetPiece: GamePhase | null
   tackleAttemptedThisTurn: boolean
   matchStats: { team1: TeamMatchStats; team2: TeamMatchStats }

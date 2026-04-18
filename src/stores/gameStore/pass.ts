@@ -120,6 +120,7 @@ export function makePassBall(set: StoreSet, get: StoreGet): GameStore['passBall'
           passesThisTurn: 0,
           ballOwnerChangedThisTurn: false,
           mustPass: true,
+          setPieceReady: false,
           lastSetPiece: 'free_kick',
           lastEvent: result.event,
         },
@@ -310,6 +311,7 @@ export function makePassBall(set: StoreSet, get: StoreGet): GameStore['passBall'
         passesThisTurn: state.passesThisTurn + 1,
         ballOwnerChangedThisTurn: ballOwnerChanged,
         mustPass: false,
+        setPieceReady: true,
         lastSetPiece: null, // Clear after first pass (corner no-offside only applies to direct pass)
         lastEvent: result.event,
       },

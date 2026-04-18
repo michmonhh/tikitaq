@@ -17,7 +17,8 @@ export class PlayerRenderer {
     animatedPositions?: Map<string, { x: number; y: number }>,
     selectedPlayerId?: string | null,
     localTeam?: TeamSide | null,
-    currentTurn?: TeamSide | null
+    currentTurn?: TeamSide | null,
+    isSetupPhase?: boolean
   ) {
     const sorted = [...players].sort((a, b) => {
       if (a.id === activePlayerId) return 1
@@ -25,8 +26,10 @@ export class PlayerRenderer {
       return a.position.y - b.position.y
     })
 
-    // When it's the opponent's turn, dim the local team's players
-    const isOpponentTurn = localTeam != null && currentTurn != null && currentTurn !== localTeam
+    // When it's the opponent's turn, dim the local team's players — but NOT during
+    // set piece phases (kickoff / free_kick / corner / throw_in), where the user
+    // may still reposition defenders even when the opponent is the taker.
+    const isOpponentTurn = !isSetupPhase && localTeam != null && currentTurn != null && currentTurn !== localTeam
 
     for (const player of sorted) {
       const isActive = player.id === activePlayerId

@@ -33,6 +33,7 @@ export function handleFoulPenalty(
         phase: 'free_kick',
         currentTurn: fouledTeam,
         mustPass: true,
+        setPieceReady: false,
         lastSetPiece: 'free_kick',
         passesThisTurn: 0,
         ballOwnerChangedThisTurn: false,
