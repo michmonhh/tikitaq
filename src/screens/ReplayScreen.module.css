@@ -1,0 +1,123 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--space-lg);
+  gap: var(--space-md);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.backBtn {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.backBtn:hover { color: var(--accent); }
+
+.scoreBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+.scoreBar .team { color: var(--text-secondary); }
+.scoreBar .score { color: var(--accent); font-weight: 900; font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
+
+.meta {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.canvasWrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0a1410;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  position: relative;
+}
+.canvas { display: block; }
+.hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+.ctrlBtn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 60px;
+}
+.ctrlBtn:hover { border-color: var(--accent); }
+.ctrlBtn:disabled { opacity: 0.4; cursor: default; }
+.ctrlBtn.active { border-color: var(--accent); color: var(--accent); }
+
+.seek {
+  flex: 1;
+  min-width: 200px;
+  max-width: 480px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.seekBar {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  position: relative;
+  cursor: pointer;
+}
+.seekFill {
+  position: absolute;
+  left: 0; top: 0;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.seekLabel {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 70px;
+  text-align: right;
+}
+
+.event {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-align: center;
+  font-style: italic;
+  min-height: 20px;
+}
