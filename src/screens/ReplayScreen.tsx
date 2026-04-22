@@ -10,6 +10,15 @@ import styles from './ReplayScreen.module.css'
 const BASE_FRAME_MS = 700  // bei speed=1: 700 ms pro Turn (genug für weite Bewegungen)
 const BALL_SPEED_BOOST = 0.55  // Ball erreicht Ziel bei 55% des Frame-Zeitraums
 
+type PlaybackSpeed = 0.3 | 0.5 | 1 | 2 | 4
+const SPEEDS: Array<{ value: PlaybackSpeed; label: string }> = [
+  { value: 0.3, label: '30 %' },
+  { value: 0.5, label: '50 %' },
+  { value: 1,   label: '1×' },
+  { value: 2,   label: '2×' },
+  { value: 4,   label: '4×' },
+]
+
 export function ReplayScreen() {
   const navigate = useUIStore(s => s.navigate)
   const lastResult = useArenaStore(s => s.lastResult)
@@ -21,7 +30,7 @@ export function ReplayScreen() {
 
   const [frame, setFrame] = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [speed, setSpeed] = useState<1 | 2 | 4>(1)
+  const [speed, setSpeed] = useState<PlaybackSpeed>(1)
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const cameraRef = useRef<Camera | null>(null)
@@ -32,7 +41,7 @@ export function ReplayScreen() {
   // bei jedem State-Change neu gestartet werden muss.
   const frameRef = useRef(frame)
   const playingRef = useRef(playing)
-  const speedRef = useRef<1 | 2 | 4>(speed)
+  const speedRef = useRef<PlaybackSpeed>(speed)
   const frameStartRef = useRef<number>(performance.now())
   const snapshotsRef = useRef(snapshots)
   useEffect(() => { frameRef.current = frame; frameStartRef.current = performance.now() }, [frame])
@@ -274,18 +283,13 @@ export function ReplayScreen() {
           <span className={styles.seekLabel}>{frame + 1} / {snapshots.length}</span>
         </div>
 
-        <button
-          className={`${styles.ctrlBtn} ${speed === 1 ? styles.active : ''}`}
-          onClick={() => setSpeed(1)}
-        >1×</button>
-        <button
-          className={`${styles.ctrlBtn} ${speed === 2 ? styles.active : ''}`}
-          onClick={() => setSpeed(2)}
-        >2×</button>
-        <button
-          className={`${styles.ctrlBtn} ${speed === 4 ? styles.active : ''}`}
-          onClick={() => setSpeed(4)}
-        >4×</button>
+        {SPEEDS.map(s => (
+          <button
+            key={s.value}
+            className={`${styles.ctrlBtn} ${speed === s.value ? styles.active : ''}`}
+            onClick={() => setSpeed(s.value)}
+          >{s.label}</button>
+        ))}
       </div>
     </div>
   )
