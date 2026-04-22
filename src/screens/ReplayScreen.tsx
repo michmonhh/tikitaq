@@ -7,7 +7,8 @@ import { PitchRenderer } from '../canvas/PitchRenderer'
 import { VISUAL } from '../engine/constants'
 import styles from './ReplayScreen.module.css'
 
-const BASE_FRAME_MS = 500  // bei speed=1: 500 ms pro Turn
+const BASE_FRAME_MS = 700  // bei speed=1: 700 ms pro Turn (genug für weite Bewegungen)
+const BALL_SPEED_BOOST = 0.55  // Ball erreicht Ziel bei 55% des Frame-Zeitraums
 
 export function ReplayScreen() {
   const navigate = useUIStore(s => s.navigate)
@@ -26,7 +27,20 @@ export function ReplayScreen() {
   const cameraRef = useRef<Camera | null>(null)
   const pitchRendererRef = useRef<PitchRenderer | null>(null)
 
-  // Canvas-Init (einmal)
+  // ── rAF-gesteuerter Render- und Playback-Loop ──
+  // State für Interpolation aus Refs lesen, damit der rAF-Loop nicht
+  // bei jedem State-Change neu gestartet werden muss.
+  const frameRef = useRef(frame)
+  const playingRef = useRef(playing)
+  const speedRef = useRef<1 | 2 | 4>(speed)
+  const frameStartRef = useRef<number>(performance.now())
+  const snapshotsRef = useRef(snapshots)
+  useEffect(() => { frameRef.current = frame; frameStartRef.current = performance.now() }, [frame])
+  useEffect(() => { playingRef.current = playing; frameStartRef.current = performance.now() }, [playing])
+  useEffect(() => { speedRef.current = speed; frameStartRef.current = performance.now() }, [speed])
+  useEffect(() => { snapshotsRef.current = snapshots }, [snapshots])
+
+  // Canvas-Init + Resize
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -47,37 +61,47 @@ export function ReplayScreen() {
       const ctx = canvas.getContext('2d')
       ctx?.setTransform(dpr, 0, 0, dpr, 0, 0)
       camera.resize(w, h)
-      redraw()
     }
 
     const ro = new ResizeObserver(resize)
     if (canvas.parentElement) ro.observe(canvas.parentElement)
     resize()
     return () => ro.disconnect()
-    // redraw ist stable genug — eslint ist hier zu streng
+  }, [])
+
+  // rAF-Loop (läuft IMMER — auch pausiert, damit Resize-Redraws und manuelle Scrubs sofort sichtbar sind)
+  useEffect(() => {
+    let rafId = 0
+    const tick = () => {
+      const snaps = snapshotsRef.current
+      if (snaps.length > 0) {
+        const framePos = frameRef.current
+        const frameDuration = BASE_FRAME_MS / speedRef.current
+        const elapsed = performance.now() - frameStartRef.current
+        let progress = playingRef.current ? Math.min(1, elapsed / frameDuration) : 0
+
+        // Am Ende angekommen: Stoppen
+        if (playingRef.current && framePos >= snaps.length - 1) {
+          setPlaying(false)
+          progress = 0
+        }
+
+        // Frame fortschalten wenn interpolation abgeschlossen
+        if (playingRef.current && progress >= 1 && framePos < snaps.length - 1) {
+          // setFrame triggert useEffect → frameStartRef auf now
+          setFrame(framePos + 1)
+        } else {
+          drawFrame(framePos, progress)
+        }
+      }
+      rafId = requestAnimationFrame(tick)
+    }
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Re-draw wenn Frame/Snapshots sich ändern
-  useEffect(() => {
-    redraw()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame, snapshots])
-
-  // Playback-Loop
-  useEffect(() => {
-    if (!playing) return
-    if (frame >= snapshots.length - 1) {
-      setPlaying(false)
-      return
-    }
-    const id = window.setTimeout(() => {
-      setFrame(f => Math.min(f + 1, snapshots.length - 1))
-    }, BASE_FRAME_MS / speed)
-    return () => clearTimeout(id)
-  }, [playing, frame, speed, snapshots.length])
-
-  function redraw() {
+  function drawFrame(frameIdx: number, progress: number) {
     const canvas = canvasRef.current
     const camera = cameraRef.current
     const pitch = pitchRendererRef.current
@@ -88,43 +112,83 @@ export function ReplayScreen() {
     const cssW = canvas.clientWidth
     const cssH = canvas.clientHeight
     ctx.clearRect(0, 0, cssW, cssH)
-
     pitch.draw(ctx)
 
-    const snap = snapshots[frame]
+    const snaps = snapshotsRef.current
+    const snap = snaps[frameIdx]
     if (!snap) return
+    const next = snaps[frameIdx + 1] ?? snap
 
-    // Spieler zeichnen
+    // ── Spieler (linear interpoliert) ──
+    const nextById = new Map(next.players.map(p => [p.id, p]))
+    const radius = VISUAL.PLAYER_RADIUS * camera.baseScale
+
     for (const p of snap.players) {
-      const screen = camera.toScreen(p.position.x, p.position.y)
-      const radius = VISUAL.PLAYER_RADIUS * camera.baseScale
-      const isBallOwner = snap.ball.ownerId === p.id
+      const np = nextById.get(p.id) ?? p
+      const x = lerp(p.position.x, np.position.x, progress)
+      const y = lerp(p.position.y, np.position.y, progress)
+      const screen = camera.toScreen(x, y)
+      const isBallOwner = snap.ball.ownerId === p.id || (progress > 0.5 && next.ball.ownerId === p.id)
 
+      // Schatten
+      ctx.beginPath()
+      ctx.ellipse(screen.x, screen.y + radius * 0.3, radius * 0.75, radius * 0.22, 0, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(0,0,0,0.28)'
+      ctx.fill()
+
+      // Glow für Ballbesitzer
+      if (isBallOwner) {
+        ctx.save()
+        ctx.shadowColor = '#ffd84d'
+        ctx.shadowBlur = radius * 0.9
+        ctx.beginPath()
+        ctx.arc(screen.x, screen.y, radius + 2, 0, Math.PI * 2)
+        ctx.fillStyle = p.team === 1 ? '#e63946' : '#457b9d'
+        ctx.fill()
+        ctx.restore()
+      }
+
+      // Disc
       ctx.beginPath()
       ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2)
       ctx.fillStyle = p.team === 1 ? '#e63946' : '#457b9d'
       ctx.fill()
-      ctx.strokeStyle = isBallOwner ? '#ffdd00' : 'rgba(0,0,0,0.35)'
-      ctx.lineWidth = isBallOwner ? 3 : 1.5
+
+      // Rand
+      ctx.strokeStyle = isBallOwner ? '#ffd84d' : 'rgba(0,0,0,0.4)'
+      ctx.lineWidth = isBallOwner ? 2.5 : 1.2
       ctx.stroke()
 
-      // Positions-Label klein
+      // Label: Positions-Label
       ctx.fillStyle = '#fff'
-      ctx.font = `${Math.max(10, radius * 0.9)}px -apple-system, BlinkMacSystemFont, sans-serif`
+      ctx.font = `700 ${Math.max(9, radius * 0.85)}px -apple-system, BlinkMacSystemFont, sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(p.positionLabel, screen.x, screen.y)
     }
 
-    // Ball
-    const ballScreen = camera.toScreen(snap.ball.position.x, snap.ball.position.y)
+    // ── Ball ──
+    // Ball bewegt sich schneller als Spieler (Pässe/Schüsse fliegen in einem Bruchteil
+    // der Turn-Zeit ans Ziel). Wir komprimieren die Ball-Bewegung auf BALL_SPEED_BOOST × Frame-Dauer.
+    const bt = Math.min(1, progress / BALL_SPEED_BOOST)
+    const bx = lerp(snap.ball.position.x, next.ball.position.x, bt)
+    const by = lerp(snap.ball.position.y, next.ball.position.y, bt)
+    const ballScreen = camera.toScreen(bx, by)
     const ballRadius = VISUAL.BALL_RADIUS * camera.baseScale
+
+    // Ball-Schatten
+    ctx.beginPath()
+    ctx.ellipse(ballScreen.x, ballScreen.y + ballRadius * 0.4, ballRadius * 0.8, ballRadius * 0.3, 0, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(0,0,0,0.4)'
+    ctx.fill()
+
+    // Ball
     ctx.beginPath()
     ctx.arc(ballScreen.x, ballScreen.y, ballRadius, 0, Math.PI * 2)
     ctx.fillStyle = '#ffffff'
     ctx.fill()
-    ctx.strokeStyle = '#000'
-    ctx.lineWidth = 1
+    ctx.strokeStyle = '#222'
+    ctx.lineWidth = 1.2
     ctx.stroke()
   }
 
@@ -225,4 +289,8 @@ export function ReplayScreen() {
       </div>
     </div>
   )
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t
 }
