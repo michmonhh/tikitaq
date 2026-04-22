@@ -85,11 +85,15 @@ export const SHOOTING = {
   GOAL_ZONE_X_LEFT: 38,
   GOAL_ZONE_X_RIGHT: 62,
 
-  // Save probability factors
-  BASE_SAVE_CHANCE: 0.5,
+  // Save probability factors.
+  // 2026-04-22: BASE_SAVE_CHANCE 0.5 → 0.35, DISTANCE_PENALTY 0.01 → 0.005.
+  // Nahdistanz-Schüsse (<= 10 m) hatten vorher saveChance ~0.65–0.75 und
+  // Torchancen ~20 %; realistisch sind eher 50–60 % Konversion aus dem
+  // Fünfmeterraum. Ergebnis im 306-RR: Ø Tore/Match steigt Richtung 1–2.
+  BASE_SAVE_CHANCE: 0.35,
   KEEPER_QUALITY_WEIGHT: 0.004,  // Per keeper quality point
   SHOOTER_FINISHING_WEIGHT: 0.004, // Per shooter finishing point
-  DISTANCE_PENALTY: 0.01, // Per unit distance from goal center
+  DISTANCE_PENALTY: 0.005, // Per unit distance from goal center
 } as const
 
 // --- Turn & Game Flow ---

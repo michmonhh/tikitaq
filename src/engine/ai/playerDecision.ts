@@ -91,18 +91,20 @@ export function decideBallAction(
     if (fieldReading) opt.score += getFieldBonus(opt, fieldReading, team)
     if (memory) opt.score += getMemoryBonus(opt, memory)
 
-    // Schuss-Bewertung: nah belohnen, weit bestrafen.
-    // 2026-04-22: Weitschuss-Malus ergänzt — User sah, dass KI aus 22–28 m
-    // schießt statt in den 16er zu laufen.
+    // Schuss-Bewertung: Zonen-gestuft, keine Weitschüsse mehr.
+    // evaluateShoot filtert > 20 m bereits ab, deshalb hier keine
+    // Weitschuss-Spezialbehandlung nötig. Innerhalb 20 m belohnen wir
+    // Nahdistanz klar stärker als Rand.
     if (opt.type === 'shoot') {
-      if (distToGoal < 12) opt.score += 25       // Nahdistanz → fast immer schießen
-      else if (distToGoal < 18) opt.score += 12  // Strafraum-Rand
-      else if (distToGoal > 22) opt.score -= 18  // 22m+: lieber vorrücken/passen
+      if (distToGoal < 10) opt.score += 35       // Fünfmeter: klar schießen
+      else if (distToGoal < 14) opt.score += 22  // innerhalb 16er
+      else if (distToGoal < 18) opt.score += 10  // Rand 16er
+      // 18–20 m: neutral — Option existiert noch, aber ohne Bonus
     }
 
     // Vorrücken belohnen wenn noch vor dem 16er und Raum nach vorne.
     // Ziel: KI läuft bis in den Strafraum, bevor sie schießt.
-    if (opt.type === 'advance' && distToGoal > 18 && distToGoal < 40) {
+    if (opt.type === 'advance' && distToGoal > 14 && distToGoal < 40) {
       opt.score += 12
     }
 

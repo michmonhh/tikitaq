@@ -6,12 +6,11 @@ import type { BallOption } from '../types'
 
 /**
  * Maximale echte Distanz zum Tor-Mittelpunkt, ab der die KI noch schießen will.
- * Davor: 24 Einheiten reine Y-Distanz — führte dazu, dass Schüsse vom Flügel
- * (Y-nah, aber seitlich weit) fälschlich abgelehnt wurden und die KI fast nie
- * schoss. Arena-Befund: 0.54 Tore/Match statt ~2.8.
- * 30 deckt den Strafraum (~18) + etwa 12 Einheiten davor komfortabel ab.
+ * 2026-04-22: 30 → 20 — User sah im Replay Schüsse von außerhalb des 16ers.
+ * Der Strafraum reicht bis ~18 m, wir lassen 2 m Rand zu. Alles darüber soll
+ * die KI durchs Vorrücken / Passen lösen, nicht durch Weitschüsse.
  */
-const MAX_SHOOT_DISTANCE = 30
+const MAX_SHOOT_DISTANCE = 20
 
 /** Torschuss */
 export function evaluateShoot(
