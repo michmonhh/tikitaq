@@ -228,12 +228,17 @@ export function executeAITurn(state: GameState): PlayerAction[] {
   const pressers = selectPressers(players, state, team, plan ?? null, acted)
 
   // Alle Zielpositionen sammeln und danach Abstände erzwingen
-  const targetEntries: { player: PlayerData; target: Position; reason: string }[] = []
+  const targetEntries: {
+    player: PlayerData
+    target: Position
+    secondaryTarget?: Position
+    reason: string
+  }[] = []
 
   for (const player of players) {
     if (acted.has(player.id)) continue
 
-    const { target: rawTarget, reason } = decidePositioning(
+    const { target: rawTarget, secondaryTarget, reason } = decidePositioning(
       player, state, team, plan ?? null, lastFieldReading,
       hasBall, ballLoose, pressers,
     )
@@ -258,7 +263,7 @@ export function executeAITurn(state: GameState): PlayerAction[] {
       if (team === 2 && target.y > offsideLine - margin) target = { x: target.x, y: offsideLine - margin }
     }
 
-    targetEntries.push({ player, target, reason })
+    targetEntries.push({ player, target, secondaryTarget, reason })
   }
 
   // ── Abwehrkette ausrichten: Zentrale Verteidiger nicht höher als breiteste ──
@@ -329,7 +334,7 @@ export function executeAITurn(state: GameState): PlayerAction[] {
     }
   }
 
-  for (const { player, target, reason } of targetEntries) {
+  for (const { player, target, secondaryTarget, reason } of targetEntries) {
     // Kleine Bewegungen überspringen — AUSSER der Ball ist frei und nah
     // (ohne Move-Action wird movePlayer nie aufgerufen → Ball wird nicht aufgenommen)
     if (distance(player.position, target) < 1) {
@@ -339,7 +344,10 @@ export function executeAITurn(state: GameState): PlayerAction[] {
         continue
       }
     }
-    actions.push({ type: 'move', playerId: player.id, target })
+    const move: PlayerAction = secondaryTarget
+      ? { type: 'move', playerId: player.id, target, secondaryTarget }
+      : { type: 'move', playerId: player.id, target }
+    actions.push(move)
     reasoning.set(player.id, reason)
   }
 

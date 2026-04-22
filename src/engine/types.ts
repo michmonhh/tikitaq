@@ -190,7 +190,19 @@ export interface GameEvent {
 export interface MoveAction {
   type: 'move'
   playerId: string
+  /**
+   * Primäres Ziel des Zuges. Wenn hier ein herrenloser Ball aufgenommen
+   * wird UND `secondaryTarget` gesetzt ist, bewegt sich der Spieler in
+   * derselben Aktion mit dem Rest-Radius weiter zum sekundären Ziel.
+   */
   target: Position
+  /**
+   * Optionales Folge-Ziel für die "mit Ball weiterlaufen"-Mechanik.
+   * Nur wirksam, wenn am primären Target ein Ball aufgenommen wird.
+   * Der Restradius nach Phase 1 wird auf den Schritt zum sekundären Ziel
+   * angewandt — Overshoot ist ausgeschlossen.
+   */
+  secondaryTarget?: Position
 }
 
 export interface PassAction {

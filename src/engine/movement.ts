@@ -52,22 +52,40 @@ export function applyMove(
   const player = state.players.find(p => p.id === action.playerId)
   if (!player) throw new Error(`Player ${action.playerId} not found`)
 
-  const target = constrainMove(player, action.target)
+  // ── Phase 1: primäres Target ansteuern ──
+  const primary = constrainMove(player, action.target)
+
+  // Check if player picks up the ball (ball is unowned and nearby)
+  let ballPickedUp = false
+  if (!state.ball.ownerId && !state.ballOwnerChangedThisTurn) {
+    const distToBall = distance(primary, state.ball.position)
+    if (distToBall < 3) {
+      ballPickedUp = true
+    }
+  }
+
+  // ── Phase 2: mit Restradius weiter zum sekundären Target, wenn Ball aufgenommen ──
+  // Das Zwei-Target-Design macht die "Ball aufnehmen und weiterlaufen"-Mechanik
+  // explizit: die KI gibt zwei Ziele an, Phase 2 greift nur wenn Phase 1 den Ball
+  // bekommen hat. Overshoot ist durch die Restradius-Clamp-Logik ausgeschlossen.
+  let finalPosition = primary
+  if (ballPickedUp && action.secondaryTarget) {
+    const fullRadius = getMovementRadius(player)
+    const usedDist = distance(player.origin, primary)
+    const remaining = Math.max(0, fullRadius - usedDist)
+    if (remaining > 0.5) {
+      const phase2 = clampToRadius(action.secondaryTarget, primary, remaining)
+      finalPosition = clampToPitch(phase2)
+    }
+  }
+
+  const target = finalPosition
 
   const updatedPlayer: PlayerData = {
     ...player,
     position: { ...target },
     // Moving does NOT set hasActed — player can act again
     hasMoved: true,
-  }
-
-  // Check if player picks up the ball (ball is unowned and nearby)
-  let ballPickedUp = false
-  if (!state.ball.ownerId && !state.ballOwnerChangedThisTurn) {
-    const distToBall = distance(target, state.ball.position)
-    if (distToBall < 3) {
-      ballPickedUp = true
-    }
   }
 
   // Check for tackle encounter with opponent ball carriers
