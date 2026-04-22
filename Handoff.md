@@ -253,7 +253,7 @@ Neue Formationen = neue Tabellenzeilen. Die Policy sieht nur die Sollposition un
    - Formations-Auswahl (siehe 4)
    - Drag-&-Drop zum Austausch von Startelf ↔ Bank
    - Spieler-Datenbank mit Bankspielern (aktuell nur Startelf vorhanden — `data/players.ts` muss erweitert werden)
-4. **Formations-Datenstruktur** (Briefing-Schritt 3): `engine/formation.ts` vom Code-Generator zur Daten-Tabelle umbauen. Start-Pool (laut User): **4-4-2, 4-2-3-1, 4-4-3, 5-3-3, 3-5-2, 3-4-1-2**, erweiterbar. *Frage offen:* 4-4-3 und 5-3-3 summieren auf 11 Feldspieler statt 10 — wahrscheinlich Schreibvarianten für 4-3-3 bzw. 5-3-2 oder andere, vor Implementierung klären.
+4. **Formations-Datenstruktur** (Briefing-Schritt 3): `engine/formation.ts` vom Code-Generator zur Daten-Tabelle umbauen. Start-Pool: **4-4-2, 4-2-3-1, 4-3-3, 5-3-2, 3-5-2, 3-4-1-2**, erweiterbar.
 5. **KI1 formations-fähig** (Briefing-Schritt 4): `positioning/roles.ts#getFormationHome` nutzt aktuell `p.origin`. Muss auf ausgewählten Formations-Anker (Attack vs. Defense je nach Ballbesitz) umgestellt werden. Ohne Verhaltens-Änderung für 4-3-3-Default.
 6. **State-Encoder** (Briefing-Schritt 5): 30–50 Features ego-zentrisch pro handelndem Spieler. Deterministisch in TypeScript. Tests via bekannter Fixtures.
 7. **Trajectory-Collection** (Briefing-Schritt 6): `ReplaySnapshot` um Feature-Vektoren + Action-Labels erweitern, oder parallelen Recorder `TrajectoryRecorder` bauen. Arena/CLI sammelt 10k–100k Spiele.

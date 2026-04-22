@@ -57,11 +57,14 @@ export const PASSING = {
 } as const
 
 // --- Interception ---
+// Feld-Intercept-Radien per 2026-04-22 halbiert (User-Beobachtung aus Arena-
+// Replay: Pässe werden zu oft abgefangen, Ballprogression stirbt im Mittelfeld).
+// GOALKEEPER_RADIUS ist Shot-Save, nicht Pass-Intercept → unverändert.
 export const INTERCEPTION = {
   GOALKEEPER_RADIUS: 3,  // TW save radius (must be in the shot line)
-  DEFENDER_RADIUS: 6,    // IV, LV, RV
-  MIDFIELDER_RADIUS: 5,  // ZDM, LM, RM, OM
-  FORWARD_RADIUS: 4,     // ST
+  DEFENDER_RADIUS: 3,    // IV, LV, RV  (war 6)
+  MIDFIELDER_RADIUS: 2.5, // ZDM, LM, RM, OM  (war 5)
+  FORWARD_RADIUS: 2,     // ST  (war 4)
 } as const
 
 // --- Tackling ---
