@@ -70,6 +70,19 @@ export function decideBallAction(
   const goalUrgency = distToGoal < 21 ? (21 - distToGoal) / 21 : 0  // 0–1
   const riskAppetite = Math.min(0.90, baseRisk + goalUrgency * 0.35)
 
+  // "Frei-durch"-Erkennung: kein Gegner (außer TW) nah am Ballträger.
+  // User-Replay-Beobachtung: ein OM war komplett frei, hat aber lieber zum
+  // (bereits bedrängten) ST gepasst statt selbst aufs Tor zu laufen. Wenn
+  // der Ballträger mehr Luft hat als seine Pass-Empfänger, soll er selbst
+  // gehen.
+  const carrierOpps = state.players.filter(p => p.team !== team && p.positionLabel !== 'TW')
+  let carrierPressure = Infinity
+  for (const opp of carrierOpps) {
+    const d = Math.hypot(carrier.position.x - opp.position.x, carrier.position.y - opp.position.y)
+    if (d < carrierPressure) carrierPressure = d
+  }
+  const carrierIsFree = carrierPressure > 10
+
   for (const opt of options) {
     // Kernformel: reward × risk + successChance × (1-risk)
     opt.score = (opt.reward * riskAppetite + opt.successChance * (1 - riskAppetite)) * 100
@@ -97,6 +110,32 @@ export function decideBallAction(
     // 2026-04-22: +8 → +15 — User hat im Replay gesehen, dass die KI zu
     // selten den riskanten Ball nach vorn sucht.
     if (opt.type === 'through_ball') opt.score += 15
+
+    // Frei-durch: Ballträger selbst gehen lassen, nicht abgeben.
+    if (carrierIsFree) {
+      if (opt.type === 'advance' || opt.type === 'dribble') {
+        opt.score += 22  // stark bevorzugen
+      }
+      // Bei Pass-Optionen: wenn der Empfänger UNTER DRUCK steht, während
+      // der Ballträger frei ist, Pass bestrafen. Wir geben den Ball nicht
+      // in eine schlechtere Lage ab.
+      if (opt.receiverId) {
+        const receiver = state.players.find(p => p.id === opt.receiverId)
+        if (receiver) {
+          let receiverPressure = Infinity
+          for (const opp of carrierOpps) {
+            const d = Math.hypot(
+              receiver.position.x - opp.position.x,
+              receiver.position.y - opp.position.y,
+            )
+            if (d < receiverPressure) receiverPressure = d
+          }
+          if (receiverPressure < carrierPressure - 3) {
+            opt.score -= 15
+          }
+        }
+      }
+    }
 
     // Rauschen für Varianz
     opt.score += (Math.random() - 0.5) * 6  // ±3
