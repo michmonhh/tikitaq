@@ -115,9 +115,38 @@
 }
 
 .event {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   text-align: center;
-  font-style: italic;
-  min-height: 20px;
+  min-height: 32px;
+}
+
+.eventBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #0a1410;
+  animation: eventPop 200ms ease-out;
+}
+.eventIcon { font-size: 14px; line-height: 1; }
+.eventMsg {
+  color: var(--text-secondary);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+@keyframes eventPop {
+  from { transform: scale(0.92); opacity: 0; }
+  to   { transform: scale(1.0);  opacity: 1; }
 }

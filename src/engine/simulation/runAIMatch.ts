@@ -11,9 +11,9 @@
  */
 
 import { useGameStore } from '../../stores/gameStore'
-import { initAIPlan } from '../ai'
+import { executeAITurn, initAIPlan } from '../ai'
 import { PITCH } from '../constants'
-import type { GamePhase, GameState, PlayerData, TeamSide } from '../types'
+import type { GameEvent, GamePhase, GameState, PlayerData, TeamSide } from '../types'
 import type {
   ArenaMatchResult, ArenaTeamStats, ReplayFile, ReplaySnapshot,
 } from './replayTypes'
@@ -57,6 +57,10 @@ export function runAIMatch(
   // eigener Feldspieler im gegnerischen 16er steht. Akkumuliert während der
   // Simulation, weil state.matchStats das nicht trackt.
   const boxPresenceTurns = { team1: 0, team2: 0 }
+
+  // Events des letzten Zugs für den nächsten Snapshot einfangen — state.lastEvent
+  // wird von endCurrentTurn() genullt, daher zwischenspeichern.
+  let pendingEvent: GameEvent | null = null
 
   while (guard++ < MAX_TURNS) {
     const s = store.getState().state
@@ -103,12 +107,35 @@ export function runAIMatch(
     }
 
     // ── Snapshot vor dem Zug (wenn Replay angefordert) ──
+    // Das pendingEvent aus dem vorigen Turn wird hier eingeklinkt, damit der
+    // Viewer ein sinnvolles "was ist gerade passiert" anzeigen kann. Danach
+    // wird es verworfen — jedes Event wird nur einem Snapshot zugewiesen.
     if (options.record) {
-      snapshots.push(makeSnapshot(s, turn))
+      const snap = makeSnapshot(s, turn)
+      snap.lastEvent = pendingEvent
+      snapshots.push(snap)
     }
+    pendingEvent = null
 
-    // ── KI-Zug ausführen (sync-Version, ohne Animator) ──
-    store.getState().executeAI()
+    // ── KI-Zug ausführen in drei Phasen, damit wir das resultierende Event
+    //    einfangen können, bevor endCurrentTurn() state.lastEvent nullt:
+    //    1. executeAITurn() liefert die Actions
+    //    2. Actions über die Store-Actions anwenden (wie makeExecuteAI)
+    //    3. Event einfangen, dann endCurrentTurn ──
+    try {
+      const actions = executeAITurn(s)
+      for (const action of actions) {
+        const currentState = store.getState().state
+        if (!currentState || currentState.phase !== 'playing') break
+        if (action.type === 'move') store.getState().movePlayer(action.playerId, action.target)
+        else if (action.type === 'pass') store.getState().passBall(action.playerId, action.target, action.receiverId)
+        else if (action.type === 'shoot') store.getState().shootBall(action.playerId, action.target)
+      }
+    } catch (err) {
+      console.error('[arena] AI turn crashed:', err)
+    }
+    pendingEvent = store.getState().state?.lastEvent ?? null
+    store.getState().endCurrentTurn()
     turn++
   }
 

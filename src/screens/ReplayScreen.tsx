@@ -19,6 +19,39 @@ const SPEEDS: Array<{ value: PlaybackSpeed; label: string }> = [
   { value: 4,   label: '4×' },
 ]
 
+// Event-Anzeige: Icon + Farbe + Label pro GameEventType.
+// Null bedeutet: Event wird nicht angezeigt (zu häufig / uninteressant).
+interface EventStyle {
+  icon: string
+  label: string
+  bg: string
+}
+const EVENT_STYLES: Record<string, EventStyle | null> = {
+  shot_scored:      { icon: '⚽',  label: 'Tor',         bg: '#22c55e' },
+  penalty_scored:   { icon: '⚽',  label: 'Tor (11m)',   bg: '#22c55e' },
+  shot_saved:       { icon: '🧤',  label: 'Parade',      bg: '#3b82f6' },
+  penalty_saved:    { icon: '🧤',  label: 'Elfmeter gehalten', bg: '#3b82f6' },
+  shot_missed:      { icon: '❌',  label: 'Daneben',     bg: '#f59e0b' },
+  penalty_missed:   { icon: '❌',  label: 'Elfmeter verfehlt', bg: '#f59e0b' },
+  pass_intercepted: { icon: '↩',   label: 'Abgefangen',  bg: '#ef4444' },
+  pass_lost:        { icon: '🔄',  label: 'Ballverlust', bg: '#fb923c' },
+  tackle_won:       { icon: '⚔',   label: 'Balleroberung', bg: '#0ea5e9' },
+  tackle_lost:      { icon: '⚔',   label: 'Zweikampf verloren', bg: '#a1a1aa' },
+  foul:             { icon: '⚠',   label: 'Foul',        bg: '#eab308' },
+  yellow_card:      { icon: '🟨',  label: 'Gelb',        bg: '#eab308' },
+  red_card:         { icon: '🟥',  label: 'Rot',         bg: '#dc2626' },
+  offside:          { icon: '🚩',  label: 'Abseits',     bg: '#f97316' },
+  corner:           { icon: '⛳',  label: 'Ecke',        bg: '#06b6d4' },
+  throw_in:         { icon: '↗',   label: 'Einwurf',     bg: '#22d3ee' },
+  penalty:          { icon: '⚠',   label: 'Elfmeter',    bg: '#dc2626' },
+  kickoff:          { icon: '▶',   label: 'Anstoß',      bg: '#a3a3a3' },
+  half_time:        { icon: '⏸',   label: 'Halbzeit',    bg: '#a3a3a3' },
+  tactic_change:    { icon: '📋',  label: 'Taktikwechsel', bg: '#a855f7' },
+  // Stumm-Schaltung — zu häufig:
+  pass_complete: null,
+  move: null,
+}
+
 export function ReplayScreen() {
   const navigate = useUIStore(s => s.navigate)
   const lastResult = useArenaStore(s => s.lastResult)
@@ -215,7 +248,9 @@ export function ReplayScreen() {
   }
 
   const snap = snapshots[frame]
-  const lastEventMsg = snap?.lastEvent?.message ?? ''
+  const eventType = snap?.lastEvent?.type
+  const eventStyle = eventType ? EVENT_STYLES[eventType] : null
+  const eventMsg = snap?.lastEvent?.message ?? ''
   const progress = snapshots.length > 0 ? (frame / Math.max(1, snapshots.length - 1)) * 100 : 0
 
   const seekFromClick = (e: React.MouseEvent) => {
@@ -243,7 +278,19 @@ export function ReplayScreen() {
         <canvas ref={canvasRef} className={styles.canvas} />
       </div>
 
-      <div className={styles.event}>{lastEventMsg}</div>
+      <div className={styles.event}>
+        {eventStyle && (
+          <span
+            key={`${frame}-${eventType}`}  // Re-animiert bei Event-Wechsel
+            className={styles.eventBadge}
+            style={{ background: eventStyle.bg }}
+          >
+            <span className={styles.eventIcon}>{eventStyle.icon}</span>
+            {eventStyle.label}
+          </span>
+        )}
+        {eventStyle && eventMsg && <span className={styles.eventMsg}>{eventMsg}</span>}
+      </div>
 
       <div className={styles.controls}>
         <button
