@@ -77,10 +77,20 @@ export function ReplayScreen() {
   const speedRef = useRef<PlaybackSpeed>(speed)
   const frameStartRef = useRef<number>(performance.now())
   const snapshotsRef = useRef(snapshots)
+  const teamColorsRef = useRef<{ team1: string; team2: string }>({
+    team1: '#e63946',
+    team2: '#457b9d',
+  })
   useEffect(() => { frameRef.current = frame; frameStartRef.current = performance.now() }, [frame])
   useEffect(() => { playingRef.current = playing; frameStartRef.current = performance.now() }, [playing])
   useEffect(() => { speedRef.current = speed; frameStartRef.current = performance.now() }, [speed])
   useEffect(() => { snapshotsRef.current = snapshots }, [snapshots])
+  useEffect(() => {
+    teamColorsRef.current = {
+      team1: home?.color ?? '#e63946',
+      team2: away?.color ?? '#457b9d',
+    }
+  }, [home, away])
 
   // Canvas-Init + Resize
   useEffect(() => {
@@ -164,6 +174,10 @@ export function ReplayScreen() {
     // ── Spieler (linear interpoliert) ──
     const nextById = new Map(next.players.map(p => [p.id, p]))
     const radius = VISUAL.PLAYER_RADIUS * camera.baseScale
+    const colors = teamColorsRef.current
+    const eventType = snap.lastEvent?.type
+    const isGoalFrame = eventType === 'shot_scored' || eventType === 'penalty_scored'
+    const scorerId = isGoalFrame ? snap.lastEvent?.playerId : null
 
     for (const p of snap.players) {
       const np = nextById.get(p.id) ?? p
@@ -171,6 +185,9 @@ export function ReplayScreen() {
       const y = lerp(p.position.y, np.position.y, progress)
       const screen = camera.toScreen(x, y)
       const isBallOwner = snap.ball.ownerId === p.id || (progress > 0.5 && next.ball.ownerId === p.id)
+      const isScorer = p.id === scorerId
+      const discColor = p.team === 1 ? colors.team1 : colors.team2
+      const textColor = contrastingTextColor(discColor)
 
       // Schatten
       ctx.beginPath()
@@ -178,14 +195,14 @@ export function ReplayScreen() {
       ctx.fillStyle = 'rgba(0,0,0,0.28)'
       ctx.fill()
 
-      // Glow für Ballbesitzer
-      if (isBallOwner) {
+      // Glow für Ballbesitzer — goldener Kranz um den Torschützen
+      if (isBallOwner || isScorer) {
         ctx.save()
-        ctx.shadowColor = '#ffd84d'
-        ctx.shadowBlur = radius * 0.9
+        ctx.shadowColor = isScorer ? '#ffd700' : '#ffd84d'
+        ctx.shadowBlur = radius * (isScorer ? 1.6 : 0.9)
         ctx.beginPath()
         ctx.arc(screen.x, screen.y, radius + 2, 0, Math.PI * 2)
-        ctx.fillStyle = p.team === 1 ? '#e63946' : '#457b9d'
+        ctx.fillStyle = discColor
         ctx.fill()
         ctx.restore()
       }
@@ -193,16 +210,16 @@ export function ReplayScreen() {
       // Disc
       ctx.beginPath()
       ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2)
-      ctx.fillStyle = p.team === 1 ? '#e63946' : '#457b9d'
+      ctx.fillStyle = discColor
       ctx.fill()
 
       // Rand
-      ctx.strokeStyle = isBallOwner ? '#ffd84d' : 'rgba(0,0,0,0.4)'
-      ctx.lineWidth = isBallOwner ? 2.5 : 1.2
+      ctx.strokeStyle = isScorer ? '#ffd700' : isBallOwner ? '#ffd84d' : 'rgba(0,0,0,0.4)'
+      ctx.lineWidth = isScorer ? 3.5 : isBallOwner ? 2.5 : 1.2
       ctx.stroke()
 
-      // Label: Positions-Label
-      ctx.fillStyle = '#fff'
+      // Label: Positions-Label (Kontrast-Schrift gegen Disc-Farbe)
+      ctx.fillStyle = textColor
       ctx.font = `700 ${Math.max(9, radius * 0.85)}px -apple-system, BlinkMacSystemFont, sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -232,6 +249,75 @@ export function ReplayScreen() {
     ctx.strokeStyle = '#222'
     ctx.lineWidth = 1.2
     ctx.stroke()
+
+    // ── Tor-Overlay ──
+    // Bei shot_scored / penalty_scored: goldener Flash + großes "TOR!"
+    // sowie Ring um das Tor. Erscheint genau für den Snapshot in dem das
+    // Tor-Event hängt (typisch 700 ms bei 1×).
+    if (isGoalFrame) {
+      const scoringTeam = (() => {
+        const scorer = snap.players.find(p => p.id === scorerId)
+        return scorer?.team ?? 1
+      })()
+      const goalY = scoringTeam === 1 ? 0 : 100
+
+      // Goldener Halbflash über den Torraum
+      const flashTop = camera.toScreen(0, scoringTeam === 1 ? 0 : 75)
+      const flashBot = camera.toScreen(100, scoringTeam === 1 ? 25 : 100)
+      ctx.save()
+      const grad = ctx.createLinearGradient(
+        0, flashTop.y, 0, flashBot.y,
+      )
+      if (scoringTeam === 1) {
+        grad.addColorStop(0, 'rgba(255, 215, 0, 0.55)')
+        grad.addColorStop(1, 'rgba(255, 215, 0, 0)')
+      } else {
+        grad.addColorStop(0, 'rgba(255, 215, 0, 0)')
+        grad.addColorStop(1, 'rgba(255, 215, 0, 0.55)')
+      }
+      ctx.fillStyle = grad
+      ctx.fillRect(flashTop.x, flashTop.y, flashBot.x - flashTop.x, flashBot.y - flashTop.y)
+      ctx.restore()
+
+      // Ring um das Tor
+      const goalCenter = camera.toScreen(50, goalY)
+      ctx.save()
+      ctx.strokeStyle = '#ffd700'
+      ctx.lineWidth = 4
+      ctx.shadowColor = '#ffd700'
+      ctx.shadowBlur = 20
+      ctx.beginPath()
+      ctx.arc(goalCenter.x, goalCenter.y, 70 * camera.baseScale, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.restore()
+
+      // Zentrierter großer "TOR!"-Text
+      ctx.save()
+      const fontSize = Math.min(cssW, cssH) * 0.18
+      ctx.font = `900 ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.lineWidth = Math.max(4, fontSize * 0.06)
+      ctx.strokeStyle = '#000'
+      ctx.strokeText('TOR!', cssW / 2, cssH / 2)
+      ctx.fillStyle = '#ffd700'
+      ctx.shadowColor = '#ffd700'
+      ctx.shadowBlur = 24
+      ctx.fillText('TOR!', cssW / 2, cssH / 2)
+      ctx.restore()
+    }
+  }
+
+  /** Wählt schwarz oder weiß abhängig von der Helligkeit der Hintergrundfarbe. */
+  function contrastingTextColor(hex: string): string {
+    const m = hex.match(/^#?([0-9a-f]{6})$/i)
+    if (!m) return '#fff'
+    const r = parseInt(m[1].slice(0, 2), 16)
+    const g = parseInt(m[1].slice(2, 4), 16)
+    const b = parseInt(m[1].slice(4, 6), 16)
+    // YIQ-Luminanz — Schwellwert 140 statt 128 bevorzugt weißen Text
+    const y = (r * 299 + g * 587 + b * 114) / 1000
+    return y > 150 ? '#000' : '#fff'
   }
 
   if (!replay) {
