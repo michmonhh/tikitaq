@@ -104,12 +104,16 @@ export function calculatePassSuccess(
 ): number {
   const dist = distance(passer.position, receiverPos)
 
-  // Base accuracy from passer stat (0-100 → 0.5-1.0 range)
+  // Base accuracy from passer stat (0-100 → 0.60-1.00 range).
+  // 2026-04-22: from 0.50+0.50 to 0.60+0.40 — Arena pass accuracy was ~80 %
+  // (too random; user feedback). Pro football baselines are ~88-92 %.
   const stat = passType === 'ground' ? passer.stats.shortPassing : passer.stats.highPassing
-  const baseAccuracy = 0.5 + (stat / 100) * 0.5
+  const baseAccuracy = 0.6 + (stat / 100) * 0.4
 
-  // Distance penalty: further away = less accurate
-  const distPenalty = dist * 0.005
+  // Distance penalty: further away = less accurate.
+  // 2026-04-22: 0.005 → 0.003 per unit — short passes shouldn't eat a 10-pp
+  // penalty just for a 20-unit horizontal ball.
+  const distPenalty = dist * 0.003
 
   // High passes are half as likely to succeed as ground passes
   const typeFactor = passType === 'ground' ? 1.0 : 0.5
@@ -144,7 +148,9 @@ export function calculatePassSuccess(
   // Apply passer's confidence modifier
   rawChance *= getConfidenceModifier(passer)
 
-  // Reduce miss rate by 68% (base 60% + additional 20% reduction)
-  const chance = 1 - (1 - rawChance) * 0.32
+  // Reduce miss rate further — 2026-04-22: factor 0.32 → 0.22. With the
+  // higher baseAccuracy and lower distPenalty this pushes typical Pro-Level
+  // Kurzpässe in die 90–95 %-Zone, wo sie auch real liegen sollten.
+  const chance = 1 - (1 - rawChance) * 0.22
   return Math.max(0.15, Math.min(0.98, chance))
 }
