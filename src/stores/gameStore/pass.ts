@@ -2,6 +2,7 @@ import type { GamePhase, TeamSide } from '../../engine/types'
 import { applyPass } from '../../engine/passing'
 import { repositionForSetPiece } from '../../engine/ai/setPiece'
 import { enforceCrossTeamSpacing } from '../../engine/ai/setPieceHelpers'
+import { recordPassEvent } from '../../engine/ai'
 import { adjustConfidence } from '../../engine/confidence'
 import { addTicker, updateTeamStats, findThrowInTaker, findCornerTaker } from './helpers'
 import type { GameStore, StoreSet, StoreGet } from './types'
@@ -22,6 +23,11 @@ export function makePassBall(set: StoreSet, get: StoreGet): GameStore['passBall'
     }
 
     const result = applyPass({ type: 'pass', playerId: passerId, target, receiverId: receiverId ?? '' }, state)
+
+    // AI memory + identity: record pass outcome for the passing team.
+    // No-op if that team is human-controlled.
+    const passer = state.players.find(p => p.id === passerId)
+    if (passer) recordPassEvent(passer.team, passer.position, target, result.success)
 
     let newPlayers = [...state.players]
     let newBall = { ...state.ball }

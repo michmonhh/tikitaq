@@ -11,6 +11,7 @@
 
 import type { GameState, TeamSide, PlayerAction, PlayerData, Position } from '../types'
 import type { TeamPlan, MatchMemory, FieldReading } from './types'
+import { PATTERNS } from './types'
 import {
   getMovementRadius, distance, clampToRadius, clampToPitch,
 } from '../geometry'
@@ -22,7 +23,7 @@ import {
 } from './positioning'
 import { createInitialPlan, reviewStrategy, REVIEW_MINUTES } from './teamPlan'
 import { readField } from './fieldReading'
-import { createMatchMemory } from './memory'
+import { createMatchMemory, recordEvent } from './memory'
 import { updateConfidence } from './identity'
 import { decideBallAction } from './playerDecision'
 
@@ -81,6 +82,41 @@ export function resetOpponentModel(): void {
   lastKnownScore = { team1: 0, team2: 0 }
   hadBallLastTurn = false
   resetPositioning()
+}
+
+// ══════════════════════════════════════════
+//  Event-Hooks (aus dem Store aufgerufen)
+// ══════════════════════════════════════════
+
+/**
+ * Registriert ein Pass-Ergebnis im Gedächtnis + Identität des passenden
+ * Teams. No-op wenn das Team menschlich gespielt wird (kein Plan/Memory).
+ *
+ * Muster-Klassifizierung:
+ * - Richtung: target.x < 40 → LEFT, > 60 → RIGHT, sonst CENTER
+ *   (spiegelt scoring.getMemoryBonus-Schwellen)
+ * - Distanz: > 25 → LONG, sonst SHORT (spiegelt evaluator/pass classifyPass)
+ */
+export function recordPassEvent(
+  passingTeam: TeamSide,
+  passerPos: Position,
+  target: Position,
+  success: boolean,
+): void {
+  const memory = matchMemories.get(passingTeam)
+  if (memory) {
+    if (target.x < 40) recordEvent(memory, PATTERNS.PASS_LEFT, success)
+    else if (target.x > 60) recordEvent(memory, PATTERNS.PASS_RIGHT, success)
+    else recordEvent(memory, PATTERNS.PASS_CENTER, success)
+
+    const dist = Math.hypot(target.x - passerPos.x, target.y - passerPos.y)
+    recordEvent(memory, dist > 25 ? PATTERNS.PASS_LONG : PATTERNS.PASS_SHORT, success)
+  }
+
+  const plan = teamPlans.get(passingTeam)
+  if (plan) {
+    plan.identity = updateConfidence(plan.identity, success ? 'pass_complete' : 'pass_failed')
+  }
 }
 
 // ══════════════════════════════════════════
