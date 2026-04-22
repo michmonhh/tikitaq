@@ -166,8 +166,11 @@ export function applyPass(
   // Calculate success probability
   let successChance = calculatePassSuccess(passer, target, passType, receiver, opponents)
   if (isThroughBallIntoSpace) {
-    // Through balls are harder — but fast runners mitigate this
-    successChance *= 0.75 + (receiver.stats.pacing / 100) * 0.20
+    // Through balls sind schwerer — aber schnelle Läufer mildern das ab.
+    // 2026-04-22: 0.75+0.20 → 0.88+0.10 — der kumulierte Malus (Pass-Roll +
+    // Interception-Check) reichte aus; diese Zusatzstufe drosselte Through-
+    // Balls zu hart.
+    successChance *= 0.88 + (receiver.stats.pacing / 100) * 0.10
   }
 
   const roll = Math.random()

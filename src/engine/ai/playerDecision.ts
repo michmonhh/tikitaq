@@ -76,8 +76,10 @@ export function decideBallAction(
       else if (distToGoal < 18) opt.score += 12
     }
 
-    // Steilpass-Bonus: gefährlichste Option belohnen
-    if (opt.type === 'through_ball') opt.score += 8
+    // Steilpass-Bonus: gefährlichste Option belohnen.
+    // 2026-04-22: +8 → +15 — User hat im Replay gesehen, dass die KI zu
+    // selten den riskanten Ball nach vorn sucht.
+    if (opt.type === 'through_ball') opt.score += 15
 
     // Rauschen für Varianz
     opt.score += (Math.random() - 0.5) * 6  // ±3

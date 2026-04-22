@@ -25,7 +25,10 @@ export function evaluateThroughBallSpace(
   const spaceBehind = team === 1 ? offsideLine : (100 - offsideLine)
   if (spaceBehind < 10) return null
 
-  // Finde Spieler, die NICHT im Abseits stehen und einen Lauf machen können
+  // Finde Spieler, die NICHT im Abseits stehen und einen Lauf machen können.
+  // 2026-04-22: Filter gelockert — User-Feedback, Steilpässe werden zu selten
+  // versucht. distToLine 25→35 (auch tiefere Mittelfeldspieler dürfen laufen),
+  // pacing 50→42 (nur Torhüter und extrem langsame Abwehrrecken fallen durch).
   const runners = teammates.filter(mate => {
     if (mate.positionLabel === 'TW') return false
     if (isOffside(mate, defTeam, state.players, carrier.position.y)) return false
@@ -36,10 +39,10 @@ export function evaluateThroughBallSpace(
 
     // Muss erreichbar nah an der Abseitslinie sein
     const distToLine = Math.abs(mate.position.y - offsideLine)
-    if (distToLine > 25) return false
+    if (distToLine > 35) return false
 
     // Braucht etwas Tempo
-    if (mate.stats.pacing < 50) return false
+    if (mate.stats.pacing < 42) return false
 
     return true
   })
