@@ -21,17 +21,19 @@ export const DEF_BEHAVIOR: Record<DefenseStrategy, Record<RoleGroup, PositionCon
   high_press: {
     defender:   { verticalOffset: 2,  ballAttractionY: 0.18, ballAttractionX: 0.20, widthScale: 1.00 },
     midfielder: { verticalOffset: 4,  ballAttractionY: 0.25, ballAttractionX: 0.18, widthScale: 0.95 },
-    attacker:   { verticalOffset: 3,  ballAttractionY: 0.35, ballAttractionX: 0.12, widthScale: 0.85 },
+    // Stürmer nicht mehr vom tiefen Ball magnetisch angezogen — sie bleiben
+    // als Konter-Anker vorn. Arena-Befund vor Fix: Box-Präsenz ≈ 1 %.
+    attacker:   { verticalOffset: 3,  ballAttractionY: 0.05, ballAttractionX: 0.12, widthScale: 0.85 },
   },
   mid_press: {
     defender:   { verticalOffset: 0,  ballAttractionY: 0.18, ballAttractionX: 0.20, widthScale: 1.00 },
     midfielder: { verticalOffset: 0,  ballAttractionY: 0.22, ballAttractionX: 0.18, widthScale: 0.95 },
-    attacker:   { verticalOffset: -3, ballAttractionY: 0.15, ballAttractionX: 0.12, widthScale: 1.00 },
+    attacker:   { verticalOffset: -3, ballAttractionY: 0.03, ballAttractionX: 0.12, widthScale: 1.00 },
   },
   deep_block: {
     defender:   { verticalOffset: -5, ballAttractionY: 0.15, ballAttractionX: 0.20, widthScale: 1.05 },
     midfielder: { verticalOffset: -3, ballAttractionY: 0.18, ballAttractionX: 0.18, widthScale: 0.95 },
-    attacker:   { verticalOffset: 0,  ballAttractionY: 0.08, ballAttractionX: 0.12, widthScale: 0.95 },
+    attacker:   { verticalOffset: 0,  ballAttractionY: 0.02, ballAttractionX: 0.12, widthScale: 0.95 },
   },
   man_marking: {
     // Platzhalter — Manndeckung nutzt separate Logik

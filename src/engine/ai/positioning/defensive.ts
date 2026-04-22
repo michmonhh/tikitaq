@@ -59,10 +59,14 @@ export function defensivePosition(
   // ── Defensive Tiefenbegrenzung: verhindert Vorwärts-Drift über viele Züge ──
   // origin ist die Startposition der Runde, NICHT die Formationsposition.
   // Ohne Begrenzung driften Verteidiger Runde für Runde nach vorne.
+  // Attacker-Obergrenzen bewusst hoch — mind. ein Stürmer bleibt als Konter-
+  // Anker im gegnerischen Halbfeld stehen, statt jedes Mal mit zurückzufallen.
+  // Bei 82/78/72 steht der höchste Angreifer bei Team 1 zwischen y=18 und y=28
+  // (also am oder im 16er), wenn der Gegner in Ballbesitz ist.
   const maxFromGoal: Record<RoleGroup, Record<DefenseStrategy, number>> = {
     defender:   { high_press: 40, mid_press: 35, deep_block: 28, man_marking: 35 },
     midfielder: { high_press: 55, mid_press: 48, deep_block: 40, man_marking: 48 },
-    attacker:   { high_press: 70, mid_press: 65, deep_block: 55, man_marking: 65 },
+    attacker:   { high_press: 82, mid_press: 78, deep_block: 72, man_marking: 78 },
   }
   const ceiling = maxFromGoal[role][defStrat]
   if (team === 1 && y < (100 - ceiling)) y = 100 - ceiling

@@ -143,6 +143,9 @@ function printAggregate(homeName: string, awayName: string, results: ArenaMatchR
   const avg = (x: number) => (x / n).toFixed(2)
   const pct = (x: number) => (x / n).toFixed(1) + '%'
 
+  const boxHome = results.reduce((s, r) => s + r.stats.team1.boxPresencePercent, 0) / n
+  const boxAway = results.reduce((s, r) => s + r.stats.team2.boxPresencePercent, 0) / n
+
   console.log(`Aggregate (${n} Matches):`)
   console.log(`                       ${homeName.padEnd(16)}  ${awayName.padEnd(16)}`)
   console.log(`  Siege               ${String(agg.home.wins).padStart(16)}  ${String(agg.away.wins).padStart(16)}`)
@@ -151,6 +154,7 @@ function printAggregate(homeName: string, awayName: string, results: ArenaMatchR
   console.log(`  Ø xG                ${avg(agg.home.xG).padStart(16)}  ${avg(agg.away.xG).padStart(16)}`)
   console.log(`  Ø Schüsse           ${avg(agg.home.shots).padStart(16)}  ${avg(agg.away.shots).padStart(16)}`)
   console.log(`  Ø Ballbesitz        ${pct(agg.home.poss).padStart(16)}  ${pct(agg.away.poss).padStart(16)}`)
+  console.log(`  Ø Box-Präsenz       ${pct(boxHome).padStart(16)}  ${pct(boxAway).padStart(16)}`)
   console.log(`  Ø Passquote         ${pct(agg.home.passAcc).padStart(16)}  ${pct(agg.away.passAcc).padStart(16)}`)
 }
 

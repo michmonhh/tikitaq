@@ -64,12 +64,16 @@ export function offensivePosition(
   const role = getRoleGroup(player)
   const cfg = ATK_BEHAVIOR[plan?.strategy.attack ?? 'possession'][role]
 
-  // Basis: Formationsposition mit Rückzug-Drang zum Mannschaftsgefüge
-  // Bei Ballgewinn stehen Spieler oft falsch — Formation-Pull zieht sie zurück
+  // Basis: Formationsposition als Orientierung, aber schwach gezogen — sonst
+  // kommt bei Ballbesitz niemand vorn an. Stürmer werden zusätzlich übers
+  // Home hinaus nach vorn geschoben (ATTACKER_PUSH).
+  // Arena-Befund vor Fix: Box-Präsenz nur 0.5–1.1 % → niemand im 16er.
   const formHome = getFormationHome(player)
-  const FORMATION_PULL_ATK = 0.45  // 45% Zug Richtung Heimposition
+  const FORMATION_PULL_ATK = 0.20  // vorher 0.45
+  const ATTACKER_PUSH = 10
   const anchorX = player.origin.x + (formHome.x - player.origin.x) * FORMATION_PULL_ATK
-  const anchorY = player.origin.y + (formHome.y - player.origin.y) * FORMATION_PULL_ATK
+  const baseAnchorY = player.origin.y + (formHome.y - player.origin.y) * FORMATION_PULL_ATK
+  const anchorY = role === 'attacker' ? baseAnchorY + fwd * ATTACKER_PUSH : baseAnchorY
   const xOffset = anchorX - 50
   let x = 50 + xOffset * cfg.widthScale
   let y = anchorY
