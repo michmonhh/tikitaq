@@ -1,6 +1,12 @@
-# TIKITAQ — Handoff (rekonstruiert 2026-04-22)
+# TIKITAQ — Handoff (rekonstruiert 2026-04-22, erweitert 2026-04-22)
 
-> **Kontext:** Das iCloud-Repo ist beim Verschieben verloren gegangen. Der letzte GitHub-Push war am **18. April 2026, 15:16 UTC** (Commit `e35f2e2` "Add Saison-Modus Phase A (1. Liga)"). Dies ist eine Rekonstruktion des KI-Status aus dem vorhandenen Code. Die ungetrackten Dateien `Handoff.md`, `Handoff2.md`, `Handoff3.md`, `KI.md`, `SESSION-AUTONOMOUS.md`, `claude-code-briefing.md`, `scripts/` und der komplette `training/`-Ordner (Python PPO-Pipeline inkl. ~33 MB Rollout-Daten) sind nicht mehr vorhanden.
+> **Kontext:** Das iCloud-Repo ist beim Verschieben verloren gegangen. Der letzte GitHub-Push war am **18. April 2026, 15:16 UTC** (Commit `e35f2e2` "Add Saison-Modus Phase A (1. Liga)"). Dies ist eine Rekonstruktion des KI-Status aus dem vorhandenen Code. Die ungetrackten Dateien `Handoff.md`, `Handoff2.md`, `Handoff3.md`, `KI.md`, `SESSION-AUTONOMOUS.md`, `scripts/` und der komplette `training/`-Ordner (Python PPO-Pipeline inkl. ~33 MB Rollout-Daten) sind nicht mehr vorhanden.
+>
+> **Update:** `claude-code-briefing.md` wurde zwischenzeitlich wiedergefunden und enthält die komplette Spec für die MARL-Pipeline (hierarchische Policy, Formations-als-Daten, Behavioral Cloning + PPO + Self-Play). Roadmap-Abschnitt weiter unten entsprechend überarbeitet. Seit der Rekonstruktion ist außerdem Folgendes gebaut:
+>   - Auth-Login/Sign-up-Button auf localhost
+>   - Vollständige Event-Verdrahtung: `pass_complete/failed`, `tackle_won/lost`, `save` in MatchMemory + TeamIdentity
+>   - Arena-Pipeline: headless `runAIMatch` + CLI round-robin + `ArenaScreen` + animierter `ReplayScreen`
+>   - dev/main-Branch-Trennung, Push-Disziplin etabliert
 
 ## Was gerettet wurde
 
@@ -17,8 +23,7 @@
 | Rolling Handoffs | `Handoff.md`, `Handoff2.md`, `Handoff3.md` — Tages-Übergabestände |
 | KI-Spec | `KI.md` — detaillierte Spezifikation der KI-Architektur |
 | Autonomous-Mode | `SESSION-AUTONOMOUS.md`, `autonomous_run.sh`, `mega_run.log` |
-| Briefing | `claude-code-briefing.md` |
-| KI-Tuning CLIs | `scripts/` komplett (`ppoRollout.ts`, `ppoSelfPlay.sh`, `collectTrajectories.ts`, `simulate-mega.ts`, `parityTest.ts`, `aiArena.ts`, `ki2Smoke.ts`, `bcEncoderSmoke.ts`, `encoderSmoke.ts`, `policySmoke.ts`, `rewardsSmoke.ts`, `trajectorySmoke.ts`, `coachTriggerSmoke.ts`, `actionsSmoke.ts`, `simulate.ts`, `simulate-mega.ts`, `simulateSeason.ts`, `team-dna-test.ts`, `test-spacing.ts`, `arena-runs/`) |
+| KI-Tuning CLIs | `scripts/` komplett (`ppoRollout.ts`, `ppoSelfPlay.sh`, `collectTrajectories.ts`, `simulate-mega.ts`, `parityTest.ts`, `ki2Smoke.ts`, `bcEncoderSmoke.ts`, `encoderSmoke.ts`, `policySmoke.ts`, `rewardsSmoke.ts`, `trajectorySmoke.ts`, `coachTriggerSmoke.ts`, `actionsSmoke.ts`, `simulate.ts`, `simulate-mega.ts`, `simulateSeason.ts`, `team-dna-test.ts`, `test-spacing.ts`, `arena-runs/`) — einziger neu gebauter Ersatz ist `scripts/aiArena.ts`. |
 | Python-Training | `training/` komplett: `bc_train.py`, `ppo_train.py`, `dataset.py`, `ppo_dataset.py`, `model.py`, `export_onnx.py`, `export_weights.py`, `smoke.py`, `requirements.txt`, `tikitaq_train/__init__.py` |
 | Trainingsdaten | 100 Rollout-Dateien (`training/ppo_rollouts/rollout-31000.jsonl` bis `-31099.jsonl`, ~33 MB) |
 | Arbeit 18.–21. April | Ca. 3 Tage lokale Arbeit nie gepusht (Inhalt unbekannt — MCP-Logs zeigen viel Live-Preview-Testing) |
@@ -187,33 +192,72 @@ Dispatcher in `positioning.ts` (108 Zeilen). Entscheidungsbaum in `decidePositio
 
 ### Code-Indizien offener Baustellen
 
-1. **Confidence-Events nur teilweise verdrahtet** (`identity.ts`): `goal_scored`/`goal_conceded` werden in `index.ts:108–112` gefüttert. Die anderen 6 Events sind definiert aber ungenutzt im AI-Modul. Entweder im gameStore einhaken oder Events entfernen.
-2. **Memory schreibt nichts** (`memory.ts`): `recordEvent` hat keinen Call-Sites im AI-Modul. `getAvoiding`/`getWorking` laufen ins Leere bis Events reinkommen. Aufgabe: Pass-/Schuss-Resultate aus `gameStore/pass.ts`/`shoot.ts` in `MatchMemory` schreiben.
-3. **`Knowledge` (persistent)** ist hart auf leeres Dummy gesetzt (`loadKnowledge` gibt leere Map zurück) — Kommentar sagt *"Wird durch AI-vs-AI Training befüllt. Vorerst leer."* Das war vermutlich der Zweck der Python PPO-Pipeline (`training/`), die jetzt verloren ist.
-4. **Hungarian in `positioning/marking.ts`** ist die einfache Variante (64 Zeilen). Im verlorenen `scripts/`-Ordner gab es `positioning/hungarian.ts` als größere Variante (Dateiname aus iCloud-Listing der vorherigen Session bekannt). Möglicherweise ging dort bessere Zuordnungs-Logik verloren.
+1. ~~**Confidence-Events nur teilweise verdrahtet**~~ ✅ erledigt in Commits `fb66601` (pass) + `52c476e` (tackle + save). Offen bleibt nur `possession_turn` — Turn-Transition-Hook wird später evaluiert.
+2. ~~**Memory schreibt nichts**~~ ✅ erledigt in `fb66601` — `recordEvent` wird aus `gameStore/pass.ts` gefüttert mit `PASS_LEFT/CENTER/RIGHT` + `PASS_SHORT/LONG`. `getAvoiding`/`getWorking` haben damit Datengrundlage.
+3. **`Knowledge` (persistent)** ist hart auf leeres Dummy gesetzt (`loadKnowledge` gibt leere Map zurück). Wird durch die in `claude-code-briefing.md` beschriebene MARL-Pipeline befüllt — das ist KI2, nicht KI1-Intern.
+4. **Hungarian in `positioning/marking.ts`** ist die einfache Variante (64 Zeilen). Im verlorenen `scripts/`-Ordner gab es `positioning/hungarian.ts` als größere Variante. Mögliche Regression; nur relevant falls Manndeckungs-Strategie in Arena-Matches schwach erscheint.
+5. **Tor-Armut** (neu, Arena-Befund): Ø 0.54 Tore/Match statt ~2.8, ~62% Remis, München auf Platz 14. Kombiniertes xG ~2.9/Match — Chancen werden erzeugt, Konvertierung scheitert. Verdächtig: `evaluators/shoot.ts` (Schuss-Auswahl) oder `engine/shooting.ts` (Schuss-Mechanik). **Prioritäre Baustelle vor Trajectory-Collection**, weil eine schwache KI1 ein schwaches BC-Pretraining produziert.
 
-### Parallel-Gleis: Python RL-Training (**verloren, war im Aufbau**)
+### KI2 — MARL-Pipeline (aus `claude-code-briefing.md` wiedergewonnen)
 
-Aus CLAUDE.md + dem vorher gesichteten iCloud-Listing rekonstruierbar:
+Das Briefing ist zurück und gibt die komplette Spec vor. Zusammenfassung der verbindlichen Eckpunkte:
 
-- **PPO (Proximal Policy Optimization)** + **Behavioral Cloning** in PyTorch
-- Rollouts als JSONL geschrieben (100 Rollouts à ~330 KB = ~33 MB zum Zeitpunkt des Absturzes)
-- Export via `export_onnx.py` / `export_weights.py` — vermutlich ONNX-Runtime in den Browser / zur Laufzeit geplant
-- Autonomous-Self-Play über `autonomous_run.sh` / `ppoSelfPlay.sh`
-- `tikitaq_train/dataset.py`, `ppo_dataset.py`, `model.py`, `bc_train.py`, `ppo_train.py`, `smoke.py`, `__init__.py`
+**Hierarchische Policy (zwei Netze):**
+- **Spieler-Policy** — MLP 2–3 Hidden Layers, 64–128 Units. Ein einziges Netz für alle Spieler, Rolle als Input-Feature (Parameter-Sharing). Diskreter Action-Space, pro Rolle maskiert (TW schießt nicht aufs Tor etc.).
+- **Coach-Policy** — kleineres MLP, diskreter Action-Space ≈ 18 (6 Formationen × 3 Risikostufen). Feuert seltener (alle N Runden oder Event-getrieben: Gegentor, rote Karte, Phasenwechsel).
 
-**Ziel** laut Typ `Knowledge.strategyHints: Map<string, number>`: Strategie-Muster mit Winrate annotiert (z.B. `"deep_block_vs_fast" → 0.62`), die `teamPlan.chooseStrategy` dann als zusätzlichen Score-Term konsumiert. Im aktuellen Code ist dieser Term nicht verdrahtet.
+**Modellbudget:** < 1 MB, < 1 ms Inferenz pro Spieler auf Mittelklasse-Handys. Export ONNX int8 → ONNX Runtime Web oder TF.js.
+
+**Formationen = Daten, nicht Code:**
+```ts
+Formation = {
+  name: '4-3-3',
+  roles: [{ role: 'GK', anchor_attack: [0.05, 0.5], anchor_defense: [0.02, 0.5] }, …],
+  compactness: { vertical: 0.6, horizontal: 0.7 },
+}
+```
+Neue Formationen = neue Tabellenzeilen. Die Policy sieht nur die Sollposition und generalisiert über den Pool.
+
+**State-Features (30–50, ego-zentrisch):**
+- Eigene Position, Qualitäten, Rolle (one-hot)
+- Eigene Sollposition (Formations-Anker nach Ballbesitz-Zustand) + Offset
+- Kompaktheit (vertikal/horizontal als Skalare)
+- Distanz/Winkel zum Ball
+- Distanz zu nächstem Gegner und Mitspieler pro Rolle
+- Team-Strategie (Risiko/Aggressivität/Pressing) + Kontext (Stand, verbleibende Runden)
+
+**Trainingsverfahren:**
+1. Trajektorien von KI1 sammeln (Größenordnung 10k–100k Spiele)
+2. Behavioral Cloning als Pretraining → Policy startet mit fußballartigem Verhalten
+3. PPO gegen KI1, statische zufällig gesamplete Formationen pro Spiel, optional KL-Penalty zu KI1
+4. Self-Play + League aktivieren wenn KI1 geschlagen (KI1 und Varianten bleiben im League)
+5. Erst scripted Coach, dann gelernter Coach
+
+**Plausibilität = explizites Designziel** (nicht nur Winrate):
+- Passlängenverteilung, Shot-Distanzen aus dem Strafraum, Position-Abweichung vom Anker (existent, aber plausibel), Teamform-Kompaktheit nach Spielphase, Ballbesitz nach Zone
+- Sichtprüfung pro Checkpoint: 5–10 Spiele rendern, hässlicher Fußball = untauglich
+
+**Engine-Determinismus:** Training (Python) und Runtime (Browser) müssen identisch sein. Vorschlag aus Briefing: TypeScript-Engine + Python-Port mit Paritäts-Tests, oder Rust/WASM für beide Seiten.
+
+**Verloren, muss neu:** `bc_train.py`, `ppo_train.py`, `dataset.py`, `ppo_dataset.py`, `model.py`, `export_onnx.py`, `export_weights.py`, plus der Python-Engine-Port unter `/sim-py`, plus die gesammelten Trajektorien (100 Rollouts). Die `ReplaySnapshot`-Infrastruktur aus der Arena ist die halbe Miete — sie braucht nur noch Policy-Feature-Extraction als zusätzliche Schicht.
 
 ---
 
-## Vorgeschlagene nächste Schritte (Priorität absteigend)
+## Roadmap (briefing-basiert, Priorität absteigend)
 
-1. **Repo als Arbeitskopie annehmen.** Current: `~/Documents/tikitaq save/tikitaq`. Reine Umbenennung nach `~/Documents/tikitaq` vorschlagen, falls Pfad stört.
-2. **`npm install && npx tsc -b && npm run build`** — verifizieren, dass der 18.-April-Stand clean baut.
-3. **Memory-Events verdrahten**: `recordEvent` aus `engine/passing/applyPass.ts` und `engine/shooting.ts` aufrufen. Confidence-Events (`pass_complete`, `tackle_won`, `save`) analog im `gameStore`.
-4. **Entscheiden: Python RL-Pipeline neu aufbauen?** Die TypeScript-KI ist voll funktional auch ohne `Knowledge`. Rebuild lohnt erst wenn die regelbasierte Variante in AI-vs-AI-Arenen reproduzierbare Schwächen zeigt.
-5. **`scripts/`-Verlust**: Zumindest `aiArena.ts` (AI-vs-AI-Simulator) und `parityTest.ts` (Regressionstest nach Refactor) neu aufbauen — das waren vermutlich die wichtigsten Verifikations-Tools.
-6. **Arbeit vom 18.–21. April**: komplett neu machen. MCP-Logs zeigen viel Live-Preview-Klick/Screenshot-Aktivität, wenig Rückschluss auf Code-Änderungen. Kandidaten (spekulativ): Saison-Modus-Tuning, Bugfixes an Set-Pieces, KI-Parameter-Feintuning.
+**KI1 härten, bevor KI2 anfängt** — eine schwache Baseline produziert ein schwaches BC-Pretraining.
+
+1. **Tor-Armut fixen.** Arena zeigt Ø 0.54 Tore/Match, ~62% Remis. Suspect: `playerDecision/evaluators/shoot.ts` (Auswahl) + `engine/shooting.ts` (Mechanik). Zielwert: realistisch ~2.5–3 Tore/Match, München unter den Top 3 im Round-Robin.
+2. **Paritäts-Test.** `runAIMatch` (gameStore headless) vs. UI-Match — identischer Seed, identischer Endzustand? Essentiell bevor wir Trajektorien für BC einfrieren. `scripts/parityTest.ts` war genau das verlorene Tool.
+3. **Formations-Datenstruktur** (Briefing-Schritt 3): `engine/formation.ts` vom Code-Generator zur Daten-Tabelle umbauen. Start-Pool: 4-3-3, 4-4-2, 3-5-2, 5-3-2. JSON oder TS-Literal.
+4. **KI1 formations-fähig** (Briefing-Schritt 4): `positioning/roles.ts#getFormationHome` nutzt aktuell `p.origin`. Muss auf ausgewählten Formations-Anker (Attack vs. Defense je nach Ballbesitz) umgestellt werden. Ohne Verhaltens-Änderung für 4-3-3-Default.
+5. **Spiel-Setup erweitern**: Formation pro Team wählbar in `QuickGame` / `Arena`. Trainings-Sampling randomisiert später.
+6. **State-Encoder** (Briefing-Schritt 5): 30–50 Features ego-zentrisch pro handelndem Spieler. Deterministisch in TypeScript. Tests via bekannter Fixtures.
+7. **Trajectory-Collection** (Briefing-Schritt 6): `ReplaySnapshot` um Feature-Vektoren + Action-Labels erweitern, oder parallelen Recorder `TrajectoryRecorder` bauen. Arena/CLI sammelt 10k–100k Spiele.
+8. **Plausibilitäts-Metriken** (Briefing-Abschnitt Plausibilität, Punkt 5): Passlängen-Verteilung, Shot-Distanz-Verteilung, mittlere Anker-Abweichung, Team-Kompaktheit pro Phase, Ballbesitz-Heatmap. Pro Arena-Run ausgeben, pro Checkpoint vergleichen.
+9. **Python-Pipeline** (Briefing-Schritte 7 ff.): Engine-Port nach Python ODER Rust/WASM-Entscheidung. BC-Pretraining, PPO-Loop, Self-Play + League, Coach (scripted → gelernt), ONNX-Export, Browser-Integration.
+
+**Nebengleis:** Arena-Polish — IndexedDB-Persistenz für Replays, Round-Robin-Ansicht im UI (aktuell nur CLI), mehr Visualisierung (Reasoning-Overlay, Formations-Anker, Bewegungs-Trails).
 
 ---
 
