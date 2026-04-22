@@ -24,8 +24,11 @@ export function evaluateAdvance(
   }
   if (blocked >= 2) return null
 
+  // 2026-04-22: Dämpfung 0.8 → 0.95 — der Radius ist eh physiologisch
+  // begrenzt (Pacing + Fitness); eine zusätzliche 20-%-Sicherheitsmarge
+  // war übervorsichtig und bremste die Progression Richtung 16er.
   const target = clampToPitch(clampToRadius(
-    { x: carrier.position.x, y: carrier.position.y + dir * moveRad * 0.8 },
+    { x: carrier.position.x, y: carrier.position.y + dir * moveRad * 0.95 },
     carrier.origin, moveRad,
   ))
 

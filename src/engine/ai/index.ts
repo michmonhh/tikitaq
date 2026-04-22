@@ -244,12 +244,18 @@ export function executeAITurn(state: GameState): PlayerAction[] {
 
     // Abseits vermeiden — NICHT für Spieler die zum losen Ball laufen
     // (Abseits gilt nur beim Zuspiel, nicht beim Aufnehmen eines losen Balls)
+    //
+    // 2026-04-22: Sicherheitsmarge 1 → 2.5 Einheiten. Stürmer sollen
+    // "möglichst nie im Abseits stehen" (User). Bei nur 1 Einheit Puffer
+    // reichte eine minimale Abwehr-Aufwärtsbewegung, um den Stürmer
+    // wieder abseits zu setzen.
     const chasingLooseBall = reason === 'Läuft zum losen Ball' || reason === 'Sichert losen Ball ab'
     if (player.positionLabel !== 'TW' && !chasingLooseBall) {
       const defTeam: TeamSide = team === 1 ? 2 : 1
       const offsideLine = getOffsideLine(state.players, defTeam)
-      if (team === 1 && target.y < offsideLine) target = { x: target.x, y: offsideLine + 1 }
-      if (team === 2 && target.y > offsideLine) target = { x: target.x, y: offsideLine - 1 }
+      const margin = 2.5
+      if (team === 1 && target.y < offsideLine + margin) target = { x: target.x, y: offsideLine + margin }
+      if (team === 2 && target.y > offsideLine - margin) target = { x: target.x, y: offsideLine - margin }
     }
 
     targetEntries.push({ player, target, reason })
