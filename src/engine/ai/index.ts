@@ -119,6 +119,25 @@ export function recordPassEvent(
   }
 }
 
+/**
+ * Registriert einen Zweikampf-Ausgang.
+ * winnerTeam bekommt tackle_won, loserTeam tackle_lost — beide nur wenn das
+ * Team einen Plan hat (AI-Team). Auch für Fouls: der "winner" ist der gefoulte
+ * Spieler, der "loser" der Foulspieler — die Identität-Deltas passen.
+ */
+export function recordTackleEvent(winnerTeam: TeamSide, loserTeam: TeamSide): void {
+  const winnerPlan = teamPlans.get(winnerTeam)
+  if (winnerPlan) winnerPlan.identity = updateConfidence(winnerPlan.identity, 'tackle_won')
+  const loserPlan = teamPlans.get(loserTeam)
+  if (loserPlan) loserPlan.identity = updateConfidence(loserPlan.identity, 'tackle_lost')
+}
+
+/** Registriert eine Torwart-Parade für das verteidigende Team. */
+export function recordSaveEvent(savingTeam: TeamSide): void {
+  const plan = teamPlans.get(savingTeam)
+  if (plan) plan.identity = updateConfidence(plan.identity, 'save')
+}
+
 // ══════════════════════════════════════════
 //  Einstiegspunkt
 // ══════════════════════════════════════════

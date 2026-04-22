@@ -1,6 +1,7 @@
 import type { GameState, PenaltyState, TeamSide } from '../../engine/types'
 import { applyShot, calculateShotAccuracy, resolvePenalty, aiChoosePenaltyDirection } from '../../engine/shooting'
 import { handleGoalScored } from '../../engine/turn'
+import { recordSaveEvent } from '../../engine/ai'
 import { adjustConfidence } from '../../engine/confidence'
 import { PITCH } from '../../engine/constants'
 import { addTicker, updateTeamStats, directionFromX, addGoalLog } from './helpers'
@@ -49,6 +50,7 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
         resultPlayers = resultPlayers.map(p =>
           p.id === ps.keeperId ? { ...p, gameStats: { ...p.gameStats, saves: p.gameStats.saves + 1 } } : p,
         )
+        recordSaveEvent(keeper.team)
       } else {
         const missX = shotX + (shotX < 50 ? -8 : 8)
         const missY = goalY + (ps.shooterTeam === 1 ? -3 : 3)
@@ -122,6 +124,7 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
         const savedPlayers = resultPlayers.map(p =>
           p.id === ps.keeperId ? { ...p, gameStats: { ...p.gameStats, saves: p.gameStats.saves + 1 } } : p,
         )
+        recordSaveEvent(keeper.team)
         // Show result, then free ball
         set({
           state: { ...newState, players: savedPlayers, ball: { position: reboundPos, ownerId: null }, phase: 'penalty' },
@@ -205,6 +208,7 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
         return p
       })
       newState = { ...state, players: updatedPlayers, ball: newBall, lastEvent: result.event }
+      if (result.savedBy) recordSaveEvent(result.savedBy.team)
     }
 
     get().showEvent(result.event.message, 3000, result.event.type)

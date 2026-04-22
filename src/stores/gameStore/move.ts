@@ -1,6 +1,7 @@
 import type { GameEvent, GameState, TeamMatchStats } from '../../engine/types'
 import { applyMove } from '../../engine/movement'
 import { resolveTackle } from '../../engine/tackle'
+import { recordTackleEvent } from '../../engine/ai'
 import { adjustConfidence } from '../../engine/confidence'
 import { addTicker, updateTeamStats, isSetPiecePhase } from './helpers'
 import type { GameStore, StoreSet, StoreGet } from './types'
@@ -133,6 +134,10 @@ export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePla
       const tackleResult = resolveTackle(result.tackle)
       lastEvent = tackleResult.event
       const tacklerTeam = result.tackle.defender.team
+
+      // AI identity: record tackle outcome for both teams' plans.
+      // winner is the player who ends up with the ball (fouled player on foul).
+      recordTackleEvent(tackleResult.winner.team, tackleResult.loser.team)
 
       get().showEvent(tackleResult.event.message, 3000, tackleResult.event.type)
 
