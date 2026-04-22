@@ -247,11 +247,14 @@ Neue Formationen = neue Tabellenzeilen. Die Policy sieht nur die Sollposition un
 
 **KI1 härten, bevor KI2 anfängt** — eine schwache Baseline produziert ein schwaches BC-Pretraining.
 
-1. **Tor-Armut fixen.** Arena zeigt Ø 0.54 Tore/Match, ~62% Remis. Suspect: `playerDecision/evaluators/shoot.ts` (Auswahl) + `engine/shooting.ts` (Mechanik). Zielwert: realistisch ~2.5–3 Tore/Match, München unter den Top 3 im Round-Robin.
+1. **Tor-Armut fixen.** Arena zeigt Ø 0.54 Tore/Match, ~62% Remis. Erste Pass (`de72952`) brachte partielle Linderung (Ø 0.63) — Kern-Ursache ist **nicht Schuss-Mechanik, sondern Positionierung**: Box-Präsenz < 2% (Stürmer stehen fast nie im gegnerischen 16er). Nächster Schritt: **Replay eines einzelnen Matches im UI anschauen**, beobachten wie sich Stürmer zwischen Turns verhalten, dann gezielt nachtunen. Zielwert: ~2.5–3 Tore/Match, München im Round-Robin unter Top 3.
 2. **Paritäts-Test.** `runAIMatch` (gameStore headless) vs. UI-Match — identischer Seed, identischer Endzustand? Essentiell bevor wir Trajektorien für BC einfrieren. `scripts/parityTest.ts` war genau das verlorene Tool.
-3. **Formations-Datenstruktur** (Briefing-Schritt 3): `engine/formation.ts` vom Code-Generator zur Daten-Tabelle umbauen. Start-Pool: 4-3-3, 4-4-2, 3-5-2, 5-3-2. JSON oder TS-Literal.
-4. **KI1 formations-fähig** (Briefing-Schritt 4): `positioning/roles.ts#getFormationHome` nutzt aktuell `p.origin`. Muss auf ausgewählten Formations-Anker (Attack vs. Defense je nach Ballbesitz) umgestellt werden. Ohne Verhaltens-Änderung für 4-3-3-Default.
-5. **Spiel-Setup erweitern**: Formation pro Team wählbar in `QuickGame` / `Arena`. Trainings-Sampling randomisiert später.
+3. **Match-Planning-Screen wiederherstellen** (**war vor dem Verlust bereits gebaut**, muss neu). Kam vor jedem Match aller Modi zum Einsatz, mit:
+   - Formations-Auswahl (siehe 4)
+   - Drag-&-Drop zum Austausch von Startelf ↔ Bank
+   - Spieler-Datenbank mit Bankspielern (aktuell nur Startelf vorhanden — `data/players.ts` muss erweitert werden)
+4. **Formations-Datenstruktur** (Briefing-Schritt 3): `engine/formation.ts` vom Code-Generator zur Daten-Tabelle umbauen. Start-Pool (laut User): **4-4-2, 4-2-3-1, 4-4-3, 5-3-3, 3-5-2, 3-4-1-2**, erweiterbar. *Frage offen:* 4-4-3 und 5-3-3 summieren auf 11 Feldspieler statt 10 — wahrscheinlich Schreibvarianten für 4-3-3 bzw. 5-3-2 oder andere, vor Implementierung klären.
+5. **KI1 formations-fähig** (Briefing-Schritt 4): `positioning/roles.ts#getFormationHome` nutzt aktuell `p.origin`. Muss auf ausgewählten Formations-Anker (Attack vs. Defense je nach Ballbesitz) umgestellt werden. Ohne Verhaltens-Änderung für 4-3-3-Default.
 6. **State-Encoder** (Briefing-Schritt 5): 30–50 Features ego-zentrisch pro handelndem Spieler. Deterministisch in TypeScript. Tests via bekannter Fixtures.
 7. **Trajectory-Collection** (Briefing-Schritt 6): `ReplaySnapshot` um Feature-Vektoren + Action-Labels erweitern, oder parallelen Recorder `TrajectoryRecorder` bauen. Arena/CLI sammelt 10k–100k Spiele.
 8. **Plausibilitäts-Metriken** (Briefing-Abschnitt Plausibilität, Punkt 5): Passlängen-Verteilung, Shot-Distanz-Verteilung, mittlere Anker-Abweichung, Team-Kompaktheit pro Phase, Ballbesitz-Heatmap. Pro Arena-Run ausgeben, pro Checkpoint vergleichen.
