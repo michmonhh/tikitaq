@@ -58,13 +58,20 @@ export function decidePositioning(
   // Pressing (inkl. Gegenpress + loser Ball)
   if (pressers.has(player.id)) {
     if (ballLoose) {
-      // Loser Ball: erster Presser direkt zum Ball, zweiter leicht versetzt
+      // Loser Ball: erster Presser zielt ÜBER den Ball hinaus Richtung
+      // gegnerisches Tor, damit er den Ball im Vorbeilaufen aufnimmt
+      // (applyMove prüft ballPickedUp jetzt entlang des Pfades) und mit dem
+      // Restradius weiterläuft. constrainMove (movement radius) clampt das
+      // Target, Overshoot ist also ausgeschlossen.
+      const fwd = team === 1 ? -1 : 1
       const isClosest = isFirstPresser(player, state, pressers)
       if (isClosest) {
-        return { target: state.ball.position, reason: 'Läuft zum losen Ball' }
+        return {
+          target: { x: state.ball.position.x, y: state.ball.position.y + fwd * 10 },
+          reason: 'Läuft zum losen Ball',
+        }
       }
       // Zweiter Presser: abfangen statt identische Position
-      const fwd = team === 1 ? -1 : 1
       return {
         target: { x: state.ball.position.x, y: state.ball.position.y + fwd * 6 },
         reason: 'Sichert losen Ball ab',
