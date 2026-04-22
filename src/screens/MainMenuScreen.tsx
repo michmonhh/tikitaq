@@ -50,11 +50,17 @@ export function MainMenuScreen() {
       <TeamEditor open={showEditor} onClose={() => setShowEditor(false)} />
       {/* End editor block */}
 
-      {user && (
+      {user ? (
         <div className={styles.userBar}>
           <span className={styles.username}>{username || user.email}</span>
           <Button variant="ghost" size="sm" onClick={handleLogout}>
             Logout
+          </Button>
+        </div>
+      ) : (
+        <div className={styles.userBar}>
+          <Button variant="ghost" size="sm" onClick={() => navigate('auth')}>
+            Login / Sign up
           </Button>
         </div>
       )}
