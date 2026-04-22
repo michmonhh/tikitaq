@@ -64,15 +64,20 @@ export function offensivePosition(
   const role = getRoleGroup(player)
   const cfg = ATK_BEHAVIOR[plan?.strategy.attack ?? 'possession'][role]
 
-  // Basis: Formationsposition als Orientierung, aber schwach gezogen — sonst
-  // kommt bei Ballbesitz niemand vorn an. Stürmer werden zusätzlich übers
-  // Home hinaus nach vorn geschoben (ATTACKER_PUSH).
-  // Arena-Befund vor Fix: Box-Präsenz nur 0.5–1.1 % → niemand im 16er.
+  // Basis: Formationsposition als Orientierung.
+  //
+  // 2026-04-22: Pull-Werte getrennt für X und Y.
+  //  - X stark (0.60): Flügelspieler sollen klar auf ihrer Seite stehen —
+  //    sonst bleibt die Verteidigung eng stellbar (User-Befund).
+  //  - Y schwach (0.20): Progression Richtung Tor darf nicht gebremst werden.
+  // Stürmer bekommen zusätzlich ATTACKER_PUSH nach vorn — 10 → 20, weil ST
+  // sich im Replay zu lange im Mittelfeld aufhielt.
   const formHome = getFormationHome(player)
-  const FORMATION_PULL_ATK = 0.20  // vorher 0.45
-  const ATTACKER_PUSH = 10
-  const anchorX = player.origin.x + (formHome.x - player.origin.x) * FORMATION_PULL_ATK
-  const baseAnchorY = player.origin.y + (formHome.y - player.origin.y) * FORMATION_PULL_ATK
+  const FORMATION_PULL_X = 0.60
+  const FORMATION_PULL_Y = 0.20
+  const ATTACKER_PUSH = 20
+  const anchorX = player.origin.x + (formHome.x - player.origin.x) * FORMATION_PULL_X
+  const baseAnchorY = player.origin.y + (formHome.y - player.origin.y) * FORMATION_PULL_Y
   const anchorY = role === 'attacker' ? baseAnchorY + fwd * ATTACKER_PUSH : baseAnchorY
   const xOffset = anchorX - 50
   let x = 50 + xOffset * cfg.widthScale
