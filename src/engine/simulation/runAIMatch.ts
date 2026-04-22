@@ -53,6 +53,11 @@ export function runAIMatch(
   let turn = 0
   let guard = 0
 
+  // Box-Präsenz: pro Turn des jeweiligen Teams zählen, wie oft mindestens ein
+  // eigener Feldspieler im gegnerischen 16er steht. Akkumuliert während der
+  // Simulation, weil state.matchStats das nicht trackt.
+  const boxPresenceTurns = { team1: 0, team2: 0 }
+
   while (guard++ < MAX_TURNS) {
     const s = store.getState().state
     if (!s || s.phase === 'full_time') break
@@ -91,6 +96,12 @@ export function runAIMatch(
       continue
     }
 
+    // ── Box-Präsenz: vor dem Zug messen, wer im gegnerischen 16er steht ──
+    if (teamHasPlayerInOpponentBox(s.players, s.currentTurn)) {
+      if (s.currentTurn === 1) boxPresenceTurns.team1++
+      else boxPresenceTurns.team2++
+    }
+
     // ── Snapshot vor dem Zug (wenn Replay angefordert) ──
     if (options.record) {
       snapshots.push(makeSnapshot(s, turn))
@@ -104,7 +115,7 @@ export function runAIMatch(
   const finalState = store.getState().state
   if (!finalState) throw new Error('match ended without state')
 
-  const stats = buildStats(finalState)
+  const stats = buildStats(finalState, boxPresenceTurns)
 
   // Torschützen aus dem goal-log des States
   const scorers = (finalState.goalLog ?? []).map(g => ({
@@ -175,19 +186,15 @@ function makeSnapshot(s: GameState, turnIdx: number): ReplaySnapshot {
   }
 }
 
-function buildStats(s: GameState): ArenaMatchResult['stats'] {
+function buildStats(
+  s: GameState,
+  boxPresenceTurns: { team1: number; team2: number },
+): ArenaMatchResult['stats'] {
   const mk = (side: TeamSide): ArenaTeamStats => {
     const key = side === 1 ? 'team1' : 'team2'
     const ms = s.matchStats[key]
     const turns = s.totalTurns[key]
-    const ownTeamId: TeamSide = side
-    const opponentGoalY = side === 1 ? PITCH.GOAL_TOP_Y : PITCH.GOAL_BOTTOM_Y
-
-    // Box-Präsenz aus finalem Frame kann nicht berechnet werden (nur punktuell).
-    // Wird stattdessen in simulateTurn-Hook ermittelt — hier 0 als Platzhalter,
-    // bis die Laufzeit-Aggregation im Orchestrator ankommt (Phase 2).
-    void opponentGoalY
-    void ownTeamId
+    const boxTurns = boxPresenceTurns[key]
 
     return {
       goals: side === 1 ? s.score.team1 : s.score.team2,
@@ -206,13 +213,27 @@ function buildStats(s: GameState): ArenaMatchResult['stats'] {
       turns,
       possessionTurns: ms.possession,
       possessionPercent: turns > 0 ? (ms.possession / turns) * 100 : 0,
-      boxPresenceTurns: 0,      // TODO Phase 2: Laufzeit-Aggregation im Orchestrator
-      boxPresencePercent: 0,
+      boxPresenceTurns: boxTurns,
+      boxPresencePercent: turns > 0 ? (boxTurns / turns) * 100 : 0,
       distanceCovered: ms.distanceCovered,
     }
   }
 
   return { team1: mk(1), team2: mk(2) }
+}
+
+/** True wenn mindestens ein nicht-TW-Spieler des angreifenden Teams im gegnerischen 16er steht. */
+function teamHasPlayerInOpponentBox(players: PlayerData[], attackingTeam: TeamSide): boolean {
+  for (const p of players) {
+    if (p.team !== attackingTeam) continue
+    if (p.positionLabel === 'TW') continue
+    if (p.position.x < PITCH.PENALTY_AREA_LEFT || p.position.x > PITCH.PENALTY_AREA_RIGHT) continue
+    // Team 1 greift oben (y=0) an → gegnerischer 16er ist y ≤ PENALTY_AREA_DEPTH
+    // Team 2 greift unten (y=100) an → gegnerischer 16er ist y ≥ 100 - PENALTY_AREA_DEPTH
+    if (attackingTeam === 1 && p.position.y <= PITCH.PENALTY_AREA_DEPTH) return true
+    if (attackingTeam === 2 && p.position.y >= 100 - PITCH.PENALTY_AREA_DEPTH) return true
+  }
+  return false
 }
 
 /** Elfmeter (während des Spielflusses) auto-resolven mit Zufalls-Richtung. */

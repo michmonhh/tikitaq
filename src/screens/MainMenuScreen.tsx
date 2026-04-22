@@ -15,6 +15,7 @@ export function MainMenuScreen() {
     { label: 'DUEL', screen: 'duel' as const, description: 'Play vs Friends' },
     { label: 'PERFECT RUN', screen: 'perfect-run' as const, description: 'Beat every team — lose once, it\u2019s over' },
     { label: 'SEASON', screen: 'season' as const, description: 'Spiele eine komplette Liga-Saison' },
+    { label: 'ARENA', screen: 'arena' as const, description: 'KI-vs-KI simulieren und anschauen' },
     { label: 'WORLD LEAGUE', screen: 'main-menu' as const, description: 'Coming Soon', disabled: true },
   ]
 

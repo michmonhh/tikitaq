@@ -8,6 +8,8 @@ export type Screen =
   | 'duel'
   | 'perfect-run'
   | 'season'
+  | 'arena'
+  | 'replay'
   | 'match'
 
 export interface MatchConfig {
@@ -56,7 +58,11 @@ export const useUIStore = create<UIStore>((set, get) => ({
       case 'duel':
       case 'perfect-run':
       case 'season':
+      case 'arena':
         set({ screen: 'main-menu' })
+        break
+      case 'replay':
+        set({ screen: 'arena' })
         break
       case 'main-menu':
         set({ screen: 'intro' })

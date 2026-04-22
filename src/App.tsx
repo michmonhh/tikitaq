@@ -7,6 +7,7 @@ import { QuickGameScreen } from './screens/QuickGameScreen'
 import { DuelScreen } from './screens/DuelScreen'
 import { PerfectRunScreen } from './screens/PerfectRunScreen'
 import { SeasonScreen } from './screens/SeasonScreen'
+import { ArenaScreen } from './screens/ArenaScreen'
 import { AuthScreen } from './screens/AuthScreen'
 import { MatchScreen } from './screens/MatchScreen'
 
@@ -57,6 +58,11 @@ export default function App() {
       content = <PerfectRunScreen />; break
     case 'season':
       content = <SeasonScreen />; break
+    case 'arena':
+      content = <ArenaScreen />; break
+    case 'replay':
+      // Replay-Screen folgt als nächstes — erstmal zurück zur Arena.
+      content = <ArenaScreen />; break
     case 'match':
       content = <MatchScreen />; break
     default:
