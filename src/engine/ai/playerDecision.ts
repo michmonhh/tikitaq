@@ -56,7 +56,15 @@ export function decideBallAction(
   // ── Bewerten ──
   const baseRisk = plan?.riskAppetite ?? 0.5
   const oppGoalY = team === 1 ? 0 : 100
-  const distToGoal = Math.abs(carrier.position.y - oppGoalY)
+
+  // Echte Euclid-Distanz zum Tor-Mittelpunkt, nicht nur Y.
+  // Vorher: Math.abs(y - oppGoalY) — Flügelspieler (x=30, y=15) galten als
+  //   nah am Tor obwohl echte Distanz 25. User-Replay: KI schießt zu früh.
+  const goalCx = 50  // PITCH.CENTER_X
+  const distToGoal = Math.sqrt(
+    (carrier.position.x - goalCx) ** 2 +
+    (carrier.position.y - oppGoalY) ** 2,
+  )
 
   // Risikoeskalation: je näher am Tor, desto aggressiver
   const goalUrgency = distToGoal < 21 ? (21 - distToGoal) / 21 : 0  // 0–1
@@ -70,10 +78,19 @@ export function decideBallAction(
     if (fieldReading) opt.score += getFieldBonus(opt, fieldReading, team)
     if (memory) opt.score += getMemoryBonus(opt, memory)
 
-    // Schuss-Bonus: nah am Tor stark bevorzugen (40% näher als vorher)
+    // Schuss-Bewertung: nah belohnen, weit bestrafen.
+    // 2026-04-22: Weitschuss-Malus ergänzt — User sah, dass KI aus 22–28 m
+    // schießt statt in den 16er zu laufen.
     if (opt.type === 'shoot') {
-      if (distToGoal < 12) opt.score += 25   // Nahdistanz → fast immer schießen
-      else if (distToGoal < 18) opt.score += 12
+      if (distToGoal < 12) opt.score += 25       // Nahdistanz → fast immer schießen
+      else if (distToGoal < 18) opt.score += 12  // Strafraum-Rand
+      else if (distToGoal > 22) opt.score -= 18  // 22m+: lieber vorrücken/passen
+    }
+
+    // Vorrücken belohnen wenn noch vor dem 16er und Raum nach vorne.
+    // Ziel: KI läuft bis in den Strafraum, bevor sie schießt.
+    if (opt.type === 'advance' && distToGoal > 18 && distToGoal < 40) {
+      opt.score += 12
     }
 
     // Steilpass-Bonus: gefährlichste Option belohnen.
