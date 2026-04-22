@@ -93,8 +93,12 @@ export function offensivePosition(
 
   // ── Freilaufen: Abstand von Gegnern UND Mitspielern suchen ──
   // In Ballbesitz: Räume besetzen, nicht klumpen
-
-  // 1) Vom nächsten Gegner weg (sichere Passoptionen)
+  //
+  // Offensivspieler (ST, LM, RM, OM) brauchen AGGRESSIVES Freilaufen, damit
+  // sie anspielbar bleiben. Arena-Befund (User, Replay-Sichtung): Offensive
+  // pickt keine Räume. Attacker bekommen größeren Suchradius + stärkeren Push
+  // und einen zusätzlichen Vorwärts-Bias im Push-Vektor.
+  const isOffPlayer = role === 'attacker' || ['LM', 'RM', 'OM'].includes(player.positionLabel)
   const opponents = state.players.filter(p => p.team !== team && p.positionLabel !== 'TW')
   let nearOppDist = Infinity
   let nearOppX = 0, nearOppY = 0
@@ -102,10 +106,13 @@ export function offensivePosition(
     const d = distance({ x, y }, opp.position)
     if (d < nearOppDist) { nearOppDist = d; nearOppX = opp.position.x; nearOppY = opp.position.y }
   }
-  if (nearOppDist < 18) {
-    const push = (18 - nearOppDist) * 0.35
+  const evasionRadius = isOffPlayer ? 24 : 18
+  const evasionStrength = isOffPlayer ? 0.60 : 0.35
+  const forwardBias = isOffPlayer ? 4 : 2  // stärkerer Drang nach vorn beim Ausweichen
+  if (nearOppDist < evasionRadius) {
+    const push = (evasionRadius - nearOppDist) * evasionStrength
     const dx = x - nearOppX
-    const dy = (y - nearOppY) + fwd * 2
+    const dy = (y - nearOppY) + fwd * forwardBias
     const len = Math.sqrt(dx * dx + dy * dy) || 1
     x += (dx / len) * push
     y += (dy / len) * push
