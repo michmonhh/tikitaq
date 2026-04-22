@@ -150,8 +150,13 @@ export function positionOffensiveFreekick(
       }))
     }
 
+    // Stürmer nicht auf die Mittellinie parken — sie sollen als Konter-
+    // Ausgangspunkt in der gegnerischen Hälfte bleiben (y=35 Team 1 / y=65 Team 2).
     for (let i = 0; i < attackers.length; i++) {
-      actions.push(moveAction(attackers[i], { x: 40 + i * 20, y: 50 }))
+      actions.push(moveAction(attackers[i], {
+        x: 40 + i * 20,
+        y: shiftToward(50, 15, team),
+      }))
     }
 
     const ownGoal = ownGoalY(team)
@@ -227,8 +232,13 @@ export function positionDefensiveFreekick(
       }
     }
 
+    // Stürmer als Konter-Anker in der gegnerischen Hälfte lassen,
+    // nicht auf Mittellinie parken.
     for (let i = 0; i < attackers.length && i < 2; i++) {
-      actions.push(moveAction(attackers[i], { x: 35 + i * 30, y: 50 }))
+      actions.push(moveAction(attackers[i], {
+        x: 35 + i * 30,
+        y: shiftToward(50, 15, team),
+      }))
     }
   } else {
     // Midfield free kick: compact shape
@@ -259,10 +269,11 @@ export function positionDefensiveFreekick(
       }
     }
 
+    // Stürmer als Konter-Anker, nicht nur knapp über Mittellinie.
     for (let i = 0; i < attackers.length && i < 2; i++) {
       actions.push(moveAction(attackers[i], {
         x: 35 + i * 30,
-        y: shiftToward(50, 10, team),
+        y: shiftToward(50, 18, team),
       }))
     }
 
