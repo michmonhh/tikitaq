@@ -61,18 +61,11 @@ export function applyMove(
     hasMoved: true,
   }
 
-  // Check if player picks up the ball (ball is unowned and on the move path).
-  // 2026-04-22: path-check instead of endpoint-only. The AI now sets loose-
-  // ball targets past the ball toward the attacking goal, and this lets the
-  // player scoop the ball up mid-stride and continue to the endpoint —
-  // still clamped by constrainMove above, so the movement radius is never
-  // exceeded.
+  // Check if player picks up the ball (ball is unowned and nearby)
   let ballPickedUp = false
   if (!state.ball.ownerId && !state.ballOwnerChangedThisTurn) {
-    const ballDistFromPath = pointToSegmentDistance(
-      state.ball.position, player.origin, target,
-    )
-    if (ballDistFromPath < 3) {
+    const distToBall = distance(target, state.ball.position)
+    if (distToBall < 3) {
       ballPickedUp = true
     }
   }
