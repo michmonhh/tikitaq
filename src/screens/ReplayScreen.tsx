@@ -81,18 +81,15 @@ export function ReplayScreen() {
   const speedRef = useRef<PlaybackSpeed>(speed)
   const frameStartRef = useRef<number>(performance.now())
   const snapshotsRef = useRef(snapshots)
-  const teamColorsRef = useRef<{ team1: string; team2: string }>({
-    team1: '#e63946',
-    team2: '#457b9d',
-  })
   useEffect(() => { frameRef.current = frame; frameStartRef.current = performance.now() }, [frame])
   useEffect(() => { playingRef.current = playing; frameStartRef.current = performance.now() }, [playing])
   useEffect(() => { speedRef.current = speed; frameStartRef.current = performance.now() }, [speed])
   useEffect(() => { snapshotsRef.current = snapshots }, [snapshots])
   useEffect(() => {
-    teamColorsRef.current = {
-      team1: home?.color ?? '#e63946',
-      team2: away?.color ?? '#457b9d',
+    // Renderer kennen Default-Kit-Farben. Wir überschreiben sie mit den
+    // echten Team-Farben aus data/teams.ts, damit Dortmund gelb bleibt etc.
+    if (playerRendererRef.current && home?.color && away?.color) {
+      playerRendererRef.current.setTeamColors(home.color, away.color)
     }
   }, [home, away])
 
@@ -195,8 +192,15 @@ export function ReplayScreen() {
       })
     }
 
-    // ── Ball-Animation: Ball fliegt schneller als Spieler laufen ──
-    const bt = Math.min(1, progress / BALL_SPEED_BOOST)
+    // ── Ball-Animation ──
+    // Wenn der Ballbesitz stabil bleibt (Dribbling), läuft der Ball SYNCHRON
+    // mit dem Spieler — sonst klebt er mitten im Sprint an der Endposition
+    // und wartet, während der Carrier noch unterwegs ist.
+    // Nur bei Besitzwechsel (Pass/Schuss/Abfang) wird BALL_SPEED_BOOST
+    // angewandt, sodass der Ball schneller ans Ziel fliegt als die Spieler
+    // laufen — das wirkt wie ein echter Pass.
+    const ownershipChanged = s.ball.ownerId !== ns.ball.ownerId
+    const bt = ownershipChanged ? Math.min(1, progress / BALL_SPEED_BOOST) : progress
     const animatedBallPos: Position = {
       x: lerp(s.ball.position.x, ns.ball.position.x, bt),
       y: lerp(s.ball.position.y, ns.ball.position.y, bt),
