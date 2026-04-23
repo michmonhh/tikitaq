@@ -4,7 +4,9 @@ import { useArenaStore } from '../stores/arenaStore'
 import { getTeamById } from '../data/teams'
 import { Camera } from '../canvas/Camera'
 import { PitchRenderer } from '../canvas/PitchRenderer'
-import { VISUAL } from '../engine/constants'
+import { PlayerRenderer } from '../canvas/PlayerRenderer'
+import { BallRenderer } from '../canvas/BallRenderer'
+import type { Position } from '../engine/types'
 import styles from './ReplayScreen.module.css'
 
 const BASE_FRAME_MS = 700  // bei speed=1: 700 ms pro Turn (genug für weite Bewegungen)
@@ -68,6 +70,8 @@ export function ReplayScreen() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const cameraRef = useRef<Camera | null>(null)
   const pitchRendererRef = useRef<PitchRenderer | null>(null)
+  const playerRendererRef = useRef<PlayerRenderer | null>(null)
+  const ballRendererRef = useRef<BallRenderer | null>(null)
 
   // ── rAF-gesteuerter Render- und Playback-Loop ──
   // State für Interpolation aus Refs lesen, damit der rAF-Loop nicht
@@ -99,6 +103,8 @@ export function ReplayScreen() {
     const camera = new Camera()
     cameraRef.current = camera
     pitchRendererRef.current = new PitchRenderer(camera)
+    playerRendererRef.current = new PlayerRenderer(camera)
+    ballRendererRef.current = new BallRenderer(camera)
 
     const resize = () => {
       const parent = canvas.parentElement
@@ -157,7 +163,9 @@ export function ReplayScreen() {
     const canvas = canvasRef.current
     const camera = cameraRef.current
     const pitch = pitchRendererRef.current
-    if (!canvas || !camera || !pitch) return
+    const playerR = playerRendererRef.current
+    const ballR = ballRendererRef.current
+    if (!canvas || !camera || !pitch || !playerR || !ballR) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
@@ -170,89 +178,81 @@ export function ReplayScreen() {
     const snap = snaps[frameIdx]
     if (!snap) return
     const next = snaps[frameIdx + 1] ?? snap
-    // Adapter: im Zwischenzustand (Commit 1) lesen wir weiterhin aus den alten
-    // Feldern — Renderer-Umbau auf Original-Renderer folgt im nächsten Commit.
     const s = snap.state
     const ns = next.state
 
-    // ── Spieler (linear interpoliert) ──
+    // ── Interpolierte Positionen bauen ──
+    // animatedPositions wird an den original PlayerRenderer übergeben; die
+    // Snap-Position selbst übergibt man via players[]. Der Renderer nimmt
+    // dann die animatedPosition wenn vorhanden, sonst player.position.
     const nextById = new Map(ns.players.map(p => [p.id, p]))
-    const radius = VISUAL.PLAYER_RADIUS * camera.baseScale
-    const colors = teamColorsRef.current
+    const animatedPositions = new Map<string, Position>()
+    for (const p of s.players) {
+      const np = nextById.get(p.id) ?? p
+      animatedPositions.set(p.id, {
+        x: lerp(p.position.x, np.position.x, progress),
+        y: lerp(p.position.y, np.position.y, progress),
+      })
+    }
+
+    // ── Ball-Animation: Ball fliegt schneller als Spieler laufen ──
+    const bt = Math.min(1, progress / BALL_SPEED_BOOST)
+    const animatedBallPos: Position = {
+      x: lerp(s.ball.position.x, ns.ball.position.x, bt),
+      y: lerp(s.ball.position.y, ns.ball.position.y, bt),
+    }
+
+    // ── Spieler zeichnen (Original-Renderer) ──
+    // localTeam = 1 → Fitness-Bar wird für Team 1 angezeigt, Team 2 ist
+    // Gegner und wird bei dessen Zug gedimmt. isSetupPhase bleibt false.
+    playerR.draw(
+      ctx,
+      s.players,
+      null,                  // activePlayerId — kein Drag im Replay
+      null,                  // dragPosition
+      animatedPositions,     // → überschreibt player.position mit interpolierter Position
+      null,                  // selectedPlayerId
+      1,                     // localTeam (zeigt Fitness-Bar für Team 1)
+      s.currentTurn,         // aktueller Team-Turn (dimmt das Nicht-Team)
+      false,                 // isSetupPhase
+    )
+
+    // ── Ball zeichnen ──
+    const carrier = s.ball.ownerId
+      ? s.players.find(p => p.id === s.ball.ownerId) ?? null
+      : null
+    ballR.draw(
+      ctx,
+      s.ball,
+      false,             // isDragging
+      undefined,         // dragPos
+      carrier,           // carrier
+      null,              // carrierDragPos
+      animatedBallPos,   // animierte Ball-Position
+    )
+
+    // ── Overlays & Highlights ──
     const eventType = s.lastEvent?.type
     const isGoalFrame = eventType === 'shot_scored' || eventType === 'penalty_scored'
     const scorerId = isGoalFrame ? s.lastEvent?.playerId : null
 
-    for (const p of s.players) {
-      const np = nextById.get(p.id) ?? p
-      const x = lerp(p.position.x, np.position.x, progress)
-      const y = lerp(p.position.y, np.position.y, progress)
-      const screen = camera.toScreen(x, y)
-      const isBallOwner = s.ball.ownerId === p.id || (progress > 0.5 && ns.ball.ownerId === p.id)
-      const isScorer = p.id === scorerId
-      const discColor = p.team === 1 ? colors.team1 : colors.team2
-      const textColor = contrastingTextColor(discColor)
-
-      // Schatten
-      ctx.beginPath()
-      ctx.ellipse(screen.x, screen.y + radius * 0.3, radius * 0.75, radius * 0.22, 0, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(0,0,0,0.28)'
-      ctx.fill()
-
-      // Glow für Ballbesitzer — goldener Kranz um den Torschützen
-      if (isBallOwner || isScorer) {
+    // Torschützen-Highlight: goldener Ring über der Disc
+    if (scorerId) {
+      const scorer = s.players.find(p => p.id === scorerId)
+      if (scorer) {
+        const pos = animatedPositions.get(scorer.id) ?? scorer.position
+        const screen = camera.toScreen(pos.x, pos.y)
         ctx.save()
-        ctx.shadowColor = isScorer ? '#ffd700' : '#ffd84d'
-        ctx.shadowBlur = radius * (isScorer ? 1.6 : 0.9)
+        ctx.strokeStyle = '#ffd700'
+        ctx.lineWidth = 4
+        ctx.shadowColor = '#ffd700'
+        ctx.shadowBlur = 18
         ctx.beginPath()
-        ctx.arc(screen.x, screen.y, radius + 2, 0, Math.PI * 2)
-        ctx.fillStyle = discColor
-        ctx.fill()
+        ctx.arc(screen.x, screen.y, camera.toScreenDistance(3.5), 0, Math.PI * 2)
+        ctx.stroke()
         ctx.restore()
       }
-
-      // Disc
-      ctx.beginPath()
-      ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2)
-      ctx.fillStyle = discColor
-      ctx.fill()
-
-      // Rand
-      ctx.strokeStyle = isScorer ? '#ffd700' : isBallOwner ? '#ffd84d' : 'rgba(0,0,0,0.4)'
-      ctx.lineWidth = isScorer ? 3.5 : isBallOwner ? 2.5 : 1.2
-      ctx.stroke()
-
-      // Label: Positions-Label (Kontrast-Schrift gegen Disc-Farbe)
-      ctx.fillStyle = textColor
-      ctx.font = `700 ${Math.max(9, radius * 0.85)}px -apple-system, BlinkMacSystemFont, sans-serif`
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(p.positionLabel, screen.x, screen.y)
     }
-
-    // ── Ball ──
-    // Ball bewegt sich schneller als Spieler (Pässe/Schüsse fliegen in einem Bruchteil
-    // der Turn-Zeit ans Ziel). Wir komprimieren die Ball-Bewegung auf BALL_SPEED_BOOST × Frame-Dauer.
-    const bt = Math.min(1, progress / BALL_SPEED_BOOST)
-    const bx = lerp(s.ball.position.x, ns.ball.position.x, bt)
-    const by = lerp(s.ball.position.y, ns.ball.position.y, bt)
-    const ballScreen = camera.toScreen(bx, by)
-    const ballRadius = VISUAL.BALL_RADIUS * camera.baseScale
-
-    // Ball-Schatten
-    ctx.beginPath()
-    ctx.ellipse(ballScreen.x, ballScreen.y + ballRadius * 0.4, ballRadius * 0.8, ballRadius * 0.3, 0, 0, Math.PI * 2)
-    ctx.fillStyle = 'rgba(0,0,0,0.4)'
-    ctx.fill()
-
-    // Ball
-    ctx.beginPath()
-    ctx.arc(ballScreen.x, ballScreen.y, ballRadius, 0, Math.PI * 2)
-    ctx.fillStyle = '#ffffff'
-    ctx.fill()
-    ctx.strokeStyle = '#222'
-    ctx.lineWidth = 1.2
-    ctx.stroke()
 
     // ── Tor-Overlay ──
     // Bei shot_scored / penalty_scored: goldener Flash + großes "TOR!"
@@ -310,18 +310,6 @@ export function ReplayScreen() {
       ctx.fillText('TOR!', cssW / 2, cssH / 2)
       ctx.restore()
     }
-  }
-
-  /** Wählt schwarz oder weiß abhängig von der Helligkeit der Hintergrundfarbe. */
-  function contrastingTextColor(hex: string): string {
-    const m = hex.match(/^#?([0-9a-f]{6})$/i)
-    if (!m) return '#fff'
-    const r = parseInt(m[1].slice(0, 2), 16)
-    const g = parseInt(m[1].slice(2, 4), 16)
-    const b = parseInt(m[1].slice(4, 6), 16)
-    // YIQ-Luminanz — Schwellwert 140 statt 128 bevorzugt weißen Text
-    const y = (r * 299 + g * 587 + b * 114) / 1000
-    return y > 150 ? '#000' : '#fff'
   }
 
   if (!replay) {
