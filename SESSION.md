@@ -1,4 +1,4 @@
-# TIKITAQ — Session-Stand (2026-04-23)
+# TIKITAQ — Session-Stand (2026-04-22)
 
 > Lebendes Protokoll der aktuellen Chat-Sitzung. Nach einem Chat-Crash hier
 > einsteigen: Abschnitt **"Wo wir stehen"** lesen, dann **"Offen"** für den
@@ -7,56 +7,65 @@
 
 ## Wo wir stehen
 
-- Branch: `dev` bei **`91e7921`** (gepusht zu `origin/dev`).
+- Branch: `dev` bei **`6ffb724`** (lokal, noch NICHT gepusht).
 - Arena-CLI: `npx tsx scripts/aiArena.ts --roundrobin` läuft 306 Matches in
-  ~8s und gibt am Ende eine Bundesliga-Vergleichstabelle + Tor-Typen aus.
+  ~16s und gibt am Ende eine Bundesliga-Vergleichstabelle + Tor-Typen aus.
 - Replay-Viewer im Browser (Arena → Match simulieren → "Replay anschauen")
   nutzt 1:1 die Match-Renderer. Team-Farben, Tor-Overlay, 30 % / 50 % / 1× /
   2× / 4× Geschwindigkeit alle funktional.
 - Debug-Hilfe: `scripts/debugCorner.ts` — scannt Replays nach Set-Piece-
   Phasen und dumpt umliegende Frames. Template für ähnliche Debug-Szenarien.
 
-## Aktuelle Arena-Metriken (306 Matches, Commit 91e7921)
+## Aktuelle Arena-Metriken (306 Matches, Commit 6ffb724)
 
 | Metrik | Simuliert | Bundesliga-Ziel |
 |---|---:|---:|
-| Tore/Match | **4.50** | 3.00 |
-| Heimsieg/Remis/Auswärts | ~42 % / 20 % / 38 % | 43 / 25 / 32 % |
-| xG/Team | ~1.5 | 1.50 |
-| Passquote | ~88 % | 82 % |
-| Schüsse/Team | ~3.3 | 12.5 |
-| Pässe/Team | ~19 | 450 |
-| Gelbe / Rote Karten | 1.4 / 0.02 | 1.8 / 0.05 |
-| Eckbälle/Team | 0.8 | 4.5 |
-| **Elfmeter-Anteil an Toren** | **54.6 %** | 10 % |
-| **Steilpass-Anteil an Open-Play** | **74.7 %** | 15 % |
+| Tore/Match | **2.66** | 3.00 |
+| Heimsieg/Remis/Auswärts | **44 / 23 / 33 %** | 43 / 25 / 32 % ✓ |
+| xG/Team | ~1.1 | 1.50 |
+| Passquote | **84.5 %** | 82 % ✓ |
+| Schüsse/Team | 2.6 | 12.5 |
+| Pässe/Team | 34 | 450 |
+| Gelbe / Rote Karten | 1.1 / 0.01 | 1.8 / 0.05 |
+| Eckbälle/Team | 0.7 | 4.5 |
+| **Elfmeter-Anteil an Toren** | **23.9 %** | 10 % |
+| **Steilpass-Anteil an Open-Play** | **58.2 %** | ~15 % |
+| **Flanken-Anteil an Open-Play** | **8.9 %** | 18 % |
 
-Passquote, xG, Remis-Quote, Kartenrate: im Bundesliga-Band. Schüsse und
-Pässe strukturell gedeckelt durch 1 Aktion/Team/Turn + 0.5 min/turn.
+Passquote, Remis-Quote, Heimsieg-Quote, Kartenrate: **im Bundesliga-Band**.
+Schüsse und Pässe strukturell gedeckelt durch 1 Aktion/Team/Turn +
+0.5 min/turn. Tor-Rate knapp unter dem Ziel (2.66 vs 3.00).
+
+## Fortschritt in dieser Iteration
+
+Vom letzten Commit (`5bf16b5`) zu jetzt (`6ffb724`):
+- Steilpass-Tor-Anteil: 74.7 % → **58.2 %** (absolut 578→361)
+- Penalty-Anteil: 54.6 % → **23.9 %** (absolut 672→195)
+- Flanken-Tor-Anteil: 5.7 % → **8.9 %** (absolut 47→55)
+- Solo-Anteil: 8.2 % → **11.9 %**
+- Kurzpass-Anteil: 6.5 % → **13.2 %**
 
 ## Offen — Priorität absteigend
 
-1. **Elfmeter-Explosion (54.6 % der Tore).** Entstand als Folge des
-   Set-Piece-Phase-Fix in `91e7921`: jetzt werden Penalties korrekt
-   aufgelöst (vorher still verworfen). Aber die Foul-im-16er-Rate ist zu
-   hoch. **Kandidaten**: `engine/tackle.ts#calculateFoulChance`
-   `foulChance *= 1.5` im Penalty Area reduzieren (z. B. auf 0.8x), oder
-   tackle-Radius im 16er verkürzen, oder defensive Spieler im 16er zu
-   "stellen statt tacklen" zwingen.
-2. **Steilpass-Dominanz (74.7 % der Open-Play-Tore).** Ziel ~15 %. Der
-   Through-Ball-Buff war nötig damit die KI überhaupt Tore schießt,
-   überschießt jetzt aber. Kandidaten: Through-Ball-Scoring-Bonus
-   `+15 → +5` in `playerDecision.ts`, oder Cross / Short-Pass-Abschluss
-   stärker belohnen statt durch Steilpass balancen.
-3. **Ecken gehen jetzt — im Replay verifizieren.** User hatte Corner-
-   Hänger gemeldet, `91e7921` sollte das Kernproblem (phase='corner'
-   wurde direkt überschrieben) beheben. Noch vom User zu bestätigen.
-4. **LM-Grundlinie-Laufen fixed** (Commit 821c57f) — advance zielt jetzt
-   auf Tor-Zentrum statt auf Grundlinie. Zu bestätigen im Replay.
-5. **Elfmeter ohne sichtbaren Verteidiger** (User-Beobachtung): Fouls
-   entstehen nur aus Tackle-Encounter, also muss irgendein Verteidiger
-   da sein. Entweder Sicht-Limit im Replay oder anderer Spieler auf dem
-   Feld wurde gefoult. Nach Elfmeter-Rate-Fix vielleicht obsolet.
+1. **Steilpass-Anteil weiter runter (58 % → ~15 %).** Noch dominant, aber
+   deutlich weniger katastrophal. Möglicher Hebel: Intercept-Score-Cap
+   weiter anheben (aktuell 0.70), oder Through-Ball-Reward/Bonus im
+   `playerDecision.ts` weiter drosseln. Riskant: Tor-Rate ist bereits
+   unter Ziel, weitere Nerfs müssen von Schussrate-Hebeln kompensiert
+   werden.
+2. **Torrate unter Ziel (2.66 vs 3.00).** Mehr Tore aus anderen Quellen
+   nötig. Hebel: Schuss-Zonen-Bonus leicht anheben, Box-Präsenz
+   vergrößern, Flanken-Conversion stärken.
+3. **Penalty-Anteil 23.9 % vs 10 % Ziel.** Noch zu hoch. Weitere Hebel:
+   tackle-Radius im Strafraum verkürzen, Verteidiger im Box zu "stellen
+   statt tacklen" zwingen, oder Elfmeter-Success-Rate drosseln.
+4. **Eckbälle strukturell niedrig (0.7 vs 4.5).** Aus Turn-Modell heraus
+   schwer zu ändern — möglicherweise akzeptabel.
+5. **Elfmeter ohne sichtbaren Verteidiger** (alte User-Beobachtung): nach
+   den aktuellen Fixes wahrscheinlich seltener. User muss bestätigen.
+6. **Replay-Verifikation:** User sieht im Live-Replay ob Flanken jetzt
+   wirklich kommen, Grundlinien-Läufe erfolgen und Steilpässe öfter
+   abgefangen werden.
 
 ## Wichtige Architektur-Entscheidungen dieser Sitzung
 
@@ -71,11 +80,28 @@ Pässe strukturell gedeckelt durch 1 Aktion/Team/Turn + 0.5 min/turn.
   Tor-Typ-Statistik korreliert.
 - **Arena-Penalty synchron** in `runAIMatch.autoResolvePenalty`. Umgeht
   das setTimeout-basierte `gameStore.shootBall`-Pfad-Konstrukt.
+- **Through-Ball-Interception**: eigener `checkThroughBallInterception`-
+  Check in `applyPass.ts`, parallel zum bestehenden ground-Intercept.
+  Nutzt `getAnticipation` aus `positioning/anticipation.ts` und ist
+  positions-sensitiv (nur IV/LV/RV/ZDM/ZM, nicht Stürmer).
 
 ## Änderungen heute (chronologisch, neueste zuerst)
 
-Alle commits sind auf `dev`, gepusht zu `origin/dev`:
+Alle commits sind auf `dev`:
 
+- **`6ffb724`** — tune(tackle): penalty foul rate 0.5× → 0.35×, cap 0.15 → 0.10.
+  Senkt Elfmeter-Anteil 32.2 % → 23.9 %.
+- **`9e3f095`** — tune(ai): wings run to byline + strikers pull into box.
+  LM/RM Wing-Korridor (x=15/85), progressiv Richtung Grundlinie.
+  Stürmer+OM werden in 16er-Korridor gezogen bei Flügelangriff.
+  Flanken-Bonus +12 im scoring.
+- **`6b6b62f`** — fix(passing): through-balls can be intercepted.
+  Neuer `checkThroughBallInterception`-Check; Through-Ball kann jetzt
+  flach ODER hoch sein (passType je nach Lane). Steilpass-Tore fallen
+  von 74.7 % auf 58.2 % Open-Play-Anteil, Passquote landet bei 84.5 %
+  (im Bundesliga-Band).
+- **`5bf16b5`** — tune(tackle): foul in box 1.5× → 0.5× (cap 0.45 → 0.15).
+  Erster Penalty-Fix nach Set-Piece-Phase-Guard.
 - **`91e7921`** — fix(arena): preserve set-piece phase across turn boundary.
   Der Kern-Bug: Orchestrator rief `endCurrentTurn` immer, das überschrieb
   corner/free_kick/penalty-Phasen. Löste Ecken + Elfmeter gleichzeitig.
@@ -127,14 +153,10 @@ Alle commits sind auf `dev`, gepusht zu `origin/dev`:
 
 ## Nächster konkreter Schritt
 
-Ich würde mit **Punkt 1 (Elfmeter-Explosion)** starten:
+**Push nach `origin/dev`** (3 neue Commits lokal), dann **User-Replay-
+Verifikation**: Sieht er jetzt Flanken? Laufen Flügelspieler bis zur
+Grundlinie? Werden Steilpässe abgefangen?
 
-```ts
-// engine/tackle.ts calculateFoulChance + resolveTackle:
-// foulChance *= 1.5 im Strafraum → 0.8
-// + clamp 0.45 → 0.30
-```
-
-Das reduziert die Foul-im-16er-Wahrscheinlichkeit ohne Zweikämpfe
-generell zu verändern. Erwartung: Penalty-Anteil von 54 % auf ~10 %.
-Danach Verification via Round-Robin-Vergleich.
+Wenn das bestätigt ist, zurück an Punkt 1 der Offen-Liste (Steilpass-
+Anteil weiter runter). Alternative: Schuss-/Flanken-Conversion erhöhen,
+um Tor-Rate ans 3.00-Ziel zu heben.
