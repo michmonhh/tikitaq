@@ -3,7 +3,7 @@ import { applyShot, calculateShotAccuracy, resolvePenalty, aiChoosePenaltyDirect
 import { handleGoalScored } from '../../engine/turn'
 import { recordSaveEvent } from '../../engine/ai'
 import { repositionForSetPiece } from '../../engine/ai/setPiece'
-import { enforceCrossTeamSpacing } from '../../engine/ai/setPieceHelpers'
+import { enforceCrossTeamSpacing, enforceOpponentMinDistFromBall } from '../../engine/ai/setPieceHelpers'
 import { adjustConfidence } from '../../engine/confidence'
 import { PITCH } from '../../engine/constants'
 import { addTicker, updateTeamStats, directionFromX, addGoalLog, findCornerTaker } from './helpers'
@@ -184,23 +184,55 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
       // und der Replay-Viewer zeigt kein TOR!-Overlay.
       newState = { ...newState, lastEvent: result.event }
     } else if (result.event.type === 'shot_missed') {
-      // Shot missed (went wide / over goal) → goal kick for defending team
-      // Goalkeeper gets the ball inside the goal area (5m-Raum)
+      // Shot missed (went wide / over goal) → Abstoß für verteidigendes Team.
+      // FIFA Law 16: Gegner müssen außerhalb des 16ers sein, bis der Ball
+      // gespielt wird. Wir simulieren das als defensiven Freistoß:
+      // phase='free_kick', mustPass=true, Keeper=Taker, beide Teams
+      // repositioniert, Gegner 9.15 m vom Ball weg.
       const defendingTeam: TeamSide = state.currentTurn === 1 ? 2 : 1
       const keeper = state.players.find(p => p.team === defendingTeam && p.positionLabel === 'TW')
-      // Place keeper in the 5m goal area
       const goalKickY = defendingTeam === 1 ? 95 : 5
       const goalKickPos = { x: 50, y: goalKickY }
 
-      const updatedPlayers = state.players.map(p => {
+      let players = state.players.map(p => {
         if (p.id === shooterId) return { ...p, hasActed: true }
         if (keeper && p.id === keeper.id) return { ...p, position: { ...goalKickPos }, origin: { ...goalKickPos } }
         return p
       })
-      const newBall = keeper
+      const goalKickBall = keeper
         ? { position: { ...goalKickPos }, ownerId: keeper.id }
         : { position: { ...goalKickPos }, ownerId: null }
-      newState = { ...state, players: updatedPlayers, ball: newBall, lastEvent: result.event }
+
+      // Beide Teams für den Abstoß positionieren (als defensiver Freistoß)
+      if (keeper) {
+        for (const team of [1 as TeamSide, 2 as TeamSide]) {
+          const spState = { ...state, players, ball: goalKickBall }
+          const spActions = repositionForSetPiece(spState, team, 'free_kick')
+          for (const action of spActions) {
+            if (action.type === 'move') {
+              players = players.map(p =>
+                p.id === action.playerId
+                  ? { ...p, position: { ...action.target }, origin: { ...action.target } }
+                  : p,
+              )
+            }
+          }
+        }
+        enforceCrossTeamSpacing(players, new Set([keeper.id]))
+        enforceOpponentMinDistFromBall(players, goalKickPos, defendingTeam)
+      }
+
+      newState = {
+        ...state,
+        players,
+        ball: goalKickBall,
+        lastEvent: result.event,
+        phase: 'free_kick',
+        currentTurn: defendingTeam,
+        mustPass: true,
+        setPieceReady: true,
+        lastSetPiece: 'free_kick',
+      }
     } else {
       // Save — entweder Keeper hat den Ball, oder er hat ins Aus abgelenkt
       // und es gibt Eckball. Corner-Transition wird als eigenständiger Pfad
@@ -247,6 +279,8 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
           }
         }
         enforceCrossTeamSpacing(players, new Set(taker ? [taker.id] : []))
+        // FIFA Law 17: Gegner mind. 9.15 m vom Ball beim Eckstoß
+        enforceOpponentMinDistFromBall(players, cornerPos, attackingTeam)
 
         // Stats: Schuss zählt als aufs Tor + Ecke + xG, Confidence
         const shotAccuracy = shooter ? calculateShotAccuracy(shooter, shooter.position, attackingTeam) : 0

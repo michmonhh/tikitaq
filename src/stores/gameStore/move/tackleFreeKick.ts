@@ -1,7 +1,7 @@
 import type { GameState, TeamSide } from '../../../engine/types'
 import type { TackleResult } from '../../../engine/tackle'
 import { repositionForSetPiece } from '../../../engine/ai/setPiece'
-import { enforceCrossTeamSpacing } from '../../../engine/ai/setPieceHelpers'
+import { enforceCrossTeamSpacing, enforceOpponentMinDistFromBall } from '../../../engine/ai/setPieceHelpers'
 
 /**
  * Transition the game to a free kick after a tackle foul outside the penalty area.
@@ -52,6 +52,8 @@ export function handleFoulFreeKick(
     }
   }
   enforceCrossTeamSpacing(fkPlayers, new Set(fkTaker ? [fkTaker.id] : []))
+  // FIFA Law 13: Gegner mind. 9.15 m vom Ball beim Freistoß
+  enforceOpponentMinDistFromBall(fkPlayers, fkBallPos, fouledTeam)
 
   return {
     ...tackleState,

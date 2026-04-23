@@ -2,7 +2,7 @@
  * Shared helpers for set-piece positioning.
  */
 
-import type { Position, PlayerAction, TeamSide } from '../types'
+import type { PlayerData, Position, PlayerAction, TeamSide } from '../types'
 import { PITCH } from '../constants'
 
 /** Goal-line y for the team's OWN goal (the end they defend). */
@@ -147,6 +147,43 @@ export function enforceSpacing(actions: PlayerAction[], fixedPositions: Position
  * After both teams are repositioned, push any cross-team overlaps apart.
  * Modifies player positions in-place.  `fixedIds` (e.g. ball carrier) are untouched.
  */
+/**
+ * FIFA-konformer Mindestabstand vom Ball für Gegner bei Standards.
+ * Freistoß / Ecke / Einwurf: 9.15 m (wir nutzen 9.15 Pitch-Einheiten,
+ * weil PITCH-Koordinaten grob ~1 Einheit ≈ 1 m approximieren).
+ */
+export const SET_PIECE_OPP_MIN_DIST = 9.15
+
+/**
+ * Alle Gegner des kickenden Teams mindestens `minDist` vom Ball weg schieben.
+ * In-place Mutation der player.position. Eigene Spieler und der Taker
+ * bleiben unangetastet.
+ */
+export function enforceOpponentMinDistFromBall(
+  players: PlayerData[],
+  ballPos: Position,
+  kickingTeam: TeamSide,
+  minDist: number = SET_PIECE_OPP_MIN_DIST,
+): void {
+  for (const p of players) {
+    if (p.team === kickingTeam) continue
+    if (p.positionLabel === 'TW') continue  // Keeper darf nah am eigenen Tor
+    const dx = p.position.x - ballPos.x
+    const dy = p.position.y - ballPos.y
+    const d = Math.sqrt(dx * dx + dy * dy)
+    if (d >= minDist) continue
+    if (d < 0.1) {
+      // Exakt auf dem Ball — nach hinten (Richtung eigenes Tor) schieben
+      const awayY = p.team === 1 ? ballPos.y + minDist : ballPos.y - minDist
+      p.position = clamp({ x: ballPos.x, y: awayY })
+    } else {
+      const ux = dx / d
+      const uy = dy / d
+      p.position = clamp({ x: ballPos.x + ux * minDist, y: ballPos.y + uy * minDist })
+    }
+  }
+}
+
 export function enforceCrossTeamSpacing(
   players: { id: string; position: Position }[],
   fixedIds: Set<string>,

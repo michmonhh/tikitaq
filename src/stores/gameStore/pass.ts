@@ -1,7 +1,7 @@
 import type { GamePhase, TeamSide } from '../../engine/types'
 import { applyPass } from '../../engine/passing'
 import { repositionForSetPiece } from '../../engine/ai/setPiece'
-import { enforceCrossTeamSpacing } from '../../engine/ai/setPieceHelpers'
+import { enforceCrossTeamSpacing, enforceOpponentMinDistFromBall } from '../../engine/ai/setPieceHelpers'
 import { recordPassEvent } from '../../engine/ai'
 import { adjustConfidence } from '../../engine/confidence'
 import { addTicker, updateTeamStats, findThrowInTaker, findCornerTaker } from './helpers'
@@ -102,6 +102,8 @@ export function makePassBall(set: StoreSet, get: StoreGet): GameStore['passBall'
         }
       }
       enforceCrossTeamSpacing(newPlayers, new Set(fkTaker ? [fkTaker.id] : []))
+      // FIFA Law 13: Gegner mind. 9.15 m vom Ball beim Freistoß
+      enforceOpponentMinDistFromBall(newPlayers, fkBallPos, defendingTeam)
 
       set({
         state: {
@@ -238,6 +240,8 @@ export function makePassBall(set: StoreSet, get: StoreGet): GameStore['passBall'
           }
         }
         enforceCrossTeamSpacing(newPlayers, new Set(taker ? [taker.id] : []))
+        // FIFA Law 17: Gegner mind. 9.15 m vom Ball beim Eckstoß
+        enforceOpponentMinDistFromBall(newPlayers, cornerPos, attackingTeam)
 
         // Track stats + ticker, then transition to corner phase
         let trackedState = { ...state, players: newPlayers, ball: newBall }
