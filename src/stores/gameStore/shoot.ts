@@ -252,7 +252,7 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
         const shotAccuracy = shooter ? calculateShotAccuracy(shooter, shooter.position, attackingTeam) : 0
         let trackedState: GameState = { ...state, players, ball: cornerBall, lastEvent: result.event }
         trackedState = updateTeamStats(trackedState, attackingTeam, s => ({
-          xG: s.xG + shotAccuracy,
+          xG: s.xG + shotAccuracy * 0.5,  // echte Tor-Wahrscheinlichkeit, siehe Haupt-xG-Kommentar unten
           shotsOnTarget: s.shotsOnTarget + 1,
           corners: s.corners + 1,
         }))
@@ -322,8 +322,12 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
     // Track shot stats + xG + ticker
     const shooter = state.players.find(p => p.id === shooterId)
     const shotAccuracy = shooter ? calculateShotAccuracy(shooter, shooter.position, state.currentTurn) : 0
+    // xG = erwartete Tor-Wahrscheinlichkeit, nicht on-target-Rate.
+    // Akkurate Näherung: accuracy × (1 - avg saveChance). Mit
+    // BASE_SAVE_CHANCE 0.35 und Modifikatoren im Mittel ~0.5.
+    const shotXG = shotAccuracy * 0.5
     newState = updateTeamStats(newState, state.currentTurn, s => ({
-      xG: s.xG + shotAccuracy,
+      xG: s.xG + shotXG,
       shotsOnTarget: s.shotsOnTarget + (result.event.type !== 'shot_missed' ? 1 : 0),
       shotsOff: s.shotsOff + (result.event.type === 'shot_missed' ? 1 : 0),
     }))

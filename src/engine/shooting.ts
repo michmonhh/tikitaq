@@ -169,9 +169,9 @@ export function applyShot(
     if (Math.random() < saveProbability) {
       // Bei Paraden landet der Ball nicht immer beim Keeper — ein Teil der
       // Schüsse wird ins Aus gefaustet/abgelenkt → Eckball für das
-      // angreifende Team. 35 % ist ein grober Bundesliga-Richtwert (~4.5
-      // Ecken pro Team/Match, passend zur Schussrate).
-      const deflectedToCorner = Math.random() < 0.35
+      // angreifende Team. 60 % — User-Präferenz, gibt dem Replay mehr
+      // Dynamik auch wenn die Absolut-Schusszahlen noch niedrig sind.
+      const deflectedToCorner = Math.random() < 0.60
       return {
         scored: false,
         savedBy: keeper,

@@ -149,11 +149,14 @@ function calculateFoulChance(defender: PlayerData, attacker: PlayerData): number
 function determineCard(_defender: PlayerData, foulChance: number): 'yellow' | 'red' | null {
   const cardRoll = Math.random()
 
-  // Red card: very rare, only for extremely reckless fouls
-  if (foulChance > 0.25 && cardRoll < 0.05) return 'red'
+  // 2026-04-23 kalibriert nach der Turn-Rate-Verdopplung (MINUTES_PER_TURN
+  // 1 → 0.5): mit doppelt so vielen Zweikämpfen waren die alten Quoten
+  // verdoppelt. Rot: Schwellwert 0.25 → 0.30 + Roll 0.05 → 0.02.
+  // Gelb: Faktor 1.5 → 0.6.
+  // Bundesliga-Target: ~15 % Karten pro Foul (davon ~3 % rot).
+  if (foulChance > 0.30 && cardRoll < 0.02) return 'red'
 
-  // Yellow card: proportional to how reckless the foul was
-  const yellowChance = foulChance * 1.5 // ~5-50% chance of yellow given a foul
+  const yellowChance = foulChance * 0.6
   if (cardRoll < yellowChance) return 'yellow'
 
   return null
