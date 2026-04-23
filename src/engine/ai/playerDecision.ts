@@ -26,6 +26,7 @@ import {
 } from './playerDecision/evaluators'
 import { getStrategyBonus, getFieldBonus, getMemoryBonus } from './playerDecision/scoring'
 import { toAction, getReceiverLabel } from './playerDecision/helpers'
+import { lookaheadValue, AI_LOOKAHEAD_ENABLED, AI_LOOKAHEAD_WEIGHT } from './playerDecision/lookahead'
 
 /**
  * Entscheidet was der Ballführer tut.
@@ -156,6 +157,24 @@ export function decideBallAction(
 
     // Rauschen für Varianz
     opt.score += (Math.random() - 0.5) * 6  // ±3
+  }
+
+  // ── Stufe-1-Lookahead: 1-Zug-Minimax für Ballführer ──
+  // Für jede Pass- und advance/dribble-Option simulieren wir den Folge-
+  // State und bewerten die beste Aktion, die der neue Ballbesitzer dann
+  // hätte. Der Folge-Score wird successChance-gewichtet dazuaddiert.
+  //
+  // Effekt: KI bevorzugt Pässe, die dem Empfänger echte Folgeoptionen
+  // geben (Schuss, Flanke, eigener Vorstoß) — nicht nur "freier Mitspieler".
+  //
+  // Kosten (Arena): ~17× langsamer, von 16 s auf ~4.5 min für 306 Matches.
+  // Live-Spiel: ~2.5 ms pro Entscheidung — unsichtbar neben 500 ms
+  // Turn-Animation.
+  if (AI_LOOKAHEAD_ENABLED) {
+    for (const opt of options) {
+      const lookahead = lookaheadValue(opt, carrier, state, team, plan, fieldReading, memory)
+      opt.score += lookahead * opt.successChance * AI_LOOKAHEAD_WEIGHT
+    }
   }
 
   // ── Beste Option wählen ──
