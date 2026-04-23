@@ -183,6 +183,12 @@ export interface GameEvent {
   targetId?: string
   position: Position
   message: string
+  /**
+   * Bei Pass-Events (pass_complete / pass_intercepted / pass_lost):
+   * Art des Passes. Ermöglicht retrograde Analysen wie "wie viele Tore
+   * fielen nach einem Steilpass?".
+   */
+  passKind?: 'short_pass' | 'long_ball' | 'through_ball' | 'cross'
 }
 
 // --- Action Types ---

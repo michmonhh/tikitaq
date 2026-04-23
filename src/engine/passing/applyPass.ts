@@ -251,6 +251,20 @@ export function applyPass(
       ? T.tickerPassHigh(name(passer), name(receiver))
       : T.tickerPassGround(name(passer), name(receiver))
 
+  // Pass-Typ klassifizieren — für retrograde Analyse (z.B. "wie viele
+  // Tore nach Steilpass?"). Heuristik: explizit isThroughBallIntoSpace,
+  // sonst Distanz für short/long, Flanke bei Herkunft von der Seite.
+  const passDist = distance(passer.position, receiver.position)
+  const passerWide = passer.position.x < 25 || passer.position.x > 75
+  const receiverCentral = receiver.position.x > 25 && receiver.position.x < 75
+  const oppGoalY = passer.team === 1 ? 0 : 100
+  const receiverNearGoal = Math.abs(receiver.position.y - oppGoalY) < 25
+  const passKind: 'short_pass' | 'long_ball' | 'through_ball' | 'cross' =
+    isThroughBallIntoSpace                              ? 'through_ball' :
+    (passerWide && receiverCentral && receiverNearGoal) ? 'cross' :
+    passDist > 25                                       ? 'long_ball' :
+                                                          'short_pass'
+
   return {
     success: true, passType, interceptedBy: null, receiver,
     ballLandingPos: null, outOfBounds: null,
@@ -261,6 +275,7 @@ export function applyPass(
       targetId: receiver.id,
       position: throughBallTarget ?? receiver.position,
       message: successMsg,
+      passKind,
     },
   }
 }

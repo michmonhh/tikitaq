@@ -200,9 +200,15 @@ function printBundesligaComparison(results: ArenaMatchResult[]) {
 
   // Tor-Typen
   const goalKinds = { open_play: 0, penalty: 0, own_goal: 0 }
+  const assistKinds = { short_pass: 0, long_ball: 0, through_ball: 0, cross: 0, solo: 0 }
   for (const r of results) {
     for (const g of r.scorers) {
       goalKinds[g.kind] = (goalKinds[g.kind] ?? 0) + 1
+      // Assist-Klassifizierung nur für Open-Play-Tore sinnvoll
+      if (g.kind === 'open_play') {
+        if (g.assistKind) assistKinds[g.assistKind]++
+        else assistKinds.solo++
+      }
     }
   }
   const totalGoalsCounted = goalKinds.open_play + goalKinds.penalty + goalKinds.own_goal
@@ -214,6 +220,18 @@ function printBundesligaComparison(results: ArenaMatchResult[]) {
     console.log(`  Elfmeter:        ${String(goalKinds.penalty).padStart(4)}  (${pct(goalKinds.penalty)})`)
     console.log(`  Eigentor:        ${String(goalKinds.own_goal).padStart(4)}  (${pct(goalKinds.own_goal)})`)
     console.log(`  Bundesliga-Referenz: ~86 % aus dem Spiel, ~10 % Elfmeter, ~4 % Eigentor`)
+
+    if (goalKinds.open_play > 0) {
+      const openGoals = goalKinds.open_play
+      const apct = (k: number) => `${((k / openGoals) * 100).toFixed(1)}%`
+      console.log()
+      console.log(`Entstehung der ${openGoals} Open-Play-Tore:`)
+      console.log(`  Steilpass (through):  ${String(assistKinds.through_ball).padStart(4)}  (${apct(assistKinds.through_ball)})`)
+      console.log(`  Kurzpass:             ${String(assistKinds.short_pass).padStart(4)}  (${apct(assistKinds.short_pass)})`)
+      console.log(`  Langer Ball:          ${String(assistKinds.long_ball).padStart(4)}  (${apct(assistKinds.long_ball)})`)
+      console.log(`  Flanke:               ${String(assistKinds.cross).padStart(4)}  (${apct(assistKinds.cross)})`)
+      console.log(`  Alleingang / solo:    ${String(assistKinds.solo).padStart(4)}  (${apct(assistKinds.solo)})`)
+    }
   }
 
   console.log()

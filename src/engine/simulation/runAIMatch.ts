@@ -13,7 +13,9 @@
 import { useGameStore } from '../../stores/gameStore'
 import { executeAITurn, initAIPlan } from '../ai'
 import { PITCH } from '../constants'
-import type { GameEvent, GamePhase, GameState, PlayerData, TeamSide } from '../types'
+import { resolvePenalty, aiChoosePenaltyDirection } from '../shooting'
+import { handleGoalScored } from '../turn'
+import type { GameEvent, GamePhase, GameState, PenaltyDirection, PlayerData, TeamSide } from '../types'
 import type {
   ArenaMatchResult, ArenaTeamStats, ReplayFile, ReplaySnapshot,
 } from './replayTypes'
@@ -62,6 +64,13 @@ export function runAIMatch(
   // wird von endCurrentTurn() genullt, daher zwischenspeichern.
   let pendingEvent: GameEvent | null = null
 
+  // Assist-Tracker pro Team: welcher Pass-Typ war zuletzt erfolgreich?
+  // Wird bei einem Tor dem scorer zugeordnet; bei Ballverlust gelöscht.
+  type PassKind = 'short_pass' | 'long_ball' | 'through_ball' | 'cross'
+  const assistKindByTeam = new Map<TeamSide, PassKind>()
+  // Tor → assistKind, korreliert mit goalLog-Index am Ende.
+  const goalAssists: Array<{ minute: number; playerId: string; assistKind: PassKind | null }> = []
+
   while (guard++ < MAX_TURNS) {
     const s = store.getState().state
     if (!s || s.phase === 'full_time') break
@@ -74,7 +83,17 @@ export function runAIMatch(
 
     // Penalty während Spielflusses → auto-resolve (zufällige Richtung)
     if (s.phase === 'penalty') {
-      autoResolvePenalty(store)
+      const scored = autoResolvePenalty(store)
+      if (scored) {
+        const post = store.getState().state
+        if (post) {
+          goalAssists.push({
+            minute: post.gameTime,
+            playerId: scored.shooterId,
+            assistKind: null,  // Elfmeter: kein Assist
+          })
+        }
+      }
       continue
     }
 
@@ -127,9 +146,29 @@ export function runAIMatch(
       for (const action of actions) {
         const currentState = store.getState().state
         if (!currentState || currentState.phase !== 'playing') break
+        const actingTeam = currentState.currentTurn
         if (action.type === 'move') store.getState().movePlayer(action.playerId, action.target)
         else if (action.type === 'pass') store.getState().passBall(action.playerId, action.target, action.receiverId)
         else if (action.type === 'shoot') store.getState().shootBall(action.playerId, action.target)
+
+        // Assist-Tracking: was war's Event der gerade gelaufenen Action?
+        const ev = store.getState().state?.lastEvent
+        if (!ev) continue
+        if (ev.type === 'pass_complete' && ev.passKind) {
+          assistKindByTeam.set(actingTeam, ev.passKind)
+        } else if (ev.type === 'pass_intercepted' || ev.type === 'pass_lost') {
+          assistKindByTeam.delete(actingTeam)
+        } else if (ev.type === 'shot_scored') {
+          const postState = store.getState().state
+          if (postState) {
+            goalAssists.push({
+              minute: postState.gameTime,
+              playerId: ev.playerId,
+              assistKind: assistKindByTeam.get(actingTeam) ?? null,
+            })
+          }
+          assistKindByTeam.delete(actingTeam)
+        }
       }
     } catch (err) {
       console.error('[arena] AI turn crashed:', err)
@@ -144,14 +183,19 @@ export function runAIMatch(
 
   const stats = buildStats(finalState, boxPresenceTurns)
 
-  // Torschützen aus dem goal-log des States
-  const scorers = (finalState.goalLog ?? []).map(g => ({
-    team: g.team as TeamSide,
-    playerId: g.playerId,
-    playerName: g.playerName,
-    minute: g.minute,
-    kind: g.kind,
-  }))
+  // Torschützen aus dem goal-log des States — assistKind aus goalAssists
+  // per (minute, playerId) zuordnen (eindeutig bei realistischen Datensätzen).
+  const scorers = (finalState.goalLog ?? []).map(g => {
+    const assist = goalAssists.find(a => a.minute === g.minute && a.playerId === g.playerId)
+    return {
+      team: g.team as TeamSide,
+      playerId: g.playerId,
+      playerName: g.playerName,
+      minute: g.minute,
+      kind: g.kind,
+      assistKind: g.kind === 'penalty' ? null : (assist?.assistKind ?? null),
+    }
+  })
 
   const finalScore = finalState.score
   const winner: TeamSide | null =
@@ -254,24 +298,101 @@ function teamHasPlayerInOpponentBox(players: PlayerData[], attackingTeam: TeamSi
   return false
 }
 
-/** Elfmeter (während des Spielflusses) auto-resolven mit Zufalls-Richtung. */
-function autoResolvePenalty(store: typeof useGameStore): void {
+/**
+ * Elfmeter (während des Spielflusses) synchron auflösen.
+ *
+ * gameStore.shootBall() löst Elfmeter über setTimeout auf — in der
+ * synchronen Arena-Simulation würde das Ergebnis nie ankommen (Tor
+ * verpufft). Deshalb rufen wir hier direkt resolvePenalty() und
+ * handleGoalScored() auf und bauen den State selbst.
+ */
+function autoResolvePenalty(store: typeof useGameStore): { shooterId: string } | null {
   const s = store.getState().state
   const ps = store.getState().penaltyState
   if (!s || !ps) {
     store.getState().endCurrentTurn()
-    return
+    return null
   }
-  // Richtung simulieren: Ziel-x für shootBall (directionFromX nutzt x < 45 = left, > 55 = right, sonst center)
-  const roll = Math.random()
-  const targetX = roll < 0.33 ? 40 : roll < 0.66 ? 50 : 60
   const shooter = s.players.find((p: PlayerData) => p.id === ps.shooterId)
-  if (!shooter) {
+  const keeper = s.players.find((p: PlayerData) => p.id === ps.keeperId)
+  if (!shooter || !keeper) {
     store.getState().endCurrentTurn()
-    return
+    return null
   }
-  const goalY = shooter.team === 1 ? PITCH.GOAL_TOP_Y : PITCH.GOAL_BOTTOM_Y
-  store.getState().shootBall(shooter.id, { x: targetX, y: goalY })
+
+  const pickDir = (): PenaltyDirection => {
+    const r = Math.random()
+    return r < 0.33 ? 'left' : r < 0.66 ? 'center' : 'right'
+  }
+  const completePs = {
+    ...ps,
+    shooterChoice: ps.shooterChoice ?? pickDir(),
+    keeperChoice: ps.keeperChoice ?? aiChoosePenaltyDirection(),
+  }
+
+  const result = resolvePenalty(completePs, shooter, keeper)
+
+  let nextState: GameState = { ...s, lastEvent: result.event }
+
+  if (result.outcome === 'scored') {
+    // Torschütze-Stats + goal log, dann handleGoalScored für Kickoff-Setup
+    const scoringPlayers = s.players.map((p: PlayerData) =>
+      p.id === shooter.id
+        ? { ...p, gameStats: { ...p.gameStats, goalsScored: p.gameStats.goalsScored + 1 } }
+        : p,
+    )
+    nextState = { ...nextState, players: scoringPlayers }
+    // goalLog-Eintrag hinzufügen (kind: 'penalty')
+    const goalLog = [...(nextState.goalLog ?? []), {
+      team: completePs.shooterTeam,
+      playerId: shooter.id,
+      playerName: `${shooter.firstName} ${shooter.lastName}`,
+      minute: nextState.gameTime,
+      kind: 'penalty' as const,
+    }]
+    nextState = { ...nextState, goalLog }
+    nextState = handleGoalScored(nextState, completePs.shooterTeam)
+    nextState = { ...nextState, lastEvent: result.event }
+  } else if (result.outcome === 'saved') {
+    // Ball prallt ab — Keeper behält ihn effektiv (simplifiziert)
+    const keeperStats = s.players.map((p: PlayerData) =>
+      p.id === keeper.id
+        ? { ...p, gameStats: { ...p.gameStats, saves: p.gameStats.saves + 1 } }
+        : p,
+    )
+    nextState = {
+      ...nextState,
+      players: keeperStats,
+      ball: { position: { ...keeper.position }, ownerId: keeper.id },
+      phase: 'playing',
+    }
+  } else {
+    // Verfehlt — Abstoß für verteidigendes Team
+    const defTeam: TeamSide = completePs.shooterTeam === 1 ? 2 : 1
+    const goalKickY = defTeam === 1 ? 95 : 5
+    const goalKickPos = { x: 50, y: goalKickY }
+    const goalKickPlayers = s.players.map((p: PlayerData) =>
+      p.id === keeper.id
+        ? { ...p, position: { ...goalKickPos }, origin: { ...goalKickPos } }
+        : p,
+    )
+    nextState = {
+      ...nextState,
+      players: goalKickPlayers,
+      ball: { position: { ...goalKickPos }, ownerId: keeper.id },
+      phase: 'playing',
+      currentTurn: defTeam,
+      mustPass: true,
+      setPieceReady: true,
+      lastSetPiece: null,
+    }
+  }
+
+  store.setState({ state: nextState, penaltyState: null })
+  // endCurrentTurn lassen wir NICHT laufen — handleGoalScored hat den
+  // Kickoff bereits gesetzt; der nächste Loop-Schritt handled die
+  // kickoff/playing-Phase selbst.
+  return result.outcome === 'scored' ? { shooterId: shooter.id } : null
 }
 
 /** Einzel-Kick im Elfmeterschießen auto-resolven. */

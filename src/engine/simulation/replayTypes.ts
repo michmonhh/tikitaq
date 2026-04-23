@@ -96,6 +96,8 @@ export interface ArenaMatchResult {
     playerName: string
     minute: number
     kind: 'open_play' | 'penalty' | 'own_goal'
+    /** Art des letzten Passes VOR dem Tor (null wenn Alleingang / Elfmeter). */
+    assistKind?: 'short_pass' | 'long_ball' | 'through_ball' | 'cross' | null
   }>
   /** Echtzeit-Dauer der Simulation in ms. */
   simDurationMs: number
