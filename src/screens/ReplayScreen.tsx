@@ -356,7 +356,7 @@ export function ReplayScreen() {
         <button className={styles.backBtn} onClick={() => navigate('arena')}>← Back</button>
         <div className={styles.scoreBar}>
           <span className={styles.team}>{home?.shortName}</span>
-          <span className={styles.score}>{replay.finalScore.team1} : {replay.finalScore.team2}</span>
+          <span className={styles.score}>{s ? `${s.score.team1} : ${s.score.team2}` : `${replay.finalScore.team1} : ${replay.finalScore.team2}`}</span>
           <span className={styles.team}>{away?.shortName}</span>
         </div>
         <div className={styles.meta}>
