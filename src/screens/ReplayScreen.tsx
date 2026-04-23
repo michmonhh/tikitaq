@@ -100,7 +100,14 @@ export function ReplayScreen() {
     const camera = new Camera()
     cameraRef.current = camera
     pitchRendererRef.current = new PitchRenderer(camera)
-    playerRendererRef.current = new PlayerRenderer(camera)
+    const playerRenderer = new PlayerRenderer(camera)
+    // Team-Farben direkt bei der Renderer-Erstellung setzen — der separate
+    // useEffect feuert beim ersten Mount vor dem Canvas-Init und greift dann
+    // auf einen noch nicht erstellten Renderer zu.
+    if (home?.color && away?.color) {
+      playerRenderer.setTeamColors(home.color, away.color)
+    }
+    playerRendererRef.current = playerRenderer
     ballRendererRef.current = new BallRenderer(camera)
 
     const resize = () => {
