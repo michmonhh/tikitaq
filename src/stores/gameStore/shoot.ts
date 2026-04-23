@@ -177,6 +177,10 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
       let baseState: GameState = { ...state, players: updatedPlayers }
       if (shooter) baseState = addGoalLog(baseState, shooter, 'open_play')
       newState = handleGoalScored(baseState, state.currentTurn)
+      // handleGoalScored ruft setupKickoff auf und trägt lastEvent nicht
+      // nach. Ohne diesen Zusatz "vergisst" der Store das Torschuss-Event,
+      // und der Replay-Viewer zeigt kein TOR!-Overlay.
+      newState = { ...newState, lastEvent: result.event }
     } else if (result.event.type === 'shot_missed') {
       // Shot missed (went wide / over goal) → goal kick for defending team
       // Goalkeeper gets the ball inside the goal area (5m-Raum)
