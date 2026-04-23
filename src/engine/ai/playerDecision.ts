@@ -27,6 +27,7 @@ import {
 import { getStrategyBonus, getFieldBonus, getMemoryBonus } from './playerDecision/scoring'
 import { toAction, getReceiverLabel } from './playerDecision/helpers'
 import { lookaheadValue, AI_LOOKAHEAD_ENABLED, AI_LOOKAHEAD_WEIGHT } from './playerDecision/lookahead'
+import { getIntent, getIntentPassBonus } from './matchIntent'
 
 /**
  * Entscheidet was der Ballführer tut.
@@ -132,6 +133,15 @@ export function decideBallAction(
     // Außerdem brechen wir damit die Steilpass-Monokultur auf.
     // Bonus nur wenn Flanke wirklich auf einen Empfänger in der Box geht.
     if (opt.type === 'cross') opt.score += 12
+
+    // ── Stufe 4: Intent-Bonus (GOAP-light) ──
+    // Pass-Optionen in Intent-Richtung bekommen +6, gegen die Richtung -4.
+    // So bleibt ein Angriff über 3–5 Züge auf einer Seite kohärent,
+    // statt pro Zug neu zu würfeln.
+    if (opt.receiverId) {
+      const intent = getIntent(team)
+      opt.score += getIntentPassBonus(intent, opt.target.x)
+    }
 
     // Frei-durch: Ballträger selbst gehen lassen, nicht abgeben.
     if (carrierIsFree) {

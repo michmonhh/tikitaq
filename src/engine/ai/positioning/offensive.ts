@@ -3,6 +3,7 @@ import type { TeamPlan, FieldReading } from '../types'
 import { distance } from '../../geometry'
 import { ATK_BEHAVIOR } from './config'
 import { getFormationHome, getRoleGroup, getHomeSide } from './roles'
+import { getIntent, getIntentPositionShift } from '../matchIntent'
 
 /**
  * Verhindert, dass Verteidiger zu weit über die Mittellinie aufrücken,
@@ -94,6 +95,20 @@ export function offensivePosition(
   if (fieldReading) {
     if (fieldReading.weakSide === 'left' && player.origin.x < 40) x -= 3
     if (fieldReading.weakSide === 'right' && player.origin.x > 60) x += 3
+  }
+
+  // ── Stufe 4: Intent-Shift (GOAP-light) ──
+  // Offensivspieler bewegen sich leicht in die Intent-Richtung, damit der
+  // Team-Angriff über mehrere Züge kohärent auf einer Seite bleibt.
+  // Flügelspieler auf der Intent-Seite rücken stärker auf, Flügelspieler
+  // der Gegenseite bleiben näher am Zentrum als Konter-Anker.
+  const intent = getIntent(team)
+  if (intent) {
+    // Team-2-Spiegelung: Intent bezieht sich auf das Spielfeld (x<50=left),
+    // für Team 2 ist "link" gespiegelt. getIntentPositionShift gibt den
+    // Shift für Team 1 zurück — für Team 2 invertieren.
+    const raw = getIntentPositionShift(intent, player)
+    x += team === 1 ? raw : -raw
   }
 
   // ── Flügelspieler LM/RM: Breite + Grundlinie-Lauf ──

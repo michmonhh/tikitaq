@@ -26,6 +26,7 @@ import { readField } from './fieldReading'
 import { createMatchMemory, recordEvent } from './memory'
 import { updateConfidence } from './identity'
 import { decideBallAction } from './playerDecision'
+import { refreshIntent, getIntent, resetIntents } from './matchIntent'
 
 // ══════════════════════════════════════════
 //  Modul-State
@@ -82,6 +83,7 @@ export function resetOpponentModel(): void {
   lastKnownScore = { team1: 0, team2: 0 }
   hadBallLastTurn = false
   resetPositioning()
+  resetIntents()
 }
 
 // ══════════════════════════════════════════
@@ -193,6 +195,16 @@ export function executeAITurn(state: GameState): PlayerAction[] {
   const carrier = getBallCarrier(state.players, state.ball.ownerId)
   const hasBall = carrier != null && carrier.team === team
   const ballLoose = state.ball.ownerId === null
+
+  // ── Stufe 4: Team-Intent aktualisieren ──
+  // Angriffsachse über 3–5 Züge stabil halten. Intent wird bei eigenem
+  // Ballbesitz aus FieldReading + Ballposition abgeleitet und erst
+  // invalidiert, wenn Ball die Seite wechselt oder Zeit abläuft.
+  const currentIntent = refreshIntent(team, state, lastFieldReading, hasBall, carrier ?? null)
+  if (currentIntent && hasBall) {
+    reasoning.set('__intent', `Angriff ${currentIntent.attackSide} (${currentIntent.trigger})`)
+  }
+
   if (hasBall && carrier) {
     const action = decideBallAction(
       carrier, state, team,
