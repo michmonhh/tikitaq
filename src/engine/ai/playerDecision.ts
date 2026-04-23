@@ -108,6 +108,17 @@ export function decideBallAction(
       opt.score += 12
     }
 
+    // Defensive Rollen sollen nicht in Gegner-Radius dribbeln/vorrücken.
+    // Indikator: successChance < 0.80 heißt Gegner blockt den Pfad.
+    // TW/IV/LV/RV/ZDM bekommen dann einen Malus, Offensive (LM/RM/OM/ST)
+    // nicht — die dürfen auch riskante Dribblings wagen.
+    if ((opt.type === 'advance' || opt.type === 'dribble')
+      && opt.successChance < 0.80
+      && ['TW', 'IV', 'LV', 'RV', 'ZDM'].includes(carrier.positionLabel)) {
+      const penalty = carrier.positionLabel === 'ZDM' ? 25 : 35
+      opt.score -= penalty
+    }
+
     // Steilpass-Bonus: gefährlichste Option belohnen.
     // 2026-04-22: +8 → +15 — User hat im Replay gesehen, dass die KI zu
     // selten den riskanten Ball nach vorn sucht.
