@@ -122,6 +122,10 @@ export function decideBallAction(
 
     // Steilpass-Bonus: gefährlichste Option belohnen.
     // 2026-04-22: 8 → 15 — User: KI zu selten Risiko nach vorn.
+    // Versuch mit Halbierung (+7) nach Lookahead-Aktivierung gescheitert —
+    // Arena zeigte Tore 2.66 → 2.50. Lookahead-Simulator bewegt nur den
+    // Empfänger, nicht die Unterstützer-Positionierung. Heuristik-Bonus
+    // deckt daher einen Bereich ab, den Lookahead nicht sehen kann.
     if (opt.type === 'through_ball') opt.score += 15
 
     // Flanken-Bonus: User-Feedback, bisher kein sichtbares Flankentor.

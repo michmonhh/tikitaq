@@ -35,6 +35,8 @@ import {
   evaluateAdvance, evaluateHold, evaluateThroughBallSpace,
 } from './evaluators'
 import { getStrategyBonus, getFieldBonus, getMemoryBonus } from './scoring'
+import { getMovementRadius } from '../../geometry'
+import { getRoleGroup } from '../positioning/roles'
 
 /**
  * Feature-Flag. Auf `false` = deterministisch die alte 1-Zug-KI.
@@ -63,6 +65,95 @@ type ContextArgs = {
   plan: TeamPlan | null
   fieldReading: FieldReading | null
   memory: MatchMemory | null
+}
+
+/**
+ * Heuristische Mitspieler-Antizipation für den Lookahead-Simulator.
+ *
+ * Problem: Der einfache Light-Clone bewegt NUR den neuen Ballbesitzer.
+ * Stürmer und OM bleiben stehen, auch wenn sie im echten Turn in die
+ * Box ziehen würden (siehe offensive.ts). Dadurch unterschätzt der
+ * Lookahead Flanken und Steilpässe auf Flügel-Spieler.
+ *
+ * Diese Funktion simuliert einen ABGESPECKTEN Positioning-Schritt:
+ * wenn der neue Ballbesitzer seitlich (x<25 / x>75) in der gegnerischen
+ * Hälfte steht, ziehen wir Stürmer und OM Richtung Strafraum-Zentrum.
+ * Gegner reagieren ebenfalls: die nächsten drei Gegner bewegen sich
+ * Richtung Ball (Press-Antizipation).
+ */
+function simulateTeamResponse(
+  state: GameState,
+  newOwner: PlayerData,
+  team: TeamSide,
+): GameState {
+  const oppGoalY = team === 1 ? 0 : 100
+  const fwd = team === 1 ? -1 : 1
+  const ownerWide = newOwner.position.x < 25 || newOwner.position.x > 75
+  const ownerAdvanced = team === 1
+    ? newOwner.position.y < 50
+    : newOwner.position.y > 50
+
+  // Nur wenn Flanken-Situation: Stürmer in die Box ziehen
+  const shouldPullStrikersIntoBox = ownerWide && ownerAdvanced
+
+  const opponentTeam: TeamSide = team === 1 ? 2 : 1
+  const opponentsOnField = state.players.filter(
+    p => p.team === opponentTeam && p.positionLabel !== 'TW',
+  )
+  // Top-3 nächste Gegner für Press-Antizipation
+  const pressers = opponentsOnField
+    .map(p => ({ p, d: Math.hypot(
+      p.position.x - newOwner.position.x,
+      p.position.y - newOwner.position.y,
+    ) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 3)
+  const presserIds = new Set(pressers.map(e => e.p.id))
+
+  const nextPlayers = state.players.map(p => {
+    // Ballbesitzer bleibt wo er ist (wurde schon in simulateOptionState gesetzt)
+    if (p.id === newOwner.id) return p
+
+    // Mitspieler-Antizipation: Stürmer + OM in die Box
+    if (p.team === team && shouldPullStrikersIntoBox) {
+      const role = getRoleGroup(p)
+      if (role === 'attacker' || p.positionLabel === 'OM') {
+        const boxY = team === 1 ? 12 : 88
+        const isSecondStriker = p.positionLabel === 'ST' && p.origin.x > 50
+        const boxX = p.positionLabel === 'OM' ? 50
+                   : isSecondStriker ? 58 : 42
+        const pulledX = p.position.x * 0.4 + boxX * 0.6
+        const pulledY = p.position.y * 0.4 + boxY * 0.6
+        // Achtung: nicht über die Grundlinie schieben
+        const clampedY = team === 1 ? Math.max(3, pulledY) : Math.min(97, pulledY)
+        void oppGoalY; void fwd  // für späteres refinement reserviert
+        return { ...p, position: { x: pulledX, y: clampedY } }
+      }
+    }
+
+    // Gegner-Press-Antizipation: die 3 nächsten Gegner rücken nach
+    if (presserIds.has(p.id)) {
+      const moveRad = getMovementRadius(p)
+      const dx = newOwner.position.x - p.position.x
+      const dy = newOwner.position.y - p.position.y
+      const dist = Math.hypot(dx, dy) || 1
+      // Bis zu 50 % der MoveRadius oder 50 % der Distanz (was kleiner)
+      const maxMove = Math.min(moveRad * 0.5, dist * 0.5)
+      const nx = dx / dist
+      const ny = dy / dist
+      return {
+        ...p,
+        position: {
+          x: p.position.x + nx * maxMove,
+          y: p.position.y + ny * maxMove,
+        },
+      }
+    }
+
+    return p
+  })
+
+  return { ...state, players: nextPlayers }
 }
 
 /**
@@ -189,11 +280,11 @@ function scoreSingleOption(
     else if (distToGoal < 14) score += 22
     else if (distToGoal < 18) score += 10
   }
-  // Vorrücken zum Strafraum
+  // Vorrücken zum Strafraum (parallel zu playerDecision.ts)
   if (opt.type === 'advance' && distToGoal > 14 && distToGoal < 40) {
     score += 12
   }
-  // Steilpass + Flanke
+  // Steilpass + Flanke (parallel zu playerDecision.ts)
   if (opt.type === 'through_ball') score += 15
   if (opt.type === 'cross') score += 12
 
@@ -219,30 +310,42 @@ export function lookaheadValue(
   if (!sim) return 0
 
   const { nextState, newOwner } = sim
-  const nextOptions = generateOptionsFor(newOwner, nextState, team)
+
+  // Stufe 3: Mitspieler- und Gegner-Antizipation im Folge-State.
+  // Stürmer/OM ziehen in die Box bei Flanken-Situation, nächste
+  // Gegner pressen den neuen Ballbesitzer.
+  const anticipatedState = simulateTeamResponse(nextState, newOwner, team)
+  const anticipatedOwner = anticipatedState.players.find(p => p.id === newOwner.id) ?? newOwner
+
+  const nextOptions = generateOptionsFor(anticipatedOwner, anticipatedState, team)
   if (nextOptions.length === 0) return 0
 
   const ctx: ContextArgs = { plan, fieldReading, memory }
   let bestScore = -Infinity
   for (const o of nextOptions) {
-    const s = scoreSingleOption(o, newOwner, team, ctx)
+    const s = scoreSingleOption(o, anticipatedOwner, team, ctx)
     if (s > bestScore) bestScore = s
   }
   if (bestScore === -Infinity) return 0
 
-  // Gegner-Präsenz-Dampfer: Der Simulator lässt die Gegner stehen, also
-  // überschätzt er die Folgemöglichkeiten, wenn ein Gegner direkt beim
-  // neuen Owner steht — der würde im echten Turn gepresst.
-  // Faktor 1.0 bei freiem Owner, 0.4 bei stark bedrängtem.
-  const opponents = nextState.players.filter(p => p.team !== team && p.positionLabel !== 'TW')
+  // Nach der Antizipation ist der pressureFactor bereits durch die
+  // Gegner-Bewegung berücksichtigt (Gegner sind näher am Owner, was
+  // die Folge-Options-Successchance drückt). Dennoch ein leichter
+  // Restdampfer für den Fall direkter Nähe.
+  const opponents = anticipatedState.players.filter(
+    p => p.team !== team && p.positionLabel !== 'TW',
+  )
   let minOppDist = Infinity
   for (const opp of opponents) {
-    const d = Math.hypot(newOwner.position.x - opp.position.x, newOwner.position.y - opp.position.y)
+    const d = Math.hypot(
+      anticipatedOwner.position.x - opp.position.x,
+      anticipatedOwner.position.y - opp.position.y,
+    )
     if (d < minOppDist) minOppDist = d
   }
-  const pressureFactor = minOppDist >= 10 ? 1.0
-                       : minOppDist <= 3  ? 0.4
-                       : 0.4 + ((minOppDist - 3) / 7) * 0.6
+  const pressureFactor = minOppDist >= 8 ? 1.0
+                       : minOppDist <= 2 ? 0.5
+                       : 0.5 + ((minOppDist - 2) / 6) * 0.5
 
   return bestScore * pressureFactor
 }
