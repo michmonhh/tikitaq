@@ -343,6 +343,12 @@ export function ReplayScreen() {
   const eventMsg = s?.lastEvent?.message ?? ''
   const progress = snapshots.length > 0 ? (frame / Math.max(1, snapshots.length - 1)) * 100 : 0
 
+  // MatchIntent-Debug-Overlay: pro Team die aktuelle Angriffsachse + Trigger.
+  // Wird aus dem reasoning des Snapshots gelesen, das executeAITurn pro Zug
+  // mit den Keys __intent_team1 / __intent_team2 füllt.
+  const intentTeam1 = snap?.reasoning?.['__intent_team1'] ?? null
+  const intentTeam2 = snap?.reasoning?.['__intent_team2'] ?? null
+
   const seekFromClick = (e: React.MouseEvent) => {
     const bar = e.currentTarget.getBoundingClientRect()
     const pct = Math.max(0, Math.min(1, (e.clientX - bar.left) / bar.width))
@@ -381,6 +387,25 @@ export function ReplayScreen() {
         )}
         {eventStyle && eventMsg && <span className={styles.eventMsg}>{eventMsg}</span>}
       </div>
+
+      {(intentTeam1 || intentTeam2) && (
+        <div className={styles.intents}>
+          {intentTeam1 && (
+            <span className={styles.intentChip} title="KI-Angriffsachse Heim">
+              <span className={styles.intentDot} style={{ background: home?.color ?? '#888' }} />
+              <span className={styles.intentSide}>{home?.shortName ?? 'Heim'}: {intentTeam1.split(' · ')[0]}</span>
+              <span className={styles.intentTrigger}>({intentTeam1.split(' · ')[1] ?? ''})</span>
+            </span>
+          )}
+          {intentTeam2 && (
+            <span className={styles.intentChip} title="KI-Angriffsachse Auswärts">
+              <span className={styles.intentDot} style={{ background: away?.color ?? '#888' }} />
+              <span className={styles.intentSide}>{away?.shortName ?? 'Auswärts'}: {intentTeam2.split(' · ')[0]}</span>
+              <span className={styles.intentTrigger}>({intentTeam2.split(' · ')[1] ?? ''})</span>
+            </span>
+          )}
+        </div>
+      )}
 
       <div className={styles.controls}>
         <button

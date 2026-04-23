@@ -205,6 +205,18 @@ export function executeAITurn(state: GameState): PlayerAction[] {
     reasoning.set('__intent', `Angriff ${currentIntent.attackSide} (${currentIntent.trigger})`)
   }
 
+  // Beide Team-Intents für den Replay-Viewer sichtbar machen. Der Intent
+  // des jeweils nicht am Zug befindlichen Teams wurde im letzten Team-Turn
+  // geschrieben und bleibt persistent; wir lesen ihn hier zur Anzeige.
+  const intent1 = getIntent(1)
+  const intent2 = getIntent(2)
+  if (intent1) {
+    reasoning.set('__intent_team1', `${intent1.attackSide} · ${intent1.trigger}`)
+  }
+  if (intent2) {
+    reasoning.set('__intent_team2', `${intent2.attackSide} · ${intent2.trigger}`)
+  }
+
   if (hasBall && carrier) {
     const action = decideBallAction(
       carrier, state, team,

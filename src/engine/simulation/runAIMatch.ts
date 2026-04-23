@@ -11,7 +11,7 @@
  */
 
 import { useGameStore } from '../../stores/gameStore'
-import { executeAITurn, initAIPlan } from '../ai'
+import { executeAITurn, initAIPlan, getAIReasoning } from '../ai'
 import { PITCH } from '../constants'
 import { resolvePenalty, aiChoosePenaltyDirection } from '../shooting'
 import { handleGoalScored } from '../turn'
@@ -143,6 +143,17 @@ export function runAIMatch(
     //    3. Event einfangen, dann endCurrentTurn ──
     try {
       const actions = executeAITurn(s)
+
+      // reasoning in den zuletzt geschriebenen Snapshot eintragen
+      // (executeAITurn setzt es während des Zugs, wir holen es jetzt ab).
+      // Enthält __intent_team1/2, __strategy und per-Spieler-Begründungen.
+      if (options.record && snapshots.length > 0) {
+        const reasoningMap = getAIReasoning()
+        const reasoningObj: Record<string, string> = {}
+        for (const [k, v] of reasoningMap) reasoningObj[k] = v
+        snapshots[snapshots.length - 1].reasoning = reasoningObj
+      }
+
       for (const action of actions) {
         const currentState = store.getState().state
         if (!currentState || currentState.phase !== 'playing') break
