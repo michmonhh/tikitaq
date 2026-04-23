@@ -120,8 +120,7 @@ export function decideBallAction(
     }
 
     // Steilpass-Bonus: gefährlichste Option belohnen.
-    // 2026-04-22: +8 → +15 — User hat im Replay gesehen, dass die KI zu
-    // selten den riskanten Ball nach vorn sucht.
+    // 2026-04-22: 8 → 15 — User: KI zu selten Risiko nach vorn.
     if (opt.type === 'through_ball') opt.score += 15
 
     // Frei-durch: Ballträger selbst gehen lassen, nicht abgeben.

@@ -44,11 +44,16 @@ export function resolveTackle(encounter: TackleEncounter): TackleResult {
   // Prüfe ob der Zweikampf im Strafraum des Verteidigers stattfindet
   const inPenaltyArea = isInDefenderPenaltyArea(attacker.position, defender.team)
 
-  // Calculate foul probability — höher im Strafraum
+  // Calculate foul probability.
+  // 2026-04-23: Im Strafraum sind Verteidiger REALISTISCH vorsichtiger
+  // (Elfmeter-Gefahr), nicht aggressiver. Vorher 1.5x + cap 0.45. Das
+  // führte nach dem Set-Piece-Phase-Fix (91e7921) zu 54 % Elfmeter-Toren
+  // im Round-Robin. Jetzt 0.5x + cap 0.15 — Foul im 16er bleibt möglich,
+  // ist aber nicht mehr die wahrscheinlichste Auflösung eines Zweikampfs.
   let foulChance = calculateFoulChance(defender, attacker)
   if (inPenaltyArea) {
-    foulChance *= 1.5  // 50% höhere Foulrate im 16er
-    foulChance = Math.min(0.45, foulChance)
+    foulChance *= 0.5
+    foulChance = Math.min(0.15, foulChance)
   }
 
   const roll = Math.random()
