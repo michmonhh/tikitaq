@@ -52,8 +52,11 @@ export function resolveTackle(encounter: TackleEncounter): TackleResult {
   // ist aber nicht mehr die wahrscheinlichste Auflösung eines Zweikampfs.
   let foulChance = calculateFoulChance(defender, attacker)
   if (inPenaltyArea) {
-    foulChance *= 0.5
-    foulChance = Math.min(0.15, foulChance)
+    // 2026-04-22: weiter gedämpft nach Through-Ball-Defense-Fix. Mit weniger
+    // Open-Play-Toren stieg der Elfmeter-Anteil relativ zurück auf 32 %.
+    // Ziel Bundesliga ~10 %. 0.5x → 0.35x, cap 0.15 → 0.10.
+    foulChance *= 0.35
+    foulChance = Math.min(0.10, foulChance)
   }
 
   const roll = Math.random()
