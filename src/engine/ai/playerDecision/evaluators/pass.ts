@@ -90,7 +90,12 @@ export function evaluatePass(
   const dist = distance(carrier.position, mate.position)
   const range = getPassRadius(carrier)
   if (dist > range || dist < 4) return null
-  if (isOffside(mate, defTeam, state.players, carrier.position.y)) return null
+  // FIFA Law 11.3: kein Abseits direkt nach Eckstoß. Ohne diese Ausnahme
+  // filtert evaluatePass alle Mitspieler im 16er (die relativ zum Taker
+  // an der Eckfahne im Abseits stehen) und die KI findet keinen Passempfänger.
+  // Ergebnis: Ecken werden nicht ausgeführt, Spielfluss bricht ab.
+  if (state.lastSetPiece !== 'corner'
+    && isOffside(mate, defTeam, state.players, carrier.position.y)) return null
 
   // Passtyp klassifizieren
   const passType = classifyPass(carrier, mate, team, defTeam, state, oppGoalY)
