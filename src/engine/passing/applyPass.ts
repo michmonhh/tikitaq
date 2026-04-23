@@ -2,10 +2,12 @@ import type { PlayerData, GameState, PassAction, GameEvent, TeamSide, Position }
 import { name } from '../playerName'
 import * as T from '../../data/tickerTexts'
 import { tickerThroughBall } from '../../data/tickerTexts'
-import { distance, getMovementRadius, clampToPitch } from '../geometry'
+import { distance, getMovementRadius, clampToPitch, pointToSegmentDistance } from '../geometry'
 import { PITCH } from '../constants'
 import { constrainPass, findReceiver, isPassLaneBlocked, calculatePassSuccess, checkInterception, type PassType } from './mechanics'
 import { isOffside, throughBallOffsideProbability } from './offside'
+import { getAnticipation } from '../ai/positioning/anticipation'
+import { getRoleGroup } from '../ai/positioning/roles'
 
 interface PassResult {
   success: boolean
@@ -29,6 +31,83 @@ function scatterBallPosition(target: Position, maxScatter: number = 8): Position
     x: target.x + Math.cos(angle) * dist,
     y: target.y + Math.sin(angle) * dist,
   }
+}
+
+/**
+ * Through-Ball-Defensive: Abfang-Check für Steilpässe in den Raum.
+ *
+ * Hintergrund: Ein Steilpass wird als `high` gespielt, entging daher bisher
+ * dem ground-Pass-Intercept. Resultat war Arena-weit 74.7 % aller Open-Play-
+ * Tore nach Through-Ball — die Defensive hatte keine Chance, ihn zu lesen.
+ *
+ * Dieser Check läuft NUR für Through-Balls und berücksichtigt:
+ * - Steht der Verteidiger im Pass-Korridor zum Zielpunkt?
+ * - Ist er noch defensivseitig, also GOALWÄRTS vom Zielpunkt? (ein Verteidiger,
+ *   der schon weiter vorn steht als das Ziel, ist passé)
+ * - Antizipation: Weltklasse-IV liest den Ball, schwacher Spieler nicht.
+ *
+ * Rückgabe: abfangender Spieler oder null.
+ */
+function checkThroughBallInterception(
+  passer: PlayerData,
+  target: Position,
+  opponents: PlayerData[],
+): PlayerData | null {
+  // Der Ball fliegt vom passer zum target — alle Verteidiger, deren y-Position
+  // zwischen passer.y und target.y liegt, könnten den Ball auf dem Weg fangen.
+  const minY = Math.min(passer.position.y, target.y)
+  const maxY = Math.max(passer.position.y, target.y)
+
+  let bestInterceptor: PlayerData | null = null
+  let bestScore = 0
+
+  for (const opp of opponents) {
+    if (opp.positionLabel === 'TW') continue
+
+    // Nur defensive & mittlere Positionen fangen Steilpässe ab — Stürmer laufen
+    // eh in die andere Richtung.
+    const role = getRoleGroup(opp)
+    if (role === 'attacker') continue
+
+    // Muss im y-Korridor zwischen passer und target stehen (mit Toleranz).
+    // 2026-04-22 — erster Anlauf hatte hier einen Richtungs-Fehler: es wurde
+    // geprüft, ob der Verteidiger noch goalwärts vom ZIEL steht, nicht ob er
+    // im Pfad liegt. Ergebnis: Check filterte fast alle Verteidiger raus,
+    // Through-Ball-Anteil blieb bei ~71 %.
+    if (opp.position.y < minY - 2 || opp.position.y > maxY + 2) continue
+
+    // Distanz zum Pass-Korridor
+    const distToLane = pointToSegmentDistance(opp.position, passer.position, target)
+
+    // Abfang-Radius: für High-Balls deutlich größer als für Ground-Balls,
+    // weil der Verteidiger Kopfball + Sprung + Reaktion nutzen kann.
+    const ant = getAnticipation(opp)
+    const baseRadius = role === 'defender' ? 8 : 5
+    const effectiveRadius = baseRadius * (0.7 + ant * 0.8)  // 0.96–1.46x
+
+    if (distToLane > effectiveRadius) continue
+
+    // Dass er im Pfad steht reicht nicht — wir brauchen eine Wahrscheinlichkeit.
+    // Je dichter am Pfad + je höher Antizipation → höhere Chance.
+    // 2026-04-22: Nach Bugfix des Pfad-Checks war der Intercept zu aggressiv
+    // (Steilpass-Tore 71→56 % aber Gesamttor-Rate 3.40→2.73 unter dem Ziel
+    // von 3.00). Score-Cap reduziert, damit Steilpässe nicht chronisch sterben.
+    const proximityFactor = 1 - (distToLane / effectiveRadius)  // 0–1
+    const rawScore = proximityFactor * (0.35 + ant * 0.55)      // 0.35–0.90 max
+    const score = Math.min(0.70, rawScore)                      // hard cap 70 %
+
+    if (score > bestScore) {
+      bestScore = score
+      bestInterceptor = opp
+    }
+  }
+
+  // Zufällige Probe gegen den Score.
+  // score 0.5 → 50 % Intercept, score 0.9 → 90 % Intercept.
+  if (bestInterceptor && Math.random() < bestScore) {
+    return bestInterceptor
+  }
+  return null
 }
 
 /**
@@ -157,20 +236,25 @@ export function applyPass(
     }
   }
 
-  // Through ball into space: always high (lobbed over defense)
-  // Normal pass: high if lane is blocked
+  // 2026-04-22: Through-Ball kann jetzt flach ODER hoch sein.
+  // Flacher Steilpass (lane frei): leichter anzubringen, aber ground-
+  //   interception & our new through-ball lane-check fangen viele ab.
+  // Hoher Steilpass (lane blockiert): über die Abwehr gelobbt, härter
+  //   zu kontrollieren; lane-check greift ebenfalls.
   const passType: PassType = isThroughBallIntoSpace
-    ? 'high'
+    ? (isPassLaneBlocked(passer, target, opponents) ? 'high' : 'ground')
     : (isPassLaneBlocked(passer, receiver.position, opponents) ? 'high' : 'ground')
 
   // Calculate success probability
   let successChance = calculatePassSuccess(passer, target, passType, receiver, opponents)
   if (isThroughBallIntoSpace) {
-    // Through balls sind schwerer — aber schnelle Läufer mildern das ab.
-    // 2026-04-22: 0.75+0.20 → 0.88+0.10 — der kumulierte Malus (Pass-Roll +
-    // Interception-Check) reichte aus; diese Zusatzstufe drosselte Through-
-    // Balls zu hart.
-    successChance *= 0.88 + (receiver.stats.pacing / 100) * 0.10
+    // Flacher Through-Ball ist präziser als hoher, aber anfälliger für
+    // Intercept. Schnelle Läufer mildern beide ab.
+    if (passType === 'ground') {
+      successChance *= 0.94 + (receiver.stats.pacing / 100) * 0.08
+    } else {
+      successChance *= 0.82 + (receiver.stats.pacing / 100) * 0.10
+    }
   }
 
   const roll = Math.random()
@@ -238,6 +322,30 @@ export function applyPass(
           targetId: interceptor.id,
           position: interceptor.position,
           message: T.tickerPassIntercepted(name(passer), name(interceptor)),
+        },
+      }
+    }
+  }
+
+  // 2026-04-22: Through-Ball-Defensive. Auch wenn der Pass technisch sauber
+  // gespielt wurde, kann ein Verteidiger mit guter Antizipation im Pass-
+  // Korridor den Ball per Kopfball/Blocken stoppen. Vorher unerreichbar
+  // (Through-Balls liefen als 'high' am Ground-Intercept vorbei) — daher
+  // 74.7 % Through-Ball-Anteil im Arena-Round-Robin. User-Feedback:
+  // "Steilpässe sind grundsätzlich nicht verkehrt, die KI verteidigt sie
+  // nur sehr schlecht."
+  if (isThroughBallIntoSpace) {
+    const throughInterceptor = checkThroughBallInterception(passer, target, opponents)
+    if (throughInterceptor) {
+      return {
+        success: false, passType: 'high', interceptedBy: throughInterceptor, receiver,
+        ballLandingPos: null, outOfBounds: null, receiverNewPosition: null,
+        event: {
+          type: 'pass_intercepted',
+          playerId: passer.id,
+          targetId: throughInterceptor.id,
+          position: throughInterceptor.position,
+          message: T.tickerPassIntercepted(name(passer), name(throughInterceptor)),
         },
       }
     }
