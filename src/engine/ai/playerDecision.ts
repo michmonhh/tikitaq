@@ -123,6 +123,11 @@ export function decideBallAction(
     // 2026-04-22: 8 → 15 — User: KI zu selten Risiko nach vorn.
     if (opt.type === 'through_ball') opt.score += 15
 
+    // Flanken-Bonus: User-Feedback, bisher kein sichtbares Flankentor.
+    // Außerdem brechen wir damit die Steilpass-Monokultur auf.
+    // Bonus nur wenn Flanke wirklich auf einen Empfänger in der Box geht.
+    if (opt.type === 'cross') opt.score += 12
+
     // Frei-durch: Ballträger selbst gehen lassen, nicht abgeben.
     if (carrierIsFree) {
       if (opt.type === 'advance' || opt.type === 'dribble') {

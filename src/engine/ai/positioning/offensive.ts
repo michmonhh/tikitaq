@@ -96,6 +96,55 @@ export function offensivePosition(
     if (fieldReading.weakSide === 'right' && player.origin.x > 60) x += 3
   }
 
+  // ── Flügelspieler LM/RM: Breite + Grundlinie-Lauf ──
+  // 2026-04-22 — User-Feedback: "OM, RM, ST knubbeln sich vor dem 16er.
+  //   LM/RM sollen das Feld ausnutzen, gern auch bis zur Grundlinie laufen
+  //   und flanken. Noch kein Flankentor gesehen."
+  // Lösung: Flügelspieler in Ballbesitz weit nach außen (x=15/85 Zielkorridor)
+  // und bei Vordringen in gegnerische Hälfte Zug Richtung Grundlinie.
+  if (player.positionLabel === 'LM' || player.positionLabel === 'RM') {
+    const isLeft = getHomeSide(player) === 'left'
+    const wingX = isLeft ? 15 : 85
+    // Moderate Anziehung zum Flügel — nicht 100 %, damit Halbraum-Läufe möglich bleiben.
+    x = x * 0.55 + wingX * 0.45
+
+    // In der gegnerischen Hälfte: aggressiv Richtung Grundlinie.
+    // 2026-04-22: targetY bei y≈5 (bzw. 95 für team 2) = 5 Einheiten vor Grundlinie.
+    const inOppHalf = team === 1 ? y < 50 : y > 50
+    if (inOppHalf) {
+      const baselineY = team === 1 ? 5 : 95
+      // Je näher er schon ist, desto mehr Zug — progressiver Flügellauf.
+      const progress = team === 1 ? (50 - y) / 50 : (y - 50) / 50  // 0–1
+      const pull = 0.30 + progress * 0.35  // 0.30–0.65
+      y = y * (1 - pull) + baselineY * pull
+    }
+  }
+
+  // ── Stürmer in die Box ziehen, wenn Flügelspieler am Ball ──
+  // 2026-04-22 — User-Feedback: "Noch kein Flankentor gesehen."
+  // Wenn ein Teamkollege seitlich (x<25 oder x>75) in der gegnerischen
+  // Hälfte den Ball hat, laufen Stürmer und OM in den Strafraum, damit
+  // eine Flanke einen Empfänger findet.
+  if (role === 'attacker' || player.positionLabel === 'OM') {
+    const carrier = state.players.find(p => p.id === state.ball.ownerId)
+    if (carrier && carrier.team === team && carrier.id !== player.id) {
+      const carrierWide = carrier.position.x < 25 || carrier.position.x > 75
+      const carrierAdvanced = team === 1
+        ? carrier.position.y < 35
+        : carrier.position.y > 65
+      if (carrierWide && carrierAdvanced) {
+        // Zielpunkt: zentral, knapp vor dem Tor (innerhalb 16er).
+        const boxY = team === 1 ? 12 : 88
+        // Stürmer etwas breiter verteilt (Nah-/Fernpfosten).
+        const isSecondStriker = player.positionLabel === 'ST' && player.origin.x > 50
+        const boxX = player.positionLabel === 'OM' ? 50
+                   : isSecondStriker ? 58 : 42
+        x = x * 0.35 + boxX * 0.65
+        y = y * 0.35 + boxY * 0.65
+      }
+    }
+  }
+
   // ── Freilaufen: Abstand von Gegnern UND Mitspielern suchen ──
   // In Ballbesitz: Räume besetzen, nicht klumpen
   //
@@ -153,9 +202,11 @@ export function offensivePosition(
   y = counterInsurance(player, y, state, team)
 
   // ── Finale Seitengrenze: Flügelspieler verlassen nie ihre Seite ──
+  // LV/RV strenger (defensiv-wichtig), LM/RM lockerer (Breitenspiel).
   const oSide = getHomeSide(player)
-  if (oSide === 'left' && x > 48) x = 48
-  if (oSide === 'right' && x < 52) x = 52
+  const sideLimit = (player.positionLabel === 'LM' || player.positionLabel === 'RM') ? 45 : 48
+  if (oSide === 'left' && x > sideLimit) x = sideLimit
+  if (oSide === 'right' && x < (100 - sideLimit)) x = (100 - sideLimit)
 
   return { target: { x, y }, reason: 'Angriffs-Position' }
 }
