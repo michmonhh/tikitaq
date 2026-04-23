@@ -2,9 +2,11 @@ import type { GameState, PenaltyState, TeamSide } from '../../engine/types'
 import { applyShot, calculateShotAccuracy, resolvePenalty, aiChoosePenaltyDirection } from '../../engine/shooting'
 import { handleGoalScored } from '../../engine/turn'
 import { recordSaveEvent } from '../../engine/ai'
+import { repositionForSetPiece } from '../../engine/ai/setPiece'
+import { enforceCrossTeamSpacing } from '../../engine/ai/setPieceHelpers'
 import { adjustConfidence } from '../../engine/confidence'
 import { PITCH } from '../../engine/constants'
-import { addTicker, updateTeamStats, directionFromX, addGoalLog } from './helpers'
+import { addTicker, updateTeamStats, directionFromX, addGoalLog, findCornerTaker } from './helpers'
 import { completeShootoutKick } from './shootout'
 import type { GameStore, StoreSet, StoreGet } from './types'
 
@@ -200,7 +202,97 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
         : { position: { ...goalKickPos }, ownerId: null }
       newState = { ...state, players: updatedPlayers, ball: newBall, lastEvent: result.event }
     } else {
-      // Save — give ball to goalkeeper at his position
+      // Save — entweder Keeper hat den Ball, oder er hat ins Aus abgelenkt
+      // und es gibt Eckball. Corner-Transition wird als eigenständiger Pfad
+      // behandelt, damit die Phase sauber auf 'corner' schaltet.
+      if (result.deflectedToCorner && result.savedBy) {
+        const shooter = state.players.find(p => p.id === shooterId)
+        const attackingTeam = state.currentTurn
+        const goalY = attackingTeam === 1 ? 3 : 97
+        // Eckfahnen-Seite aus Schussposition ableiten
+        const cornerX = shooter && shooter.position.x < 50 ? 4 : 96
+        const cornerPos = { x: cornerX, y: goalY }
+
+        const taker = findCornerTaker(state.players, attackingTeam)
+        let players = state.players.map(p => {
+          if (p.id === shooterId) return { ...p, hasActed: true }
+          if (result.savedBy && p.id === result.savedBy.id) {
+            return { ...p, gameStats: { ...p.gameStats, saves: p.gameStats.saves + 1 } }
+          }
+          return p
+        })
+        if (taker) {
+          players = players.map(p =>
+            p.id === taker.id
+              ? { ...p, position: { ...cornerPos }, origin: { ...cornerPos } }
+              : p,
+          )
+        }
+        const cornerBall = taker
+          ? { position: { ...cornerPos }, ownerId: taker.id }
+          : { position: { ...cornerPos }, ownerId: null }
+
+        // Beide Teams für die Ecke aufstellen
+        for (const team of [1 as TeamSide, 2 as TeamSide]) {
+          const spState = { ...state, players, ball: cornerBall }
+          const spActions = repositionForSetPiece(spState, team, 'corner')
+          for (const action of spActions) {
+            if (action.type === 'move') {
+              players = players.map(p =>
+                p.id === action.playerId
+                  ? { ...p, position: { ...action.target }, origin: { ...action.target } }
+                  : p,
+              )
+            }
+          }
+        }
+        enforceCrossTeamSpacing(players, new Set(taker ? [taker.id] : []))
+
+        // Stats: Schuss zählt als aufs Tor + Ecke + xG, Confidence
+        const shotAccuracy = shooter ? calculateShotAccuracy(shooter, shooter.position, attackingTeam) : 0
+        let trackedState: GameState = { ...state, players, ball: cornerBall, lastEvent: result.event }
+        trackedState = updateTeamStats(trackedState, attackingTeam, s => ({
+          xG: s.xG + shotAccuracy,
+          shotsOnTarget: s.shotsOnTarget + 1,
+          corners: s.corners + 1,
+        }))
+        trackedState = {
+          ...trackedState,
+          players: trackedState.players.map(p =>
+            p.id === shooterId ? adjustConfidence(p, 'shot_saved') : p,
+          ),
+        }
+        trackedState = addTicker(trackedState, result.event.message, result.event.type, attackingTeam)
+
+        recordSaveEvent(result.savedBy.team)
+        get().showEvent(result.event.message, 3000, result.event.type)
+
+        set({
+          state: {
+            ...trackedState,
+            players: trackedState.players.map(p => ({
+              ...p,
+              hasActed: false,
+              hasMoved: p.id === taker?.id,
+              hasPassed: false,
+              hasReceivedPass: false,
+              origin: { ...p.position },
+            })),
+            phase: 'corner',
+            currentTurn: attackingTeam,
+            passesThisTurn: 0,
+            ballOwnerChangedThisTurn: true,
+            mustPass: false,
+            setPieceReady: true,
+            lastSetPiece: 'corner',
+          },
+          drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
+          selectedPlayerId: null,
+        })
+        return
+      }
+
+      // Normale Parade — Keeper hat den Ball
       const keeperId = result.savedBy?.id
       const newBall = keeperId
         ? { position: { ...result.savedBy!.position }, ownerId: keeperId }

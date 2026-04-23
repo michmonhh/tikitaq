@@ -10,6 +10,13 @@ export interface ShotResult {
   scored: boolean
   savedBy: PlayerData | null
   event: GameEvent
+  /**
+   * True wenn der gehaltene Schuss vom Keeper ins Aus abgelenkt wurde
+   * und daraus ein Eckball für das angreifende Team resultiert. Der
+   * gameStore transitioniert dann in die Corner-Phase statt dem Keeper
+   * den Ball zu geben.
+   */
+  deflectedToCorner?: boolean
 }
 
 /**
@@ -160,15 +167,23 @@ export function applyShot(
   if (keeper && isKeeperInShotLine(shooter, keeper, goalCenter)) {
     const saveProbability = calculateSaveProbability(shooter, keeper, goalCenter)
     if (Math.random() < saveProbability) {
+      // Bei Paraden landet der Ball nicht immer beim Keeper — ein Teil der
+      // Schüsse wird ins Aus gefaustet/abgelenkt → Eckball für das
+      // angreifende Team. 35 % ist ein grober Bundesliga-Richtwert (~4.5
+      // Ecken pro Team/Match, passend zur Schussrate).
+      const deflectedToCorner = Math.random() < 0.35
       return {
         scored: false,
         savedBy: keeper,
+        deflectedToCorner,
         event: {
-          type: 'shot_saved',
+          type: deflectedToCorner ? 'corner' : 'shot_saved',
           playerId: shooter.id,
           targetId: keeper.id,
           position: goalCenter,
-          message: T.tickerSave(name(shooter), name(keeper)),
+          message: deflectedToCorner
+            ? `${name(keeper)} lenkt den Schuss von ${name(shooter)} zur Ecke!`
+            : T.tickerSave(name(shooter), name(keeper)),
         },
       }
     }

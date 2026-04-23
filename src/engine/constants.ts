@@ -101,7 +101,10 @@ export const GAME = {
   HALF_DURATION: 45,     // Minutes per regulation half
   ET_HALF_DURATION: 15,  // Minutes per extra-time half (IFAB Law 7)
   TOTAL_HALVES: 2,
-  MINUTES_PER_TURN: 1,   // Game minutes that pass each turn
+  // 2026-04-23: 1 → 0.5. Bei 1 min/turn hat die KI pro Match nur ~90 Aktionen
+  // pro Team — echte Bundesliga rennt ~450 Pässe/Team/Match (~5 pro Minute).
+  // Mit 0.5 verdoppeln wir die Aktionsdichte bei gleicher Modell-Länge.
+  MINUTES_PER_TURN: 0.5,
   MAX_PASSES_PER_TURN: 1,
   SHOOTOUT_ROUNDS: 5,    // IFAB Law 10: first five kicks per team
 } as const
