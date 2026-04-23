@@ -113,8 +113,108 @@ async function runRoundRobin() {
 
   const totalSimMs = Date.now() - t0
   console.log(`\n⏱  Gesamt-Simulationszeit: ${(totalSimMs / 1000).toFixed(1)}s`)
-  const avgGoals = results.reduce((s, r) => s + r.score.team1 + r.score.team2, 0) / results.length
-  console.log(`⚽ Ø Tore/Match: ${avgGoals.toFixed(2)}`)
+
+  printBundesligaComparison(results)
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  Bundesliga-Vergleich
+// ──────────────────────────────────────────────────────────────────
+
+interface AvgRow {
+  label: string
+  sim: number
+  ref: number
+  /** Einheit für die Anzeige (z.B. 'pro Match', '%', '/Team'). */
+  unit: string
+  /** Format: Anzahl Nachkommastellen. */
+  digits?: number
+}
+
+function printBundesligaComparison(results: ArenaMatchResult[]) {
+  const n = results.length
+  if (n === 0) return
+
+  // Match-Ergebnis-Verteilung
+  let homeWins = 0, draws = 0, awayWins = 0
+  let totalGoals = 0
+  for (const r of results) {
+    totalGoals += r.score.team1 + r.score.team2
+    if (r.winner === 1) homeWins++
+    else if (r.winner === 2) awayWins++
+    else draws++
+  }
+
+  // Per-Team-Summen (2 Datenpunkte pro Match: home + away)
+  const sum = {
+    shotsTotal: 0, shotsOnTarget: 0, xG: 0,
+    passesTotal: 0, passesCompleted: 0,
+    possessionPct: 0, boxPresencePct: 0,
+    tacklesWon: 0, tacklesLost: 0,
+    fouls: 0, yellowCards: 0, redCards: 0,
+    corners: 0,
+    distanceCovered: 0,
+  }
+  for (const r of results) {
+    for (const ts of [r.stats.team1, r.stats.team2]) {
+      sum.shotsTotal += ts.shotsOnTarget + ts.shotsOff
+      sum.shotsOnTarget += ts.shotsOnTarget
+      sum.xG += ts.xG
+      sum.passesTotal += ts.passesTotal
+      sum.passesCompleted += ts.passesCompleted
+      sum.possessionPct += ts.possessionPercent
+      sum.boxPresencePct += ts.boxPresencePercent
+      sum.tacklesWon += ts.tacklesWon
+      sum.tacklesLost += ts.tacklesLost
+      sum.fouls += ts.fouls
+      sum.yellowCards += ts.yellowCards
+      sum.redCards += ts.redCards
+      sum.corners += ts.corners
+      sum.distanceCovered += ts.distanceCovered
+    }
+  }
+
+  const perTeam = (x: number) => x / (n * 2)  // pro Team pro Match
+  const passAccuracy = sum.passesTotal > 0 ? (sum.passesCompleted / sum.passesTotal) * 100 : 0
+
+  // Referenz: echte Bundesliga-Saison-Durchschnitte (grobe Werte aus
+  // öffentlichen Statistiken, z.B. kicker / DFL / Opta der letzten Saisons)
+  const rows: AvgRow[] = [
+    { label: 'Tore pro Match',         sim: totalGoals / n,             ref: 3.00,  unit: '',       digits: 2 },
+    { label: 'Heimsieg',               sim: (homeWins / n) * 100,       ref: 43,    unit: '%',      digits: 0 },
+    { label: 'Unentschieden',          sim: (draws / n) * 100,          ref: 25,    unit: '%',      digits: 0 },
+    { label: 'Auswärtssieg',           sim: (awayWins / n) * 100,       ref: 32,    unit: '%',      digits: 0 },
+    { label: 'xG / Team',              sim: perTeam(sum.xG),            ref: 1.50,  unit: '',       digits: 2 },
+    { label: 'Schüsse / Team',         sim: perTeam(sum.shotsTotal),    ref: 12.5,  unit: '',       digits: 1 },
+    { label: 'Schüsse a. Tor / Team',  sim: perTeam(sum.shotsOnTarget), ref: 4.5,   unit: '',       digits: 1 },
+    { label: 'Pässe / Team',           sim: perTeam(sum.passesTotal),   ref: 450,   unit: '',       digits: 0 },
+    { label: 'Passquote',              sim: passAccuracy,               ref: 82,    unit: '%',      digits: 1 },
+    { label: 'Ballbesitz / Team',      sim: perTeam(sum.possessionPct), ref: 50,    unit: '%',      digits: 1 },
+    { label: 'Box-Präsenz / Team',     sim: perTeam(sum.boxPresencePct),ref: 25,    unit: '%',      digits: 1 },
+    { label: 'Tacklings gewonnen',     sim: perTeam(sum.tacklesWon),    ref: 17,    unit: '/Team',  digits: 1 },
+    { label: 'Fouls / Team',           sim: perTeam(sum.fouls),         ref: 12,    unit: '',       digits: 1 },
+    { label: 'Gelbe Karten / Team',    sim: perTeam(sum.yellowCards),   ref: 1.8,   unit: '',       digits: 2 },
+    { label: 'Rote Karten / Team',     sim: perTeam(sum.redCards),      ref: 0.05,  unit: '',       digits: 3 },
+    { label: 'Eckbälle / Team',        sim: perTeam(sum.corners),       ref: 4.5,   unit: '',       digits: 1 },
+  ]
+
+  console.log()
+  console.log('Vergleich mit realen Bundesliga-Durchschnitten:')
+  console.log('                              Simuliert     Bundesliga    Δ')
+  console.log('  ─────────────────────────────────────────────────────────────')
+  for (const row of rows) {
+    const d = row.digits ?? 1
+    const sim = row.sim.toFixed(d) + row.unit
+    const ref = row.ref.toFixed(d) + row.unit
+    const delta = row.sim - row.ref
+    const deltaPct = row.ref !== 0 ? (delta / row.ref) * 100 : 0
+    const deltaStr = (delta >= 0 ? '+' : '') + delta.toFixed(d) + row.unit
+    const pctStr = row.ref !== 0
+      ? `  (${(deltaPct >= 0 ? '+' : '') + deltaPct.toFixed(0)}%)`
+      : ''
+    console.log(`  ${row.label.padEnd(26)}  ${sim.padStart(10)}    ${ref.padStart(10)}    ${deltaStr.padStart(8)}${pctStr}`)
+  }
+  console.log(`\n  (Referenz: DFL/Opta-Durchschnitte der letzten Bundesliga-Spielzeiten)`)
 }
 
 function printAggregate(homeName: string, awayName: string, results: ArenaMatchResult[]) {
