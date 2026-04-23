@@ -28,6 +28,7 @@ import { getStrategyBonus, getFieldBonus, getMemoryBonus } from './playerDecisio
 import { toAction, getReceiverLabel } from './playerDecision/helpers'
 import { lookaheadValue, AI_LOOKAHEAD_ENABLED, AI_LOOKAHEAD_WEIGHT } from './playerDecision/lookahead'
 import { getIntent, getIntentPassBonus } from './matchIntent'
+import { recordDecision, isTrainingExportActive } from './training'
 
 /**
  * Entscheidet was der Ballführer tut.
@@ -194,6 +195,14 @@ export function decideBallAction(
   // ── Beste Option wählen ──
   options.sort((a, b) => b.score - a.score)
   const best = options[0]
+
+  // ML-Readiness: State-Action-Paar aufzeichnen (wenn Export aktiv).
+  // Die Arena setzt via initTrainingExport() eine Zieldatei, der Live-
+  // Browser-Code bekommt keinen Dateizugriff und Export bleibt aus.
+  if (isTrainingExportActive()) {
+    const chosenIndex = 0  // nach sort() ist best an Position 0
+    recordDecision(state, team, carrier, options, chosenIndex)
+  }
 
   reasoning.set(carrier.id, best.reason)
   return toAction(carrier, best)

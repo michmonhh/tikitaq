@@ -12,9 +12,22 @@
  *   - Noch kein Replay-Dump, noch keine JSON-Ausgabe (kommt in Phase 1c)
  */
 
+import * as fs from 'node:fs'
 import { TEAMS, getTeamById } from '../src/data/teams'
 import { runAIMatch } from '../src/engine/simulation/runAIMatch'
 import type { ArenaMatchResult } from '../src/engine/simulation/replayTypes'
+import {
+  initTrainingExport, setTrainingMatchId, endTrainingMatch, drainTrainingBuffer,
+} from '../src/engine/ai/training'
+
+let trainingOutputPath: string | null = null
+
+function flushTrainingToFile(): void {
+  if (!trainingOutputPath) return
+  const lines = drainTrainingBuffer()
+  if (lines.length === 0) return
+  fs.appendFileSync(trainingOutputPath, lines.join('\n') + '\n')
+}
 
 function arg(flag: string, fallback?: string): string | undefined {
   const i = process.argv.indexOf(flag)
@@ -26,6 +39,19 @@ function hasFlag(flag: string): boolean {
 }
 
 async function main() {
+  // ML-Readiness: optional --export-training <file>
+  // Wenn gesetzt, wird jedes Match State-Action-Paare als JSONL in die
+  // Datei schreiben, die später ein Python-Trainer als Behavior-
+  // Cloning-Dataset einlesen kann.
+  const exportFile = arg('--export-training')
+  if (exportFile) {
+    trainingOutputPath = exportFile
+    // Datei zurücksetzen, damit kein alter Inhalt drinbleibt
+    fs.writeFileSync(exportFile, '')
+    initTrainingExport(exportFile)
+    console.log(`🤖  Training-Export aktiv → ${exportFile}\n`)
+  }
+
   if (hasFlag('--roundrobin')) {
     await runRoundRobin()
     return
@@ -46,7 +72,10 @@ async function main() {
 
   const results: ArenaMatchResult[] = []
   for (let i = 0; i < runs; i++) {
+    setTrainingMatchId(`${home.shortName}-${away.shortName}-${i + 1}`)
     const r = runAIMatch(homeId, awayId)
+    endTrainingMatch()
+    flushTrainingToFile()
     results.push(r)
     console.log(`Match ${i + 1}/${runs}: ${home.shortName} ${r.score.team1}–${r.score.team2} ${away.shortName}  (${r.simDurationMs} ms)`)
   }
@@ -66,7 +95,10 @@ async function runRoundRobin() {
     for (const away of teams) {
       if (home.id === away.id) continue
       i++
+      setTrainingMatchId(`${home.shortName}-${away.shortName}-${i}`)
       const r = runAIMatch(home.id, away.id)
+      endTrainingMatch()
+      flushTrainingToFile()
       results.push(r)
       if (i % 10 === 0 || i === total) {
         console.log(`  ${i}/${total} — ${Math.round((Date.now() - t0) / 1000)}s — letzte: ${home.shortName} ${r.score.team1}–${r.score.team2} ${away.shortName}`)
