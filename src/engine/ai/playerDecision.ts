@@ -175,7 +175,34 @@ function chooseForcedPass(
     const opt = evaluatePass(carrier, mate, state, team, opponents, defTeam, oppGoalY)
     if (opt) options.push(opt)
   }
-  if (options.length === 0) return null
+  // Fallback bei Standards (Freistoß, Einwurf): wenn alle Mitspieler durch
+  // Abseits-Filter rausfliegen, nimm den nächsten erreichbaren Mitspieler
+  // OHNE Abseits-Check. Ohne diesen Notfall bleibt der Taker mit dem Ball
+  // stehen, mustPass wird nach endTurn aufgehoben und der Taker läuft im
+  // nächsten eigenen Zug einfach los — unrealistisch und war User-Befund.
+  if (options.length === 0) {
+    let nearest: PlayerData | null = null
+    let nearestDist = Infinity
+    for (const mate of teammates) {
+      if (mate.positionLabel === 'TW') continue
+      const d = Math.hypot(carrier.position.x - mate.position.x, carrier.position.y - mate.position.y)
+      if (d >= 4 && d < nearestDist) {
+        nearestDist = d
+        nearest = mate
+      }
+    }
+    if (!nearest) return null
+    const label = `${nearest.positionLabel} ${nearest.lastName}`
+    options.push({
+      type: 'short_pass',
+      target: { ...nearest.position },
+      receiverId: nearest.id,
+      successChance: 0.85,
+      reward: 0.20,
+      score: 0,
+      reason: `Notfall-Pass auf ${label}`,
+    })
+  }
 
   // Bewerten (mit Strategie-Kontext)
   const riskAppetite = plan?.riskAppetite ?? 0.5
