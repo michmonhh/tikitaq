@@ -174,7 +174,20 @@ export function runAIMatch(
       console.error('[arena] AI turn crashed:', err)
     }
     pendingEvent = store.getState().state?.lastEvent ?? null
-    store.getState().endCurrentTurn()
+    // Wenn sich die Phase während des Turns in eine Set-Piece-Phase
+    // geändert hat (Pass ins Aus → corner / throw_in, Foul → free_kick,
+    // Foul im 16er → penalty), DARF endCurrentTurn nicht gerufen werden.
+    // endTurn würde phase='playing' und lastSetPiece=null setzen, wodurch
+    // das Set-Piece komplett verpufft — der Taker hätte den Ball ohne
+    // mustPass und würde einfach drauflosdribbeln. Selbe Guard-Logik wie
+    // makeExecuteAIAnimated im gameStore.
+    const postPhase = store.getState().state?.phase
+    const isSetPiecePhase = postPhase === 'corner' || postPhase === 'free_kick'
+      || postPhase === 'throw_in' || postPhase === 'kickoff'
+      || postPhase === 'penalty'
+    if (!isSetPiecePhase) {
+      store.getState().endCurrentTurn()
+    }
     turn++
   }
 
