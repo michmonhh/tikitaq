@@ -7,33 +7,24 @@
  * ArenaMatchResult: Ergebnis eines einzelnen Arena-Matches.
  */
 
-import type { GameEvent, GamePhase, Position, TeamSide } from '../types'
+import type { GameState, TeamSide } from '../types'
 
 // ══════════════════════════════════════════
 //  Replay
 // ══════════════════════════════════════════
 
-/** Kompakter Snapshot eines Turns für die Wiedergabe im Replay-Viewer. */
+/**
+ * Vollständiger Snapshot eines Turns. Enthält den kompletten `GameState`
+ * zum Zeitpunkt des Turn-Starts, damit der Replay-Viewer dieselben Renderer
+ * nutzen kann wie der Live-Match-Screen. Änderungen an der Match-Darstellung
+ * ziehen automatisch ins Replay mit.
+ */
 export interface ReplaySnapshot {
   /** Turn-Nummer (monoton steigend, beginnt bei 0). */
   turn: number
-  /** Spielminute beim Turn-Start. */
-  minute: number
-  /** Halbzeit (1, 2, 3=ET1, 4=ET2). */
-  half: number
-  /** Team, das den Zug jetzt beginnt. */
-  currentTurn: TeamSide
-  /** Phase. */
-  phase: GamePhase
-  /** Spieler-Positionen. */
-  players: Array<{ id: string; position: Position; team: TeamSide; positionLabel: string }>
-  /** Ball. */
-  ball: { position: Position; ownerId: string | null }
-  /** Punktestand. */
-  score: { team1: number; team2: number }
-  /** Letztes Event (z.B. Tor, Pass, Foul). */
-  lastEvent?: GameEvent | null
-  /** KI-Reasoning pro Spieler (optional). */
+  /** Der komplette Spielzustand. Tief-Kopie vom Live-State, immutable. */
+  state: GameState
+  /** KI-Reasoning pro Spieler (optional, für Overlays). */
   reasoning?: Record<string, string>
 }
 

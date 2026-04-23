@@ -107,12 +107,12 @@ export function runAIMatch(
     }
 
     // ── Snapshot vor dem Zug (wenn Replay angefordert) ──
-    // Das pendingEvent aus dem vorigen Turn wird hier eingeklinkt, damit der
-    // Viewer ein sinnvolles "was ist gerade passiert" anzeigen kann. Danach
-    // wird es verworfen — jedes Event wird nur einem Snapshot zugewiesen.
+    // Das pendingEvent aus dem vorigen Turn wird hier in state.lastEvent
+    // eingeklinkt, damit der Viewer "was ist gerade passiert" anzeigen kann.
+    // Danach wird es verworfen — jedes Event gehört nur zu einem Snapshot.
     if (options.record) {
       const snap = makeSnapshot(s, turn)
-      snap.lastEvent = pendingEvent
+      snap.state.lastEvent = pendingEvent
       snapshots.push(snap)
     }
     pendingEvent = null
@@ -195,21 +195,12 @@ function isSetPieceOrKickoff(phase: GamePhase): boolean {
 }
 
 function makeSnapshot(s: GameState, turnIdx: number): ReplaySnapshot {
+  // structuredClone ist in Browser + Node (>=17) verfügbar und macht eine
+  // tiefe Kopie. Damit ist der Snapshot immutable gegenüber zukünftigen
+  // State-Mutationen und enthält alle Felder, die Match-Renderer brauchen.
   return {
     turn: turnIdx,
-    minute: s.gameTime,
-    half: s.half,
-    currentTurn: s.currentTurn,
-    phase: s.phase,
-    players: s.players.map(p => ({
-      id: p.id,
-      position: { ...p.position },
-      team: p.team,
-      positionLabel: p.positionLabel,
-    })),
-    ball: { position: { ...s.ball.position }, ownerId: s.ball.ownerId },
-    score: { ...s.score },
-    lastEvent: s.lastEvent ?? null,
+    state: structuredClone(s),
   }
 }
 

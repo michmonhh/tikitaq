@@ -170,21 +170,25 @@ export function ReplayScreen() {
     const snap = snaps[frameIdx]
     if (!snap) return
     const next = snaps[frameIdx + 1] ?? snap
+    // Adapter: im Zwischenzustand (Commit 1) lesen wir weiterhin aus den alten
+    // Feldern — Renderer-Umbau auf Original-Renderer folgt im nächsten Commit.
+    const s = snap.state
+    const ns = next.state
 
     // ── Spieler (linear interpoliert) ──
-    const nextById = new Map(next.players.map(p => [p.id, p]))
+    const nextById = new Map(ns.players.map(p => [p.id, p]))
     const radius = VISUAL.PLAYER_RADIUS * camera.baseScale
     const colors = teamColorsRef.current
-    const eventType = snap.lastEvent?.type
+    const eventType = s.lastEvent?.type
     const isGoalFrame = eventType === 'shot_scored' || eventType === 'penalty_scored'
-    const scorerId = isGoalFrame ? snap.lastEvent?.playerId : null
+    const scorerId = isGoalFrame ? s.lastEvent?.playerId : null
 
-    for (const p of snap.players) {
+    for (const p of s.players) {
       const np = nextById.get(p.id) ?? p
       const x = lerp(p.position.x, np.position.x, progress)
       const y = lerp(p.position.y, np.position.y, progress)
       const screen = camera.toScreen(x, y)
-      const isBallOwner = snap.ball.ownerId === p.id || (progress > 0.5 && next.ball.ownerId === p.id)
+      const isBallOwner = s.ball.ownerId === p.id || (progress > 0.5 && ns.ball.ownerId === p.id)
       const isScorer = p.id === scorerId
       const discColor = p.team === 1 ? colors.team1 : colors.team2
       const textColor = contrastingTextColor(discColor)
@@ -230,8 +234,8 @@ export function ReplayScreen() {
     // Ball bewegt sich schneller als Spieler (Pässe/Schüsse fliegen in einem Bruchteil
     // der Turn-Zeit ans Ziel). Wir komprimieren die Ball-Bewegung auf BALL_SPEED_BOOST × Frame-Dauer.
     const bt = Math.min(1, progress / BALL_SPEED_BOOST)
-    const bx = lerp(snap.ball.position.x, next.ball.position.x, bt)
-    const by = lerp(snap.ball.position.y, next.ball.position.y, bt)
+    const bx = lerp(s.ball.position.x, ns.ball.position.x, bt)
+    const by = lerp(s.ball.position.y, ns.ball.position.y, bt)
     const ballScreen = camera.toScreen(bx, by)
     const ballRadius = VISUAL.BALL_RADIUS * camera.baseScale
 
@@ -256,7 +260,7 @@ export function ReplayScreen() {
     // Tor-Event hängt (typisch 700 ms bei 1×).
     if (isGoalFrame) {
       const scoringTeam = (() => {
-        const scorer = snap.players.find(p => p.id === scorerId)
+        const scorer = s.players.find(p => p.id === scorerId)
         return scorer?.team ?? 1
       })()
       const goalY = scoringTeam === 1 ? 0 : 100
@@ -334,9 +338,10 @@ export function ReplayScreen() {
   }
 
   const snap = snapshots[frame]
-  const eventType = snap?.lastEvent?.type
+  const s = snap?.state
+  const eventType = s?.lastEvent?.type
   const eventStyle = eventType ? EVENT_STYLES[eventType] : null
-  const eventMsg = snap?.lastEvent?.message ?? ''
+  const eventMsg = s?.lastEvent?.message ?? ''
   const progress = snapshots.length > 0 ? (frame / Math.max(1, snapshots.length - 1)) * 100 : 0
 
   const seekFromClick = (e: React.MouseEvent) => {
@@ -356,7 +361,7 @@ export function ReplayScreen() {
           <span className={styles.team}>{away?.shortName}</span>
         </div>
         <div className={styles.meta}>
-          {snap ? `Min ${snap.minute} · HZ ${snap.half} · Team ${snap.currentTurn} am Zug` : ''}
+          {s ? `Min ${s.gameTime} · HZ ${s.half} · Team ${s.currentTurn} am Zug` : ''}
         </div>
       </div>
 
