@@ -198,6 +198,24 @@ function printBundesligaComparison(results: ArenaMatchResult[]) {
     { label: 'Eckbälle / Team',        sim: perTeam(sum.corners),       ref: 4.5,   unit: '',       digits: 1 },
   ]
 
+  // Tor-Typen
+  const goalKinds = { open_play: 0, penalty: 0, own_goal: 0 }
+  for (const r of results) {
+    for (const g of r.scorers) {
+      goalKinds[g.kind] = (goalKinds[g.kind] ?? 0) + 1
+    }
+  }
+  const totalGoalsCounted = goalKinds.open_play + goalKinds.penalty + goalKinds.own_goal
+  if (totalGoalsCounted > 0) {
+    console.log()
+    console.log('Tor-Typen:')
+    const pct = (k: number) => `${((k / totalGoalsCounted) * 100).toFixed(1)}%`
+    console.log(`  Aus dem Spiel:   ${String(goalKinds.open_play).padStart(4)}  (${pct(goalKinds.open_play)})`)
+    console.log(`  Elfmeter:        ${String(goalKinds.penalty).padStart(4)}  (${pct(goalKinds.penalty)})`)
+    console.log(`  Eigentor:        ${String(goalKinds.own_goal).padStart(4)}  (${pct(goalKinds.own_goal)})`)
+    console.log(`  Bundesliga-Referenz: ~86 % aus dem Spiel, ~10 % Elfmeter, ~4 % Eigentor`)
+  }
+
   console.log()
   console.log('Vergleich mit realen Bundesliga-Durchschnitten:')
   console.log('                              Simuliert     Bundesliga    Δ')
