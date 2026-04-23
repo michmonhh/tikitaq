@@ -58,11 +58,19 @@ export function evaluateThroughBallSpace(
     return aScore > bScore ? a : b
   })
 
-  // Zielpunkt: hinter der Abwehrkette, etwas Richtung Mitte
+  // Zielpunkt: hinter der Abwehrkette.
+  // 2026-04-23: die alte 70/30-Verzerrung Richtung Mitte landete jeden
+  // Flügel-Steilpass zentral hinter den IVs — Flügel-Läufer kamen nie in
+  // den Raum hinter LV/RV (User-Befund). targetX folgt jetzt dem Läufer.
+  // Nur eine leichte Zentrierung (x-Offset kleiner halten) für zentrale
+  // Läufer, damit sie nicht am Tornetz-Rand landen.
   const moveRad = getMovementRadius(best)
   const depth = Math.min(moveRad * 0.9, 12)
   const targetY = offsideLine + dir * depth
-  const targetX = best.position.x * 0.7 + PITCH.CENTER_X * 0.3
+  const isWing = best.position.x < 30 || best.position.x > 70
+  const targetX = isWing
+    ? best.position.x                                   // Flügel: bleibe außen
+    : best.position.x * 0.85 + PITCH.CENTER_X * 0.15    // Zentral: leicht mittig
 
   const target = clampToPitch({ x: targetX, y: targetY })
 
