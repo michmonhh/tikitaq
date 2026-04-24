@@ -290,7 +290,27 @@ export function executeAITurn(state: GameState): PlayerAction[] {
     targetEntries.push({ player, target, secondaryTarget, reason })
   }
 
-  // ── Abwehrkette ausrichten: Zentrale Verteidiger nicht höher als breiteste ──
+  // ── Abwehrkette zusammenhalten ──
+  //
+  // User-Feedback 2026-04-24: "Abseits-Linie funktioniert nicht. Es gibt
+  // häufig Räume hinter den IVs." Der Antizipations-Fallback (310ac17)
+  // lässt einzelne IVs zurückfallen, wenn sie einen Threat sehen. Wenn ein
+  // IV zurückfällt und der Nachbar nicht, entsteht ein Keil: die Abseits-
+  // linie wandert mit dem tiefsten IV, in den Keil zwischen den IVs kann
+  // ein Stürmer ohne Abseits einlaufen.
+  //
+  // Zwei Regeln für die Kette (nur bei Gegner-Ballbesitz):
+  //
+  // 1. MAX-SPREAD: Die gesamte Abwehrkette darf maximal 8 Einheiten
+  //    y-Spread haben. Wenn ein IV zurückfällt, werden die anderen
+  //    mit-gedrückt (aber nur bis `deepestY - maxSpread`, nicht komplett
+  //    auf deepestY). Damit bleibt die Linie kompakt, ohne dass die
+  //    ganze Kette beim kleinsten Fallback absackt.
+  //
+  // 2. ZENTRALE-NICHT-HÖHER (alte Regel): Zentrale IVs dürfen nie
+  //    näher am gegnerischen Tor stehen als die weiten Verteidiger
+  //    (LV/RV). Stellt sicher dass die IVs nicht vorwärts driften
+  //    während die Außenverteidiger abgesichert stehen.
   if (!hasBall && !ballLoose) {
     const isDefender = (p: PlayerData) => {
       const distFromGoal = p.team === 1 ? 100 - p.origin.y : p.origin.y
@@ -298,25 +318,43 @@ export function executeAITurn(state: GameState): PlayerAction[] {
     }
     const isWideDefender = (p: PlayerData) => Math.abs(p.origin.x - 50) > 15
 
-    const wideDefenders = targetEntries.filter(
-      e => isDefender(e.player) && isWideDefender(e.player),
-    )
-    if (wideDefenders.length > 0) {
-      const deepestY = team === 1
-        ? Math.max(...wideDefenders.map(e => e.target.y))
-        : Math.min(...wideDefenders.map(e => e.target.y))
+    const defenderEntries = targetEntries.filter(e => isDefender(e.player))
 
-      const centralDefenders = targetEntries.filter(
-        e => isDefender(e.player) && !isWideDefender(e.player),
-      )
-      for (const entry of centralDefenders) {
-        if (team === 1 && entry.target.y < deepestY) {
-          entry.target = { x: entry.target.x, y: deepestY }
-          entry.reason = 'Abwehrkette halten'
+    if (defenderEntries.length >= 2) {
+      // Regel 1: Max-Spread
+      const MAX_SPREAD = 8
+      const deepestY = team === 1
+        ? Math.max(...defenderEntries.map(e => e.target.y))
+        : Math.min(...defenderEntries.map(e => e.target.y))
+      const minAllowedY = team === 1 ? deepestY - MAX_SPREAD : deepestY + MAX_SPREAD
+
+      for (const entry of defenderEntries) {
+        if (team === 1 && entry.target.y < minAllowedY) {
+          entry.target = { x: entry.target.x, y: minAllowedY }
+          if (entry.reason === 'Defensiv-Position') entry.reason = 'Kette halten'
         }
-        if (team === 2 && entry.target.y > deepestY) {
-          entry.target = { x: entry.target.x, y: deepestY }
-          entry.reason = 'Abwehrkette halten'
+        if (team === 2 && entry.target.y > minAllowedY) {
+          entry.target = { x: entry.target.x, y: minAllowedY }
+          if (entry.reason === 'Defensiv-Position') entry.reason = 'Kette halten'
+        }
+      }
+
+      // Regel 2: Zentrale nicht höher als weite
+      const wideDefenders = defenderEntries.filter(e => isWideDefender(e.player))
+      if (wideDefenders.length > 0) {
+        const wideDeepestY = team === 1
+          ? Math.max(...wideDefenders.map(e => e.target.y))
+          : Math.min(...wideDefenders.map(e => e.target.y))
+        const centralDefenders = defenderEntries.filter(e => !isWideDefender(e.player))
+        for (const entry of centralDefenders) {
+          if (team === 1 && entry.target.y < wideDeepestY) {
+            entry.target = { x: entry.target.x, y: wideDeepestY }
+            entry.reason = 'Abwehrkette halten'
+          }
+          if (team === 2 && entry.target.y > wideDeepestY) {
+            entry.target = { x: entry.target.x, y: wideDeepestY }
+            entry.reason = 'Abwehrkette halten'
+          }
         }
       }
     }
