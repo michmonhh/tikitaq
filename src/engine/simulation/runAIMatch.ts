@@ -172,10 +172,15 @@ export function runAIMatch(
         } else if (ev.type === 'shot_scored') {
           const postState = store.getState().state
           if (postState) {
+            // Event-eigenes passKind (z.B. von Corner-Header) hat Priorität
+            // vor dem vorangegangenen Pass-Track — ein Kopfball nach Ecke
+            // bekommt so korrekt 'cross' als assistKind statt 'null'.
+            const assistFromEvent = ev.passKind
+            const assistFromTrack = assistKindByTeam.get(actingTeam) ?? null
             goalAssists.push({
               minute: postState.gameTime,
               playerId: ev.playerId,
-              assistKind: assistKindByTeam.get(actingTeam) ?? null,
+              assistKind: assistFromEvent ?? assistFromTrack,
             })
           }
           assistKindByTeam.delete(actingTeam)

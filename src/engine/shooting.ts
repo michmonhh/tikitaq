@@ -265,6 +265,99 @@ export function applyShot(
 }
 
 // ══════════════════════════════════════════
+//  Kopfball nach Flanke/Ecke
+// ══════════════════════════════════════════
+
+export interface HeaderResult {
+  outcome: 'scored' | 'saved' | 'missed'
+  /** Wenn gehalten & ins Aus gefaustet: neue Ecke für Angreifer */
+  deflectedToCorner: boolean
+  event: GameEvent
+}
+
+/**
+ * Löst einen Kopfball-Schuss aus einer Flanken-Situation auf (insbesondere
+ * nach Eckstoß). Der Ball fliegt vom Passer über seinen Bogen direkt zum
+ * Header-Player, der ihn im selben Moment köpft — KEIN Zwischenturn, kein
+ * Ballbesitz-Wechsel.
+ *
+ * Reduzierte Accuracy ggü. Fuß-Schuss: Kopfbälle sind schwerer zu platzieren,
+ * TW hat bessere Reaktionszeit (Ball kommt von schräg-oben in vorhersehbarer
+ * Bahn). Grob: Accuracy ≈ 0.7× Standard-Schuss, save chance +0.10.
+ *
+ * Konsumiert den Pass-Event — das Ergebnis ersetzt das pass_complete durch
+ * ein shot_scored/saved/missed/corner.
+ */
+export function resolveHeaderShot(
+  header: PlayerData,
+  fromPos: Position,  // wo der Kopfball-Spieler beim Köpfen steht
+  attackingTeam: TeamSide,
+  defendingKeeper: PlayerData | null,
+): HeaderResult {
+  const goalCenter = getGoalCenter(attackingTeam)
+
+  // Accuracy: Standard-Schuss-Formel × 0.7 (Kopfball-Malus)
+  const standardAccuracy = calculateShotAccuracy(header, fromPos, attackingTeam)
+  const headerAccuracy = standardAccuracy * 0.7
+  const accRoll = Math.random()
+
+  if (accRoll > headerAccuracy) {
+    // Kopfball geht am Tor vorbei / drüber
+    return {
+      outcome: 'missed',
+      deflectedToCorner: false,
+      event: {
+        type: 'shot_missed',
+        playerId: header.id,
+        position: goalCenter,
+        message: `Kopfball von ${name(header)} geht vorbei!`,
+      },
+    }
+  }
+
+  // TW-Parade-Check (+0.10 gegenüber normalem Schuss — Kopfball ist
+  // vorhersehbarer als Fuß-Schuss, TW steht bereits im 5er positioniert)
+  if (defendingKeeper) {
+    const inLine = isKeeperInShotLine(header, defendingKeeper, goalCenter)
+    if (inLine) {
+      const baseSave = calculateSaveProbability(header, defendingKeeper, goalCenter)
+      const headerSave = Math.min(0.92, baseSave + 0.10)
+      if (Math.random() < headerSave) {
+        // Gehalten — 60 % Chance ins Aus gefaustet (Ecke)
+        const toCorner = Math.random() < 0.60
+        return {
+          outcome: 'saved',
+          deflectedToCorner: toCorner,
+          event: {
+            type: toCorner ? 'corner' : 'shot_saved',
+            playerId: header.id,
+            targetId: defendingKeeper.id,
+            position: goalCenter,
+            message: toCorner
+              ? `${name(defendingKeeper)} faustet den Kopfball zur Ecke!`
+              : `${name(defendingKeeper)} pariert den Kopfball von ${name(header)}!`,
+          },
+        }
+      }
+    }
+  }
+
+  // TOR — Event trägt passKind='cross', damit das Arena-Assist-Tracking
+  // es als Flanken-Tor klassifiziert (nicht als "Alleingang").
+  return {
+    outcome: 'scored',
+    deflectedToCorner: false,
+    event: {
+      type: 'shot_scored',
+      playerId: header.id,
+      position: goalCenter,
+      message: `TOR! ${name(header)} köpft ein!`,
+      passKind: 'cross',
+    },
+  }
+}
+
+// ══════════════════════════════════════════
 //  Elfmeter-Auflösung
 // ══════════════════════════════════════════
 

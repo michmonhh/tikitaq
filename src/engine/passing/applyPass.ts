@@ -9,7 +9,7 @@ import { isOffside, throughBallOffsideProbability } from './offside'
 import { getAnticipation } from '../ai/positioning/anticipation'
 import { getRoleGroup } from '../ai/positioning/roles'
 
-interface PassResult {
+export interface PassResult {
   success: boolean
   passType: PassType
   interceptedBy: PlayerData | null

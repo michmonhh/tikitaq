@@ -6,6 +6,7 @@ import { recordPassEvent } from '../../engine/ai'
 import { adjustConfidence } from '../../engine/confidence'
 import { addTicker, updateTeamStats, findThrowInTaker, findCornerTaker } from './helpers'
 import type { GameStore, StoreSet, StoreGet } from './types'
+import { maybeResolveCornerHeader } from './shared/cornerHeader'
 
 export function makePassBall(set: StoreSet, get: StoreGet): GameStore['passBall'] {
   return (passerId, target, receiverId) => {
@@ -23,6 +24,26 @@ export function makePassBall(set: StoreSet, get: StoreGet): GameStore['passBall'
     }
 
     const result = applyPass({ type: 'pass', playerId: passerId, target, receiverId: receiverId ?? '' }, state)
+
+    // 2026-04-24: Corner-Pass in die Box → direkter Kopfball-Abschluss.
+    // Behebt das Turn-Modell-Problem, bei dem der Empfänger erst nach
+    // einem Gegner-Zug schießen könnte und dabei meistens tackelt wird.
+    // Wenn die Bedingungen greifen, ersetzt der Header-Flow den normalen
+    // Pass-Complete-Pfad.
+    {
+      const headerOutcome = maybeResolveCornerHeader(state, result, state.currentTurn)
+      if (headerOutcome) {
+        set({
+          state: headerOutcome.newState,
+          drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
+          selectedPlayerId: null,
+        })
+        const evType = headerOutcome.newState.lastEvent?.type ?? 'shot_scored'
+        const msg = headerOutcome.newState.lastEvent?.message ?? 'Kopfball'
+        get().showEvent(msg, 2500, evType)
+        return
+      }
+    }
 
     // AI memory + identity: record pass outcome for the passing team.
     // No-op if that team is human-controlled.
