@@ -29,12 +29,13 @@ JSONL-Schema (pro Zeile) — gemäss src/engine/ai/training.ts:
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, IterableDataset
 
 from features import encode_sample, GLOBAL_FEATURE_DIM, OPTION_FEATURE_DIM
 
@@ -124,3 +125,86 @@ def find_dataset_files(datasets_dir: Path, pattern: str = "*.jsonl*") -> list[Pa
     files = sorted(datasets_dir.glob(pattern))
     files = [f for f in files if f.suffix in (".jsonl", ".gz")]
     return files
+
+
+# ── Streaming-Dataset für große Datenmengen (> 1 GB) ──────────────
+
+def _hash_bucket(s: str, modulo: int) -> int:
+    """Deterministischer Hash einer String-ID modulo N."""
+    h = hashlib.md5(s.encode("utf-8")).hexdigest()
+    return int(h[:8], 16) % modulo
+
+
+class TikitaqBCStreamingDataset(IterableDataset):
+    """
+    Streaming-Dataset für große Datenmengen die nicht in den RAM passen.
+
+    Liest die JSONL-Dateien Zeile für Zeile, parst + encodet on-the-fly.
+    RAM-Bedarf konstant (~Batch-Size), egal wie groß der Datensatz ist.
+
+    Train/Val-Split erfolgt deterministisch über den Hash von `match_id`:
+    - Samples mit hash % 10 < val_split*10 → Validation
+    - Rest → Training
+
+    Nachteil: kein echter Shuffle (Dateien werden sequenziell gelesen).
+    Lösung: Daten werden in einer Buffer-Window zufällig gemixt.
+    """
+
+    def __init__(
+        self,
+        paths: list[Path],
+        max_options: int = 16,
+        split: str = "train",
+        val_fraction: float = 0.1,
+        shuffle_buffer: int = 2048,
+    ):
+        super().__init__()
+        self.paths = paths
+        self.max_options = max_options
+        assert split in ("train", "val", "all")
+        self.split = split
+        # val-Bucket: 0..bucket_threshold-1
+        self.bucket_threshold = int(val_fraction * 10)
+        self.shuffle_buffer_size = shuffle_buffer if split == "train" else 0
+
+    def _belongs_to_split(self, match_id: str) -> bool:
+        if self.split == "all":
+            return True
+        bucket = _hash_bucket(match_id, 10)
+        is_val = bucket < self.bucket_threshold
+        return is_val if self.split == "val" else (not is_val)
+
+    def _raw_iter(self) -> Iterator[dict[str, torch.Tensor]]:
+        import random
+        for rec in iter_records(self.paths):
+            if not self._belongs_to_split(rec.get("match_id", "")):
+                continue
+            yield encode_sample(rec, max_options=self.max_options)
+
+    def __iter__(self) -> Iterator[dict[str, torch.Tensor]]:
+        # Optional Shuffle-Buffer: sammelt N Samples, gibt sie zufällig raus.
+        # Kein echter Global-Shuffle, aber lokaler Shuffle reicht bei
+        # Dateien die selbst schon unsortiert sind (match-für-match).
+        import random
+        if self.shuffle_buffer_size <= 0:
+            yield from self._raw_iter()
+            return
+
+        buffer: list[dict[str, torch.Tensor]] = []
+        for sample in self._raw_iter():
+            if len(buffer) < self.shuffle_buffer_size:
+                buffer.append(sample)
+            else:
+                idx = random.randrange(self.shuffle_buffer_size)
+                yield buffer[idx]
+                buffer[idx] = sample
+        random.shuffle(buffer)
+        yield from buffer
+
+    @property
+    def global_dim(self) -> int:
+        return GLOBAL_FEATURE_DIM
+
+    @property
+    def option_dim(self) -> int:
+        return OPTION_FEATURE_DIM

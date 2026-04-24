@@ -24,7 +24,7 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.tensorboard.writer import SummaryWriter
 from tqdm import tqdm
 
-from dataset import TikitaqBCDataset
+from dataset import TikitaqBCDataset, TikitaqBCStreamingDataset
 from model import PolicyNet, bc_loss, accuracy
 
 
@@ -46,6 +46,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--log-dir", type=str, default="runs")
     p.add_argument("--device", type=str, default="auto",
                    help="auto | cpu | cuda | mps (Apple Silicon)")
+    p.add_argument("--streaming", action="store_true",
+                   help="Streaming-Dataset (für Datensätze >1 GB) — konstanter RAM")
+    p.add_argument("--shuffle-buffer", type=int, default=4096,
+                   help="Größe des Shuffle-Buffers im Streaming-Modus")
     return p.parse_args()
 
 
@@ -124,19 +128,39 @@ def main() -> None:
     paths = [Path(p) for p in args.data]
     print(f"Lade {len(paths)} Datei(en)...")
     t0 = time.time()
-    ds = TikitaqBCDataset(paths, max_options=args.max_options)
-    print(f"  {len(ds)} Samples in {time.time() - t0:.1f}s geladen")
-    print(f"  Global-Feature-Dim: {ds.global_dim}")
-    print(f"  Option-Feature-Dim: {ds.option_dim}")
 
-    # Train/Val Split
-    val_n = int(len(ds) * args.val_split)
-    train_n = len(ds) - val_n
-    generator = torch.Generator().manual_seed(args.seed)
-    train_ds, val_ds = random_split(ds, [train_n, val_n], generator=generator)
+    if args.streaming:
+        # Streaming: konstanter RAM egal wie groß die Daten sind.
+        # Hash-basierter Split (deterministisch).
+        train_ds = TikitaqBCStreamingDataset(
+            paths, max_options=args.max_options, split="train",
+            val_fraction=args.val_split, shuffle_buffer=args.shuffle_buffer,
+        )
+        val_ds = TikitaqBCStreamingDataset(
+            paths, max_options=args.max_options, split="val",
+            val_fraction=args.val_split, shuffle_buffer=0,
+        )
+        global_dim = train_ds.global_dim
+        option_dim = train_ds.option_dim
+        print(f"  Streaming-Modus (konstanter RAM)")
+        print(f"  Train/Val Hash-Split: {(1 - args.val_split) * 100:.0f}% / {args.val_split * 100:.0f}%")
+    else:
+        ds = TikitaqBCDataset(paths, max_options=args.max_options)
+        print(f"  {len(ds)} Samples in {time.time() - t0:.1f}s geladen")
+        val_n = int(len(ds) * args.val_split)
+        train_n = len(ds) - val_n
+        generator = torch.Generator().manual_seed(args.seed)
+        train_ds, val_ds = random_split(ds, [train_n, val_n], generator=generator)
+        global_dim = ds.global_dim
+        option_dim = ds.option_dim
 
+    print(f"  Global-Feature-Dim: {global_dim}")
+    print(f"  Option-Feature-Dim: {option_dim}")
+
+    # Shuffle nur für In-Memory-Datasets; Streaming hat eingebauten Shuffle-Buffer
     train_loader = DataLoader(
-        train_ds, batch_size=args.batch_size, shuffle=True, num_workers=0,
+        train_ds, batch_size=args.batch_size,
+        shuffle=not args.streaming, num_workers=0,
     )
     val_loader = DataLoader(
         val_ds, batch_size=args.batch_size, shuffle=False, num_workers=0,
@@ -144,8 +168,8 @@ def main() -> None:
 
     # Modell
     model = PolicyNet(
-        global_dim=ds.global_dim,
-        option_dim=ds.option_dim,
+        global_dim=global_dim,
+        option_dim=option_dim,
         context_dim=args.context_dim,
         hidden_dim=args.hidden_dim,
         dropout=args.dropout,
@@ -182,22 +206,26 @@ def main() -> None:
             f"{dt:.1f}s"
         )
 
-        # Checkpoint nur speichern wenn besser
+        # Zwei Checkpoints: best (nur wenn val_acc besser) + last (immer).
+        # Last ist nützlich für Fortsetzungs-Trainings und als Sicherung
+        # wenn Streaming-Dataset zum letzten Epoch noch lernt.
+        checkpoint_data = {
+            "model_state": model.state_dict(),
+            "global_dim": global_dim,
+            "option_dim": option_dim,
+            "max_options": args.max_options,
+            "context_dim": args.context_dim,
+            "hidden_dim": args.hidden_dim,
+            "dropout": args.dropout,
+            "epoch": epoch,
+            "val_acc": val_acc,
+            "train_acc": train_acc,
+        }
+        torch.save(checkpoint_data, ckpt_dir / "bc_last.pt")
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            ckpt_path = ckpt_dir / "bc_latest.pt"
-            torch.save({
-                "model_state": model.state_dict(),
-                "global_dim": ds.global_dim,
-                "option_dim": ds.option_dim,
-                "max_options": args.max_options,
-                "context_dim": args.context_dim,
-                "hidden_dim": args.hidden_dim,
-                "dropout": args.dropout,
-                "epoch": epoch,
-                "val_acc": val_acc,
-            }, ckpt_path)
-            print(f"  ↳ Neues Best-Modell gespeichert: {ckpt_path} (val_acc={val_acc:.3f})")
+            torch.save(checkpoint_data, ckpt_dir / "bc_latest.pt")
+            print(f"  ↳ Neues Best-Modell gespeichert (val_acc={val_acc:.3f})")
 
     writer.close()
     print(f"\nBest validation accuracy: {best_val_acc:.3f}")
