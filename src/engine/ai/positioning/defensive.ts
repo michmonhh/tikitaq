@@ -182,16 +182,31 @@ export function defensivePosition(
   // ── Antizipations-Tiefenpuffer: nicht vom Stürmer überlaufen lassen ──
   // User-Feedback 2026-04-24: Bochum–Bayern 0:3 in 16 min durch Steilpässe
   // und lange Bälle. Verteidiger standen auf der Abseitslinie, der ST konnte
-  // sie mit einem Sprint überlaufen. Die uncovered-runner-Logik oben zieht
-  // den Verteidiger ZUM Gegner — in dieser Situation muss er aber HINTER
-  // den Gegner, um nicht per Ball in den Rücken ausgespielt zu werden.
+  // sie mit einem Sprint überlaufen.
   //
-  // Logik: für jeden defender, wenn ein offensiver Gegner (ST/OM/LM/RM) in
-  // seiner horizontalen Zone UND in Bedrohungsdistanz vor der Abwehrlinie
-  // steht, setze y auf einen pacing-sensitiven Tiefenpuffer hinter dem
-  // Threat. Langsame Verteidiger vs schnelle Stürmer → größerer Puffer.
+  // Modellierung:
+  // 1. TRIGGER (Erkennung): Gute Antizipation erkennt Threats früher und in
+  //    größerem Radius. Weltklasse-IV (ant≈0.9) sieht Laufbahnen bei 25
+  //    Einheiten Tiefe und 18 Einheiten Breite; Liga-2-IV (ant≈0.45) erst
+  //    bei 15×12 — wenn's oft zu spät ist.
+  // 2. UMSETZUNG (Reaktion): Der ideale Puffer ergibt sich aus pacing-
+  //    Differential. Aber ob der Verteidiger den Puffer tatsächlich
+  //    umsetzt, hängt von seiner Antizipation ab. Schlechte Antizipation
+  //    → Puffer nur teilweise umgesetzt (er fällt zu spät zurück).
+  //
+  // Damit:
+  // - Bayern-IV vs Bayern-ST: kleiner idealer Puffer, hohe Umsetzung →
+  //   eng gestellt aber rechtzeitig.
+  // - Bochum-IV vs Bayern-ST: großer idealer Puffer, niedrige Umsetzung →
+  //   steht nicht tief genug, wird überlaufen. REALISTISCH.
+  // - Bayern-IV vs Bochum-ST: kleiner idealer Puffer, hohe Umsetzung →
+  //   fängt den Stürmer früh ab.
   if (role === 'defender') {
     const goalward = team === 1 ? 1 : -1
+
+    // Trigger-Radius von Antizipation skaliert
+    const triggerDepth = 15 + ant * 12   // 15–25 Einheiten
+    const triggerHorDist = 11 + ant * 8  // 11–19 Einheiten
 
     // Angreifer des Gegners in meiner Zone
     const offensiveThreats = opponents.filter(o => {
@@ -201,20 +216,17 @@ export function defensivePosition(
         || o.positionLabel === 'LM'
         || o.positionLabel === 'RM'
       if (!isOff) return false
-      // Horizontal in meiner Zone (±15)
       const horDist = Math.abs(o.position.x - x)
-      if (horDist > 15) return false
-      // Vertikal: Stürmer noch vor mir UND in Bedrohungsdistanz (≤ 20)
+      if (horDist > triggerHorDist) return false
       const threatDepth = team === 1
-        ? y - o.position.y    // positiv: Stürmer oberhalb (vor Team-1-Verteidiger)
+        ? y - o.position.y
         : o.position.y - y
-      if (threatDepth < 0) return false    // Stürmer schon durch
-      if (threatDepth > 20) return false   // zu weit weg
+      if (threatDepth < 0) return false
+      if (threatDepth > triggerDepth) return false
       return true
     })
 
     if (offensiveThreats.length > 0) {
-      // Gefährlichster Gegner: der am nähesten am eigenen Tor steht
       const ownGoalY = team === 1 ? 100 : 0
       const mostDangerous = offensiveThreats.reduce((best, o) => {
         const bestDist = Math.abs(best.position.y - ownGoalY)
@@ -222,17 +234,19 @@ export function defensivePosition(
         return oDist < bestDist ? o : best
       })
 
-      // Puffer-Distanz nach pacing-Differential + Antizipation
-      // Basis 7 Einheiten, ±3 pacing-abhängig, ±1 antizipationsabhängig
+      // Idealer Puffer nach pacing-Differential (reine Physik)
       const pacingDiff = player.stats.pacing - mostDangerous.stats.pacing
-      const paceAdjust = -pacingDiff * 0.15  // pacingDiff -20 → +3 (tiefer stehen)
-      const antAdjust = (0.65 - ant) * 2     // ant 0.3 → +0.7, ant 0.9 → -0.5
-      const bufferDepth = Math.max(4, Math.min(14, 7 + paceAdjust + antAdjust))
+      const paceAdjust = -pacingDiff * 0.15
+      const idealBufferDepth = Math.max(4, Math.min(14, 7 + paceAdjust))
 
-      // Mindest-y HINTER dem Threat (goalwärts)
-      const safeY = mostDangerous.position.y + goalward * bufferDepth
+      // Antizipations-Umsetzung: wie viel des idealen Puffers wird
+      // tatsächlich realisiert? ant 0.3 → 42 %, ant 0.65 → 75 %,
+      // ant 0.95 → 99 %.
+      const antEffectiveness = 0.30 + ant * 0.72
+      const appliedBufferDepth = idealBufferDepth * antEffectiveness
 
-      // Nur fallback, nicht vorrücken — Ziel: "nicht überlaufen werden"
+      const safeY = mostDangerous.position.y + goalward * appliedBufferDepth
+
       if (team === 1 && y < safeY) {
         y = safeY
         reason = 'Fällt zurück (Antizipation)'
