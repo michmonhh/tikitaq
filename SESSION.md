@@ -1,4 +1,4 @@
-# TIKITAQ — Session-Stand (2026-04-22)
+# TIKITAQ — Session-Stand (2026-04-24)
 
 > Lebendes Protokoll der aktuellen Chat-Sitzung. Nach einem Chat-Crash hier
 > einsteigen: Abschnitt **"Wo wir stehen"** lesen, dann **"Offen"** für den
@@ -7,167 +7,163 @@
 
 ## Wo wir stehen
 
-- Branch: `dev` bei **`32c3557`** (lokal, noch NICHT gepusht).
-- Arena-CLI: `npx tsx scripts/aiArena.ts --roundrobin` läuft 306 Matches in
-  ~25 s und gibt am Ende eine Bundesliga-Vergleichstabelle + Tor-Typen aus.
-- Neu: `--export-training <file>` schreibt State-Action-Paare als JSONL.
-- Replay-Viewer im Browser (Arena → Match simulieren → "Replay anschauen")
-  nutzt 1:1 die Match-Renderer. Team-Farben, Tor-Overlay, Geschwindigkeits-
-  regler 30 % / 50 % / 1× / 2× / 4× alle funktional.
+- Branch: `dev` bei **`ecacc8d`**, gepusht zu `origin/dev`.
+- Arena-CLI: `npx tsx scripts/aiArena.ts --roundrobin` läuft 306 Matches
+  in ~32 s. Ohne Export-Flag noch schneller (~25 s, keine Disk I/O).
+- **Training-Export** mit gzip: `--export-training out.jsonl.gz` schreibt
+  alle State-Action-Paare in komprimiertes JSONL (192 MB → 22 MB).
+- Replay-Viewer im Browser zeigt Team-Farben, Tor-Overlay, MatchIntent-
+  Debug-Chips pro Team, alle Speeds 30 %–4×.
 
-## Architektur der KI (Stand Stufe 4)
+## Architektur-Status (Kernzeile)
 
-Vier Schichten arbeiten zusammen:
+Die Heuristik-KI hat **fünf Schichten**:
 
-1. **TeamPlan** (`ai/teamPlan.ts`) — Spielphasen-Strategie (riskAppetite,
-   Attack/Defense). Wird alle 22.5 min überprüft.
-2. **MatchIntent** (`ai/matchIntent.ts`, NEU) — Angriffsachse (left/center/
-   right) über 3–5 Züge kohärent gehalten. GOAP-light.
-3. **PlayerDecision mit T=2 Lookahead** (`ai/playerDecision.ts` +
-   `playerDecision/lookahead.ts`) — Ballführer-Optionen mit 1-Zug-
-   Minimax + Mitspieler- und Gegner-Antizipation.
+1. **TeamPlan** (`ai/teamPlan.ts`) — Spielphasen-Strategie, alle 22.5 min Review
+2. **MatchIntent** (`ai/matchIntent.ts`) — Angriffsachse left/center/right
+   für 3–5 Züge stabil (GOAP-light)
+3. **PlayerDecision mit Minimax T=2** (`ai/playerDecision.ts` +
+   `playerDecision/lookahead.ts`) — Ballführer-Entscheidung mit 1-Zug-
+   Lookahead + Mitspieler-/Gegner-Antizipation
 4. **Positioning** (`ai/positioning/*`) — pro Turn, reagiert auf
-   MatchIntent via `getIntentPositionShift`.
+   MatchIntent, mit Antizipations-Tiefenpuffer bei nahem Stürmer
+5. **Training-Data-Export** (`ai/training.ts`) — optional, schreibt
+   State-Action-Paare via Arena-CLI
 
-Plus: FieldReading (pro Turn), MatchMemory (pro Match), Confidence
-(per-Spieler dynamisch).
+Plus: Corner-Header-Intercept (`stores/gameStore/shared/cornerHeader.ts`)
+— Corner-Pass in Box wird als direkter Kopfball-Schuss aufgelöst, kein
+Zwischenturn.
 
-## Aktuelle Arena-Metriken (306 Matches, Commit 32c3557)
+## Aktuelle Arena-Metriken (306 Matches, Commit `ecacc8d`)
 
 | Metrik | Simuliert | Bundesliga-Ziel |
 |---|---:|---:|
-| Tore/Match | **2.57** | 3.00 |
-| Heimsieg/Remis/Auswärts | **37 / 25 / 38 %** | 43 / 25 / 32 % |
-| xG/Team | ~1.0 | 1.50 |
-| Passquote | **84.7 %** ✓ | 82 % |
-| Schüsse/Team | 2.2 | 12.5 |
-| Pässe/Team | 35 | 450 |
-| Gelbe / Rote Karten | 1.0 / 0.01 | 1.8 / 0.05 |
-| Eckbälle/Team | 0.7 | 4.5 |
-| **Elfmeter-Anteil an Toren** | **23 %** | 10 % |
-| **Steilpass-Anteil an Open-Play** | **60 %** | ~15 % |
-| **Flanken-Anteil an Open-Play** | **6.9 %** | 18 % |
+| Tore/Match | **2.67–2.82** | 3.00 |
+| Heimsieg / Remis / Auswärts | **40-44 / 18-25 / 34-42 %** | 43 / 25 / 32 % |
+| xG/Team | ~1.2 | 1.50 |
+| Passquote | **88.4 %** | 82 % |
+| Schüsse/Team | 3.2 | 12.5 |
+| Pässe/Team | 33 | 450 |
+| Gelbe / Rote Karten | 0.9 / 0.005 | 1.8 / 0.05 |
+| Eckbälle/Team | 1.0 | 4.5 |
+| **Elfmeter-Anteil an Toren** | **13.4 %** | 10 % |
+| **Corner-Conversion** | **~2.5 %** | 3-5 % |
 
-Passquote, Remis-Quote im Bundesliga-Band. Heim/Remis/Auswärts-Split je
-nach Stufe-4-Run 37–43/20–25/33–40 (Varianz mit Intent-Fixierung). Tor-
-und Schussraten strukturell gedeckelt durch 1 Aktion/Team/Turn.
+Tor-Verteilung (Open-Play) — **fußballerisch plausibel**:
+- Flanke 30.8 % (inkl. Corner-Header)
+- Kurzpass 26.0 %
+- Steilpass 22.6 %
+- Langer Ball 13.7 %
+- Alleingang 7.0 %
 
-## ML-Readiness: Training-Data-Export
+Qualitätsdifferenzierung verifiziert: **Bayern vs Bochum 200 Matches**:
+- Bayern 86 / 10 / 4 % (Siege/Remis/Niederlagen), 3.03 Tore/Match
+- Bochum 4 / 10 / 86 %, 0.58 Tore/Match
 
-Neu mit Stufe 4: Arena kann jede Entscheidung als JSONL speichern:
+## Strukturelle Limits (nicht mit Heuristik lösbar)
 
+| Metrik | Problem |
+|---|---|
+| Schüsse 3.2 vs 12.5 | 1 Aktion/Team/Turn × 180 Turns = karges Schuss-Volumen |
+| Pässe 33 vs 450 | dasselbe |
+| Ecken 1.0 vs 4.5 | zu wenig Ball-Traffic an der Grundlinie |
+| Corner-Anteil an Toren | Conversion gut, aber absolute Ecken-Zahl niedrig |
+
+## ML-Readiness: gemessen
+
+| Runs | Zeit | gzip-Datei | Entscheidungen |
+|---|---:|---:|---:|
+| 1 RR | 32 s | 22 MB | 23k |
+| 10 RRs | 5.5 min | 220 MB | 230k |
+| 50 RRs | 27 min | 1.1 GB | 1.1M |
+| 100 RRs | 55 min | 2.2 GB | 2.3M |
+
+**RAM Peak**: 348 MB mit gzip, ~170 MB ohne. Beides problemlos.
+
+Nutzung:
 ```bash
-npx tsx scripts/aiArena.ts --roundrobin --export-training matches.jsonl
+npx tsx scripts/aiArena.ts --roundrobin --export-training out.jsonl.gz
+# oder SSD-Pfad: /Volumes/<Name>/tikitaq-run01.jsonl.gz
 ```
 
-Pro Zeile: match_id, turn, team, carrier, teammates, opponents, ball,
-intent, options (alle mit score/successChance/reward/target), und
-chosen_option_index. Ein Round-Robin produziert ~22k Entscheidungen.
+## Planned ML-Roadmap (User-Entscheidung)
 
-Python-Einlesebeispiel:
+Der User hat ausdrücklich bestätigt: Heuristik erst ausreizen, dann ML.
+Fictitious Self-Play / League Training als Ziel:
 
-```python
-import json
-with open('matches.jsonl') as f:
-    records = [json.loads(line) for line in f]
-# Features: state (carrier + 10 teammates + 11 opponents + ball)
-# Labels: chosen_option_index
-# → Behavior-Cloning oder Policy-Distillation
-```
+1. **Phase 0**: BC-Vortraining auf Heuristik-Daten (Netz lernt aktuelle
+   KI nachzuahmen) — 1 Woche Setup + Training
+2. **Phase 1**: RL-Gen-1 vs BC-Basis, sucht Exploits — 1–2 Tage
+3. **Phase 2**: Exploit-Analyse → Engine/Heuristik-Fix → Gen-2 vs Gen-1
+4. **Phase 3+**: League — Pool aus 3–5 Checkpoints
 
-Damit ist die ML-Fallback-Option etabliert, die der User explizit wollte.
+Der User startet Phase 0 wenn die Heuristik sich "grundsolide anfühlt".
 
 ## Offen — Priorität absteigend
 
-1. **Torrate unter Ziel (2.57 vs 3.00).** Strukturell begrenzt durch
-   1 Aktion/Team/Turn. Weitere KI-Tuning-Schritte haben marginale
-   Rendite. Hebel: Schuss-Conversion-Boost (Box-Schüsse Saves drücken),
-   Mehr Situationen in denen geschossen wird (anders als Through-Ball).
-2. **Steilpass-Anteil 60 % (Ziel ~15 %).** Trotz Through-Ball-Defense-
-   Fix von Stage-0 noch dominant, weil absolute Schusszahl strukturell
-   niedrig ist. Intent-Shift zum Zentrum beim Flankenziel könnte helfen.
-3. **Heimsieg-Quote 37 % (Ziel 43 %).** Nach Stufe 4 unter Ziel. Run-zu-
-   Run-Varianz hoch (37–43 %). Mehrere Runs mitteln, evtl. Intent-Malus
-   für Gegen-Richtung von -4 auf -2 senken, damit situative Option-
-   Auswahl nicht zu stark unterdrückt wird.
-4. **Echte T=3 Alpha-Beta-Suche** statt unseres pragmatischen "T=2 mit
-   Gegner-Shift". Würde echten Verzweigungsraum durchsuchen inklusive
-   mehrerer Gegnerantwort-Kandidaten. Nächster Schritt falls die
-   Qualität noch höher muss.
-5. **Vollwertige GOAP-Pläne** (nicht nur Angriffsachse, sondern
-   Aktionskette `Pass → Flanke → Kopfball` als deklarativer Plan).
-   Deutlich komplexer, aber der echte Schritt Richtung "Spielzug zu
-   Ende denken".
-6. **ML-Trainings-Pipeline** (Python): Baseline aufsetzen, das
-   Behavior-Cloning auf den exportierten JSONL-Datensätzen. ONNX-Export
-   für Browser-Inferenz via `onnxruntime-web`.
+1. **User-Verifikation im Replay**: fühlen sich die Änderungen (Corner-
+   Header, Grundlinien-Präsenz, Stellen-im-16er) flüssig an?
+2. **Python-Projekt-Skelett** für BC-Training setup (wenn User freigibt)
+3. **Externe SSD-Pfad** vom User liefern, falls er große Trainings-Runs
+   will (ab ~50 RRs aufwärts)
+4. **Structural caps** akzeptieren (Schüsse, Pässe, Ecken-Anzahl). Diese
+   würde nur ein Turn-Modell-Umbau lösen.
 
 ## Änderungen heute (chronologisch, neueste zuerst)
 
-Alle commits sind auf `dev`:
+Alle Commits auf `dev`, gepusht zu `origin/dev`:
 
-- **`32c3557`** — feat(ai): ML-readiness — State-Action-Paare als JSONL
-  exportieren. `training.ts` browser-kompatibel (nur Puffer), Arena-CLI
-  schreibt per fs. `--export-training <file>` als Flag.
-- **`0945c12`** — feat(ai): Stufe-4-MatchIntent — GOAP-light Team-Absicht
-  über mehrere Züge. Angriffsachse (left/center/right) für 4 Turns
-  stabil; Pass- und Positionierungs-Bonusse darauf ausgerichtet.
-- **`8a5a954`** — feat(ai): Stufe-3-Lookahead — Mitspieler- und Gegner-
-  Antizipation. Stürmer ziehen im Simulator in die Box bei Flankensit.,
-  nächste Gegner rücken Richtung neuen Ballbesitzer.
-- **`dc483bf`** — feat(ai): 1-Zug-Lookahead für Ballführer (Stufe 1 von
-  Minimax-Ausbau). Light-Clone-Simulator, 14-Option-Lookahead pro Zug,
-  LOOKAHEAD_WEIGHT=0.15 als Tiebreaker.
-- **`a7c1cb1`** — docs: session status update (pre-Minimax-Ausbau).
-- **`6ffb724`** — tune(tackle): penalty foul rate 0.5× → 0.35×.
-- **`9e3f095`** — tune(ai): wings run to byline + strikers pull into
-  box for crosses.
-- **`6b6b62f`** — fix(passing): through-balls can be intercepted +
-  ground/high split.
-- **`5bf16b5`** — tune(tackle): foul in box 1.5× → 0.5×.
-- **`91e7921`** — fix(arena): preserve set-piece phase across turn
-  boundary.
-
-## Erkenntnisse aus diesem Tiefbau
-
-Wir haben in dieser Sitzung vier KI-Schichten aufgebaut (Stufen 1–4) und
-gelernt:
-
-1. **Lookahead-Simulatoren müssen Mitspieler-Positioning simulieren.**
-   Stufe 1 allein war zu grob (nur Ballträger wird bewegt). Stufe 3
-   musste Stürmer in die Box schieben, damit Flanken-Lookahead Sinn
-   ergibt.
-2. **Heuristik-Bonusse sind komplementär, nicht redundant.** Stufe 2
-   (Halbierung) hat Tore verringert — die Bonusse decken Bereiche ab,
-   die der Lookahead strukturell nicht sehen kann (z. B. „ST in
-   der Box bei Flanken", weil der Simulator das nicht positioniert).
-3. **Strukturelle Limits dominieren.** 1 Aktion/Team/Turn × 180 Turns
-   gibt ~2.5 Schüsse/Team. Jede KI-Verbesserung kann das absolute
-   Torvolumen nur marginal erhöhen; der Hebel liegt bei Entscheidungs-
-   qualität pro Zug (Conversion), nicht bei Entscheidungsmenge.
-4. **GOAP-light (Stufe 4) bringt qualitatives Verhalten.** Heimsieg-
-   Quote nähert sich dem Bundesliga-Band, Flanken-Nutzung steigt. Das
-   ist der erwartbare Effekt kollektiver Muster gegenüber isolierter
-   Einzelentscheidungen.
+- **`ecacc8d`** — feat(arena): gzip-Kompression für Training-Export.
+  192 MB → 22 MB pro Round Robin. Streaming-gzip, sauberer Abschluss.
+- **`d8045b7`** — feat(engine): Corner-Pass in Box = direkter Kopfball.
+  Löst das Turn-Modell-Problem: Flankenankunft und Abschluss im selben
+  Zug, kein Gegnerzug dazwischen. Corner-Conversion 1.2 % → 2.5 %,
+  Corner-Tore 7 → ~12-21 pro Round Robin.
+- **`25ebbde`** — feat(ai): Grundlinien-Präsenz + Ecken-Verwertung.
+  Stürmer-yFloor 35→28, Stürmer-in-Box auch bei zentralem Ballbesitz,
+  LM/RM aggressiver Grundlinienlauf, Ecken-Taker +25 für Flanke,
+  Corner-Cooldown-Schuss-Bonus.
+- **`5bf51d3`** — feat(engine): sechs neue Ecken-Quellen. Tackle nahe
+  Grundlinie, geblockter Schuss, abgefälschte Flanke, TW-Faust-Parade,
+  Pass-Deflection im 16er, Emergency-Clearance als KI-Option. Ecken
+  0.7/Team → 0.9/Team.
+- **`b1691a8`** — fix(ai): Verteidiger stellen statt zuwerfen im 16er.
+  Elfmeter-Anteil 33 % → 16 %. Strukturelle Anti-Elfmeter-Lösung.
+- **`12da93c`** — fix(ai): Abwehrkette hält zusammen. Max-Spread=8,
+  zentrale-nicht-höher. Steilpass-Monokultur aufgelöst.
+- **`310ac17`** — tune(ai): Antizipations-Qualität differenziert. Bayern
+  verteidigt enger, Bochum bekommt längeren Puffer, setzt ihn aber
+  nur teilweise um.
+- **`8c5bc3d`** — fix(ai): Verteidiger halten Tiefenpuffer gegen
+  Angreifer an Abseitslinie. Adressiert User-Befund "0:3 in 16 Min
+  durch Tiefenbälle".
+- **`2e84759`** — feat(replay): MatchIntent-Debug-Overlay pro Team.
+- **`3f3715a`** — docs: session status (vor heutigen Iterationen).
+- **`32c3557`** — feat(ai): ML-readiness, JSONL-Export.
+- **`0945c12`** — feat(ai): Stufe-4-MatchIntent (GOAP-light).
+- **`8a5a954`** — feat(ai): Stufe-3-Lookahead mit Antizipation.
+- **`dc483bf`** — feat(ai): 1-Zug-Lookahead für Ballführer (Stufe 1).
 
 ## Arbeitsumgebung
 
 - Repo: `~/Documents/tikitaq`.
 - Remote: `https://github.com/michmonhh/tikitaq.git`, Branch `dev`.
-- Main-Branch (`origin/main`) unverändert seit 18. April — bewusst nicht
-  pushen damit Cloudflare nichts auto-deployt.
+- Main-Branch unverändert seit 18. April (Cloudflare-Deploy blockieren).
 - Dev-Server: `npm run dev` auf http://localhost:5173/
 - Arena-CLI: `npx tsx scripts/aiArena.ts --roundrobin`
-- Training-Export: `npx tsx scripts/aiArena.ts --roundrobin --export-training out.jsonl`
+- Training-Export: `--export-training out.jsonl.gz` anhängen
+- Diagnose-Skripte:
+  - `scripts/analyzeCornerGoals.ts` — Tore aus Ecken zählen
+  - `scripts/analyzeCornerFlow.ts` — Corner-Event-Kette analysieren
+  - `scripts/testBochumBayern.ts` — Qualitätsdifferenzierungs-Test
+  - `scripts/debugCorner.ts` — Replay-basierter Corner-Frame-Dump
 
 ## Nächster konkreter Schritt
 
-Push nach `origin/dev` (5 neue Commits lokal). Dann User-Replay-
-Verifikation: Wirken die Stufen im Live-Spiel? Hat die KI sichtbare
-Muster (Links-Angriff über mehrere Züge statt Zufalls-Richtung)?
+Entscheidung liegt beim User:
+- **A**: Weiter Heuristik schleifen (aber der sinnvolle Hebelraum ist ausgereizt)
+- **B**: Python-ML-Projekt starten (BC-Phase 0)
+- **C**: Replay-Verifikation per Browser-Test bevor ML
 
-Falls qualitativ noch nicht ausreichend: Python-ML-Baseline aufsetzen
-(Offline-Skript liest das JSONL, trainiert ein einfaches PyTorch-Policy-
-Net, exportiert als ONNX, Browser lädt es per `onnxruntime-web` und
-ruft es in der KI-Entscheidung auf). Dann vergleichen wir Arena-Metriken
-der Heuristik-KI gegen die gelernte Policy.
+Aktueller Favorit nach User-Kommentaren: **B**, sobald die Heuristik
+sich grundsolide anfühlt.
