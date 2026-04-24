@@ -20,6 +20,12 @@ import type { ArenaMatchResult } from '../src/engine/simulation/replayTypes'
 import {
   initTrainingExport, setTrainingMatchId, endTrainingMatch, drainTrainingBuffer,
 } from '../src/engine/ai/training'
+import { loadOnnxPolicy, type OnnxPolicy } from '../src/engine/ai/policy/onnxPolicy'
+import { setPolicyDecision, clearPolicyDecisions } from '../src/engine/ai/policy/override'
+import { getBallCarrier } from '../src/engine/formation'
+import { generateOptions } from '../src/engine/ai/playerDecision'
+import { getIntent } from '../src/engine/ai/matchIntent'
+import type { GameState, TeamSide } from '../src/engine/types'
 
 let trainingOutputPath: string | null = null
 let trainingGzipStream: zlib.Gzip | null = null
@@ -85,8 +91,45 @@ async function main() {
     console.log(`🤖  Training-Export aktiv → ${exportFile}${gz}\n`)
   }
 
+  // --bc-policy <path>: ONNX-Modell laden und als KI statt Heuristik nutzen.
+  // Gilt für beide Teams (oder via --bc-team <1|2> nur für eines, falls man
+  // ein A/B-Experiment will).
+  const bcPolicyPath = arg('--bc-policy')
+  let bcPolicy: OnnxPolicy | null = null
+  let bcTeam: TeamSide | null = null  // null = beide Teams nutzen die Policy
+  if (bcPolicyPath) {
+    console.log(`🧠  Lade BC-Policy: ${bcPolicyPath}`)
+    bcPolicy = await loadOnnxPolicy(bcPolicyPath)
+    const teamArg = arg('--bc-team')
+    if (teamArg === '1' || teamArg === '2') {
+      bcTeam = Number(teamArg) as TeamSide
+      console.log(`   aktiviert für Team ${bcTeam}\n`)
+    } else {
+      console.log(`   aktiviert für beide Teams\n`)
+    }
+  }
+  // Baue den onBeforeAITurn Hook (identisch für alle Matches).
+  const matchOptions = bcPolicy
+    ? {
+        onBeforeAITurn: async (state: GameState, team: TeamSide) => {
+          if (bcTeam !== null && team !== bcTeam) return
+          const carrier = getBallCarrier(state.players, state.ball.ownerId)
+          if (!carrier || carrier.team !== team) return
+          if (carrier.positionLabel === 'TW' || state.mustPass) return  // Forced passes bleiben heuristisch
+          const options = generateOptions(carrier, state, team)
+          if (options.length === 0) return
+          const chosenIndex = await bcPolicy!.chooseOption(
+            state, team, carrier, options, getIntent(team),
+          )
+          setPolicyDecision(carrier.id, {
+            options, chosenIndex, source: 'bc-policy',
+          })
+        },
+      }
+    : {}
+
   if (hasFlag('--roundrobin')) {
-    await runRoundRobin()
+    await runRoundRobin(matchOptions)
     return
   }
 
@@ -106,7 +149,8 @@ async function main() {
   const results: ArenaMatchResult[] = []
   for (let i = 0; i < runs; i++) {
     setTrainingMatchId(`${home.shortName}-${away.shortName}-${i + 1}`)
-    const r = runAIMatch(homeId, awayId)
+    clearPolicyDecisions()
+    const r = await runAIMatch(homeId, awayId, matchOptions)
     endTrainingMatch()
     flushTrainingToFile()
     results.push(r)
@@ -116,7 +160,9 @@ async function main() {
   printAggregate(home.name, away.name, results)
 }
 
-async function runRoundRobin() {
+async function runRoundRobin(
+  matchOptions: Parameters<typeof runAIMatch>[2] = {},
+) {
   const teams = TEAMS
   const total = teams.length * (teams.length - 1)
   console.log(`🏟  Round-Robin — ${teams.length} Teams, ${total} Matches (Hin- + Rückspiele)\n`)
@@ -129,7 +175,8 @@ async function runRoundRobin() {
       if (home.id === away.id) continue
       i++
       setTrainingMatchId(`${home.shortName}-${away.shortName}-${i}`)
-      const r = runAIMatch(home.id, away.id)
+      clearPolicyDecisions()
+      const r = await runAIMatch(home.id, away.id, matchOptions)
       endTrainingMatch()
       flushTrainingToFile()
       results.push(r)

@@ -29,17 +29,27 @@ export interface RunAIMatchOptions {
   record?: boolean
   /** true = mit Verlängerung und Elfmeterschießen. Default false (Liga-Match). */
   mustDecide?: boolean
+  /**
+   * Pre-AI-Action-Hook: wird VOR jedem executeAITurn aufgerufen. Kann
+   * asynchron sein (z.B. für ONNX-Inferenz einer BC-Policy). Der Hook
+   * sollte bei Bedarf `setPolicyDecision()` aufrufen, damit der Ball-
+   * führer die ML-Entscheidung statt der Heuristik nutzt.
+   */
+  onBeforeAITurn?: (
+    state: import('../types').GameState,
+    team: import('../types').TeamSide,
+  ) => Promise<void> | void
 }
 
 /**
  * Spielt ein Match home vs. away mit beiden Teams als KI durch.
- * Synchron — kein React/DOM nötig.
+ * Async — erlaubt Policy-Hooks (ONNX-Inferenz) zwischen Zügen.
  */
-export function runAIMatch(
+export async function runAIMatch(
   homeId: number,
   awayId: number,
   options: RunAIMatchOptions = {},
-): ArenaMatchResult {
+): Promise<ArenaMatchResult> {
   const store = useGameStore
   const t0 = Date.now()
 
@@ -141,6 +151,13 @@ export function runAIMatch(
     //    1. executeAITurn() liefert die Actions
     //    2. Actions über die Store-Actions anwenden (wie makeExecuteAI)
     //    3. Event einfangen, dann endCurrentTurn ──
+    // Pre-AI-Hook: erlaubt async Policy-Inferenz VOR executeAITurn.
+    // Der Hook kann setPolicyDecision() aufrufen, was decideBallAction
+    // dann am Anfang verbraucht statt die Heuristik zu laufen.
+    if (options.onBeforeAITurn) {
+      await options.onBeforeAITurn(s, s.currentTurn)
+    }
+
     try {
       const actions = executeAITurn(s)
 

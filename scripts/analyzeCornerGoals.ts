@@ -42,7 +42,7 @@ for (const home of teams) {
     i++
 
     // Match mit Replay aufnehmen
-    const r = runAIMatch(home.id, away.id, { record: true })
+    const r = await runAIMatch(home.id, away.id, { record: true })
     const snaps = r.replay?.snapshots ?? []
     if (snaps.length === 0) continue
 

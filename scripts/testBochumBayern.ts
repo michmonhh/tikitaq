@@ -34,9 +34,9 @@ function emptyBucket(): Bucket {
   }
 }
 
-function runSeries(homeId: number, awayId: number, homeBucket: Bucket, awayBucket: Bucket) {
+async function runSeries(homeId: number, awayId: number, homeBucket: Bucket, awayBucket: Bucket) {
   for (let i = 0; i < RUNS; i++) {
-    const r = runAIMatch(homeId, awayId)
+    const r = await runAIMatch(homeId, awayId)
     homeBucket.matches++
     awayBucket.matches++
     homeBucket.goalsFor += r.score.team1
@@ -88,7 +88,7 @@ console.log(`🔬  Testserie: ${BOC.name} vs ${MUC.name}   —   ${RUNS} Matches
 const mucHome = emptyBucket()
 const bocAway = emptyBucket()
 console.log(`Serie 1: ${MUC.name} zuhause...`)
-runSeries(MUC.id, BOC.id, mucHome, bocAway)
+await runSeries(MUC.id, BOC.id, mucHome, bocAway)
 printBucket(`${MUC.name} (Heim)`, mucHome)
 printBucket(`${BOC.name} (Auswärts)`, bocAway)
 
@@ -96,7 +96,7 @@ printBucket(`${BOC.name} (Auswärts)`, bocAway)
 const bocHome = emptyBucket()
 const mucAway = emptyBucket()
 console.log(`\n\nSerie 2: ${BOC.name} zuhause...`)
-runSeries(BOC.id, MUC.id, bocHome, mucAway)
+await runSeries(BOC.id, MUC.id, bocHome, mucAway)
 printBucket(`${BOC.name} (Heim)`, bocHome)
 printBucket(`${MUC.name} (Auswärts)`, mucAway)
 

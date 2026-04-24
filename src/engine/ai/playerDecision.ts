@@ -30,6 +30,7 @@ import { toAction, getReceiverLabel } from './playerDecision/helpers'
 import { lookaheadValue, AI_LOOKAHEAD_ENABLED, AI_LOOKAHEAD_WEIGHT } from './playerDecision/lookahead'
 import { getIntent, getIntentPassBonus } from './matchIntent'
 import { recordDecision, isTrainingExportActive } from './training'
+import { consumePolicyDecision } from './policy/override'
 
 /**
  * Entscheidet was der Ballführer tut.
@@ -51,6 +52,18 @@ export function decideBallAction(
   }
   if (carrier.positionLabel === 'TW') {
     return chooseForcedPass(carrier, state, team, plan, fieldReading, reasoning, null)
+  }
+
+  // ── Policy-Override (ML-Inferenz aus vorherigem async Aufruf) ──
+  // Wird von runAIMatch vor executeAITurn gefüllt, wenn eine BC-Policy
+  // aktiv ist. Die gewählte Option überspringt die Heuristik komplett.
+  const override = consumePolicyDecision(carrier.id)
+  if (override) {
+    const best = override.options[override.chosenIndex]
+    if (best) {
+      reasoning.set(carrier.id, `[${override.source}] ${best.reason}`)
+      return toAction(carrier, best)
+    }
   }
 
   // ── Alle Optionen generieren ──
@@ -334,7 +347,7 @@ function chooseForcedPass(
 //  Optionen generieren
 // ══════════════════════════════════════════
 
-function generateOptions(
+export function generateOptions(
   carrier: PlayerData,
   state: GameState,
   team: TeamSide,

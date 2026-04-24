@@ -22,6 +22,7 @@
 
 set -e
 set -o pipefail
+shopt -s nullglob  # leere Globs werden zu leeren Strings (nicht zu "run*.jsonl.gz")
 
 NUM_RRS="${1:-200}"
 NUM_EPOCHS="${2:-25}"
@@ -48,7 +49,8 @@ log "Phase 1: Generating $NUM_RRS round-robin datasets..."
 mkdir -p "$DATASETS_DIR"
 
 # Bestimme Startnummer: falls schon Dateien da, weiter zählen
-EXISTING=$(ls "$DATASETS_DIR"/run*.jsonl.gz 2>/dev/null | wc -l | tr -d ' ')
+EXISTING_FILES=("$DATASETS_DIR"/run*.jsonl.gz)
+EXISTING=${#EXISTING_FILES[@]}
 log "  Existing runs: $EXISTING"
 START_IDX=$((EXISTING + 1))
 END_IDX=$((EXISTING + NUM_RRS))
@@ -72,8 +74,9 @@ for i in $(seq "$START_IDX" "$END_IDX"); do
   fi
 done
 
-TOTAL_DATASETS=$(ls "$DATASETS_DIR"/run*.jsonl.gz 2>/dev/null | wc -l | tr -d ' ')
-TOTAL_SIZE=$(du -sh "$DATASETS_DIR" | cut -f1)
+TOTAL_FILES=("$DATASETS_DIR"/run*.jsonl.gz)
+TOTAL_DATASETS=${#TOTAL_FILES[@]}
+TOTAL_SIZE=$(du -sh "$DATASETS_DIR" 2>/dev/null | cut -f1)
 log ""
 log "Datasets fertig: $TOTAL_DATASETS Dateien, gesamt $TOTAL_SIZE"
 

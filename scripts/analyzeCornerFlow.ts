@@ -53,7 +53,7 @@ for (const home of teams) {
   for (const away of teams) {
     if (home.id === away.id) continue
     matchCount++
-    const r = runAIMatch(home.id, away.id, { record: true })
+    const r = await runAIMatch(home.id, away.id, { record: true })
     const snaps = r.replay?.snapshots ?? []
 
     // Corner-Events suchen

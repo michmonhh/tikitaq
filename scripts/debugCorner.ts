@@ -10,7 +10,7 @@ for (let matchNum = 0; matchNum < 20 && !found; matchNum++) {
   const home = matchNum % 18
   const away = (matchNum + 7) % 18
   if (home === away) continue
-  const result = runAIMatch(home, away, { record: true })
+  const result = await runAIMatch(home, away, { record: true })
   const snapshots = result.replay?.snapshots ?? []
 
   // Scan alle Snapshots für corner-Events oder corner-Phase
