@@ -1,4 +1,4 @@
-# TIKITAQ — Session-Stand (2026-04-24)
+# TIKITAQ — Session-Stand (2026-04-25)
 
 > Lebendes Protokoll der aktuellen Chat-Sitzung. Nach einem Chat-Crash hier
 > einsteigen: Abschnitt **"Wo wir stehen"** lesen, dann **"Offen"** für den
@@ -7,163 +7,143 @@
 
 ## Wo wir stehen
 
-- Branch: `dev` bei **`ecacc8d`**, gepusht zu `origin/dev`.
-- Arena-CLI: `npx tsx scripts/aiArena.ts --roundrobin` läuft 306 Matches
-  in ~32 s. Ohne Export-Flag noch schneller (~25 s, keine Disk I/O).
-- **Training-Export** mit gzip: `--export-training out.jsonl.gz` schreibt
-  alle State-Action-Paare in komprimiertes JSONL (192 MB → 22 MB).
-- Replay-Viewer im Browser zeigt Team-Farben, Tor-Overlay, MatchIntent-
-  Debug-Chips pro Team, alle Speeds 30 %–4×.
+- Branch: `dev` bei **`9712373`**, gepusht zu `origin/dev`.
+- **Stufe 1 (Heuristik)**: abgeschlossen, 14 Iterationen in zwei Tagen.
+- **Stufe 2 (Behavior Cloning)**: Python-Pipeline komplett + erster
+  Test-Lauf erfolgreich — **75.3 % Top-1 / 95.6 % Top-3**.
+- **Aktuell läuft**: overnight D-Run (300 RRs, 10 Epochen, ~7.5 h) im
+  Hintergrund. Log: `ml/overnight.log`.
+- **Nächster Schritt**: Reward-Funktion für Stufe 3 definieren, dann
+  RL-Infrastruktur bauen.
 
-## Architektur-Status (Kernzeile)
+## Fortschritt heute
 
-Die Heuristik-KI hat **fünf Schichten**:
+### Stufe 2 komplett gebaut
 
-1. **TeamPlan** (`ai/teamPlan.ts`) — Spielphasen-Strategie, alle 22.5 min Review
-2. **MatchIntent** (`ai/matchIntent.ts`) — Angriffsachse left/center/right
-   für 3–5 Züge stabil (GOAP-light)
-3. **PlayerDecision mit Minimax T=2** (`ai/playerDecision.ts` +
-   `playerDecision/lookahead.ts`) — Ballführer-Entscheidung mit 1-Zug-
-   Lookahead + Mitspieler-/Gegner-Antizipation
-4. **Positioning** (`ai/positioning/*`) — pro Turn, reagiert auf
-   MatchIntent, mit Antizipations-Tiefenpuffer bei nahem Stürmer
-5. **Training-Data-Export** (`ai/training.ts`) — optional, schreibt
-   State-Action-Paare via Arena-CLI
+Komplette Python-Pipeline in `ml/`:
+- `dataset.py`: Streaming- und In-Memory-Dataset (JSONL.gz → PyTorch)
+- `features.py`: State → Tensor (296-dim global, 15-dim per option)
+- `model.py`: Option-basiertes PolicyNet (122k Parameter)
+- `train_bc.py`: Cross-Entropy-Training mit MPS/GPU-Support
+- `evaluate_bc.py`: Top-1/Top-3 Accuracy + Per-Option-Typ-Breakdown
+- `export_onnx.py`: PyTorch → ONNX (482 KB Modell)
+- `overnight.sh`: Orchestrierung für Nacht-Runs (Gen + Training + Export)
+- Streaming-Dataset für >1 GB Daten mit konstantem RAM
 
-Plus: Corner-Header-Intercept (`stores/gameStore/shared/cornerHeader.ts`)
-— Corner-Pass in Box wird als direkter Kopfball-Schuss aufgelöst, kein
-Zwischenturn.
+### Testlauf verifiziert Pipeline
 
-## Aktuelle Arena-Metriken (306 Matches, Commit `ecacc8d`)
+Kleiner Test (10 RRs, 5 Epochen, ~12 Min):
+- val_acc Progression: 0.723 → 0.733 → 0.740 → 0.748
+- **Top-1 Final: 0.753 / Top-3 Final: 0.956**
+- Per-Typ: shoot 96.7 %, through_ball 89.5 %, advance 88 %,
+  short_pass 69 %, dribble 55 %, cross 53 %, long_ball 49 %, hold 37 %
+
+### Bugs gefixt
+- `set -o pipefail` + `ls`-Glob-Crash bei leerem Datasets-Verzeichnis
+  → `shopt -s nullglob` + array-basierte Zählung
+
+## Aktuelle Arena-Metriken (Heuristik, Basis für BC)
 
 | Metrik | Simuliert | Bundesliga-Ziel |
 |---|---:|---:|
-| Tore/Match | **2.67–2.82** | 3.00 |
-| Heimsieg / Remis / Auswärts | **40-44 / 18-25 / 34-42 %** | 43 / 25 / 32 % |
-| xG/Team | ~1.2 | 1.50 |
-| Passquote | **88.4 %** | 82 % |
-| Schüsse/Team | 3.2 | 12.5 |
-| Pässe/Team | 33 | 450 |
-| Gelbe / Rote Karten | 0.9 / 0.005 | 1.8 / 0.05 |
-| Eckbälle/Team | 1.0 | 4.5 |
-| **Elfmeter-Anteil an Toren** | **13.4 %** | 10 % |
-| **Corner-Conversion** | **~2.5 %** | 3-5 % |
+| Tore/Match | 2.67–2.82 | 3.00 |
+| Heimsieg/Remis/Auswärts | 40-44/18-25/34-42 % | 43/25/32 % |
+| Passquote | 88.6 % | 82 % |
+| Elfmeter-Anteil | 13.4 % | 10 % |
+| Corner-Conversion | ~2.5 % | 3-5 % |
 
-Tor-Verteilung (Open-Play) — **fußballerisch plausibel**:
-- Flanke 30.8 % (inkl. Corner-Header)
-- Kurzpass 26.0 %
-- Steilpass 22.6 %
-- Langer Ball 13.7 %
-- Alleingang 7.0 %
+Tor-Verteilung ausgewogen: Flanke 31 %, Kurzpass 26 %, Steilpass 23 %,
+Langer Ball 14 %, Solo 7 %, Elfmeter 13 %.
 
-Qualitätsdifferenzierung verifiziert: **Bayern vs Bochum 200 Matches**:
-- Bayern 86 / 10 / 4 % (Siege/Remis/Niederlagen), 3.03 Tore/Match
-- Bochum 4 / 10 / 86 %, 0.58 Tore/Match
+## Aktueller overnight D-Run
 
-## Strukturelle Limits (nicht mit Heuristik lösbar)
+Start: nach dem Test-Lauf um 00:29
+Parameter: 300 RRs, 10 Epochen
+Erwartet: ~7.5 h (Gen 2.7 h + Training 5 h + Export 0.1 h)
+Erwartete finale Top-1: ~82-85 %
 
-| Metrik | Problem |
-|---|---|
-| Schüsse 3.2 vs 12.5 | 1 Aktion/Team/Turn × 180 Turns = karges Schuss-Volumen |
-| Pässe 33 vs 450 | dasselbe |
-| Ecken 1.0 vs 4.5 | zu wenig Ball-Traffic an der Grundlinie |
-| Corner-Anteil an Toren | Conversion gut, aber absolute Ecken-Zahl niedrig |
+Status-Check: `tail -f ml/overnight.log`
 
-## ML-Readiness: gemessen
+## Roadmap
 
-| Runs | Zeit | gzip-Datei | Entscheidungen |
+| Phase | Status | Beschreibung |
+|---|---|---|
+| **1 — Heuristik** | ✅ | 5-Schicht-KI, alle strukturellen Fixes |
+| **2 — Behavior Cloning** | 🏃 läuft | Python-Pipeline + BC-Training |
+| 3 — ONNX-Integration | TODO | BC-Netz als TS-Arena-KI einbinden |
+| 4 — A/B-Vergleich | TODO | BC vs Heuristik in der Arena |
+| 5 — Reward-Definition | **in Arbeit** | Reward-Funktion für PPO/RL |
+| 6 — RL-Infrastruktur | TODO | PPO-Setup, ONNX-Inferenz in TS |
+| 7 — RL-Finetune | TODO | Self-Play Gen 1 vs BC-Basis |
+| 8 — League Training | TODO | Pool aus 3-5 Checkpoints |
+
+## Performance-Benchmark (M1 MacBook Air, 8 GB RAM)
+
+| Aufgabe | Zeit | Disk | RAM Peak |
 |---|---:|---:|---:|
-| 1 RR | 32 s | 22 MB | 23k |
-| 10 RRs | 5.5 min | 220 MB | 230k |
-| 50 RRs | 27 min | 1.1 GB | 1.1M |
-| 100 RRs | 55 min | 2.2 GB | 2.3M |
+| 1 RR mit JSONL-gzip | 32 s | 22 MB | 350 MB |
+| 10 RRs + 5 Epochen BC | 11.5 min | 227 MB | 350 MB |
+| 300 RRs + 10 Epochen BC | ~7.5 h | 6.6 GB | 2-3 GB |
 
-**RAM Peak**: 348 MB mit gzip, ~170 MB ohne. Beides problemlos.
+## Entscheidungsfragen für Reward-Funktion (Stufe 5)
 
-Nutzung:
-```bash
-npx tsx scripts/aiArena.ts --roundrobin --export-training out.jsonl.gz
-# oder SSD-Pfad: /Volumes/<Name>/tikitaq-run01.jsonl.gz
-```
-
-## Planned ML-Roadmap (User-Entscheidung)
-
-Der User hat ausdrücklich bestätigt: Heuristik erst ausreizen, dann ML.
-Fictitious Self-Play / League Training als Ziel:
-
-1. **Phase 0**: BC-Vortraining auf Heuristik-Daten (Netz lernt aktuelle
-   KI nachzuahmen) — 1 Woche Setup + Training
-2. **Phase 1**: RL-Gen-1 vs BC-Basis, sucht Exploits — 1–2 Tage
-3. **Phase 2**: Exploit-Analyse → Engine/Heuristik-Fix → Gen-2 vs Gen-1
-4. **Phase 3+**: League — Pool aus 3–5 Checkpoints
-
-Der User startet Phase 0 wenn die Heuristik sich "grundsolide anfühlt".
-
-## Offen — Priorität absteigend
-
-1. **User-Verifikation im Replay**: fühlen sich die Änderungen (Corner-
-   Header, Grundlinien-Präsenz, Stellen-im-16er) flüssig an?
-2. **Python-Projekt-Skelett** für BC-Training setup (wenn User freigibt)
-3. **Externe SSD-Pfad** vom User liefern, falls er große Trainings-Runs
-   will (ab ~50 RRs aufwärts)
-4. **Structural caps** akzeptieren (Schüsse, Pässe, Ecken-Anzahl). Diese
-   würde nur ein Turn-Modell-Umbau lösen.
+Parallel zum laufenden BC-Training klären:
+- Ballbesitz-Philosophie? (Aufbau vs Umschalt)
+- Risikofreude? (Ballverlust tolerieren vs. sicher spielen)
+- Tor-Jagd vs Ergebnis-Sichern (bei Führung)
+- Gewicht von Nebenkriegsschauplätzen (Ecken, Fouls ziehen)
 
 ## Änderungen heute (chronologisch, neueste zuerst)
 
 Alle Commits auf `dev`, gepusht zu `origin/dev`:
 
+- **`9712373`** — feat(ml): Streaming-Dataset + Overnight-Orchestrierung.
+  IterableDataset für große Datenmengen (konstanter RAM), overnight.sh
+  für autonome Nacht-Runs mit Disk-Space-Check.
+- **`b3cff1e`** — feat(ml): Python-Projekt für Behavior-Cloning.
+  Komplette Pipeline: Dataset-Loader, Feature-Encoder, PolicyNet,
+  Training, Eval, ONNX-Export.
 - **`ecacc8d`** — feat(arena): gzip-Kompression für Training-Export.
-  192 MB → 22 MB pro Round Robin. Streaming-gzip, sauberer Abschluss.
+  192 MB → 22 MB pro Round Robin.
 - **`d8045b7`** — feat(engine): Corner-Pass in Box = direkter Kopfball.
-  Löst das Turn-Modell-Problem: Flankenankunft und Abschluss im selben
-  Zug, kein Gegnerzug dazwischen. Corner-Conversion 1.2 % → 2.5 %,
-  Corner-Tore 7 → ~12-21 pro Round Robin.
+  Löst das Turn-Modell-Problem (Gegnerzug zwischen Flanke und Abschluss).
 - **`25ebbde`** — feat(ai): Grundlinien-Präsenz + Ecken-Verwertung.
-  Stürmer-yFloor 35→28, Stürmer-in-Box auch bei zentralem Ballbesitz,
-  LM/RM aggressiver Grundlinienlauf, Ecken-Taker +25 für Flanke,
-  Corner-Cooldown-Schuss-Bonus.
-- **`5bf51d3`** — feat(engine): sechs neue Ecken-Quellen. Tackle nahe
-  Grundlinie, geblockter Schuss, abgefälschte Flanke, TW-Faust-Parade,
-  Pass-Deflection im 16er, Emergency-Clearance als KI-Option. Ecken
-  0.7/Team → 0.9/Team.
+- **`5bf51d3`** — feat(engine): sechs neue Ecken-Quellen +
+  Emergency-Clearance.
 - **`b1691a8`** — fix(ai): Verteidiger stellen statt zuwerfen im 16er.
-  Elfmeter-Anteil 33 % → 16 %. Strukturelle Anti-Elfmeter-Lösung.
-- **`12da93c`** — fix(ai): Abwehrkette hält zusammen. Max-Spread=8,
-  zentrale-nicht-höher. Steilpass-Monokultur aufgelöst.
-- **`310ac17`** — tune(ai): Antizipations-Qualität differenziert. Bayern
-  verteidigt enger, Bochum bekommt längeren Puffer, setzt ihn aber
-  nur teilweise um.
-- **`8c5bc3d`** — fix(ai): Verteidiger halten Tiefenpuffer gegen
-  Angreifer an Abseitslinie. Adressiert User-Befund "0:3 in 16 Min
-  durch Tiefenbälle".
-- **`2e84759`** — feat(replay): MatchIntent-Debug-Overlay pro Team.
-- **`3f3715a`** — docs: session status (vor heutigen Iterationen).
-- **`32c3557`** — feat(ai): ML-readiness, JSONL-Export.
-- **`0945c12`** — feat(ai): Stufe-4-MatchIntent (GOAP-light).
-- **`8a5a954`** — feat(ai): Stufe-3-Lookahead mit Antizipation.
-- **`dc483bf`** — feat(ai): 1-Zug-Lookahead für Ballführer (Stufe 1).
+- **`12da93c`** — fix(ai): Abwehrkette hält zusammen.
+- **`310ac17`** — tune(ai): Antizipation abhängig von Verteidiger-Qualität.
+- **`8c5bc3d`** — fix(ai): Verteidiger halten Tiefenpuffer.
+- **`2e84759`** — feat(replay): MatchIntent-Debug-Overlay.
 
 ## Arbeitsumgebung
 
 - Repo: `~/Documents/tikitaq`.
 - Remote: `https://github.com/michmonhh/tikitaq.git`, Branch `dev`.
-- Main-Branch unverändert seit 18. April (Cloudflare-Deploy blockieren).
+- Main-Branch unverändert seit 18. April.
 - Dev-Server: `npm run dev` auf http://localhost:5173/
 - Arena-CLI: `npx tsx scripts/aiArena.ts --roundrobin`
 - Training-Export: `--export-training out.jsonl.gz` anhängen
+- BC-Training:
+  ```bash
+  cd ml/
+  source .venv/bin/activate
+  python train_bc.py --data datasets/run*.jsonl.gz --streaming --epochs 10
+  ```
+- Overnight-Run:
+  ```bash
+  caffeinate -i bash ml/overnight.sh 300 10 > ml/overnight.log 2>&1 &
+  ```
 - Diagnose-Skripte:
   - `scripts/analyzeCornerGoals.ts` — Tore aus Ecken zählen
-  - `scripts/analyzeCornerFlow.ts` — Corner-Event-Kette analysieren
-  - `scripts/testBochumBayern.ts` — Qualitätsdifferenzierungs-Test
-  - `scripts/debugCorner.ts` — Replay-basierter Corner-Frame-Dump
+  - `scripts/analyzeCornerFlow.ts` — Corner-Event-Kette
+  - `scripts/testBochumBayern.ts` — Qualitätsdifferenzierung
 
 ## Nächster konkreter Schritt
 
-Entscheidung liegt beim User:
-- **A**: Weiter Heuristik schleifen (aber der sinnvolle Hebelraum ist ausgereizt)
-- **B**: Python-ML-Projekt starten (BC-Phase 0)
-- **C**: Replay-Verifikation per Browser-Test bevor ML
-
-Aktueller Favorit nach User-Kommentaren: **B**, sobald die Heuristik
-sich grundsolide anfühlt.
+Morgen nach dem D-Run:
+1. Eval-Metriken prüfen (erwartet Top-1 ~82-85 %)
+2. ONNX-Modell in TS-Arena laden (onnxruntime-node)
+3. A/B-Vergleich BC vs Heuristik
+4. Reward-Funktion basierend auf User-Antworten definieren
+5. RL-Infrastruktur aufsetzen
