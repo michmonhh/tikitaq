@@ -1,6 +1,6 @@
 import type { GameState, PlayerData, Position, TeamSide } from '../../types'
 import type { TeamPlan, FieldReading, DefenseStrategy } from '../types'
-import { distance, getMovementRadius } from '../../geometry'
+import { distance, getMovementRadius, getTackleRadius } from '../../geometry'
 import { PITCH } from '../../constants'
 import { DEF_BEHAVIOR } from './config'
 import type { RoleGroup } from './config'
@@ -254,6 +254,51 @@ export function defensivePosition(
       if (team === 2 && y > safeY) {
         y = safeY
         reason = 'Fällt zurück (Antizipation)'
+      }
+    }
+  }
+
+  // ── "Stellen statt zuwerfen" im eigenen 16er ──
+  // User-Feedback 2026-04-24: Elfmeter-Rate zu hoch. Strukturelle Lösung:
+  // Verteidiger im eigenen 16er halten bewusst einen Standoff-Abstand zum
+  // Ballträger, statt in den Tackle-Radius zu marschieren. Parallel blockt
+  // movement.ts den Tackle-Trigger für Defender im eigenen 16er, damit
+  // auch bei räumlichem Zusammentreffen kein Zweikampf losbricht.
+  // Wenn der Angreifer selbst durch den Defender-Radius dribbelt, bleibt
+  // der Zweikampf aktiv (realistischer Durchbruch-Versuch).
+  {
+    const inOwnBox = team === 1
+      ? y >= (100 - PITCH.PENALTY_AREA_DEPTH)
+      : y <= PITCH.PENALTY_AREA_DEPTH
+    const carrier = state.ball.ownerId
+      ? state.players.find(p => p.id === state.ball.ownerId)
+      : null
+
+    if (inOwnBox && carrier && carrier.team !== team) {
+      const carrierInBox = team === 1
+        ? carrier.position.y >= (100 - PITCH.PENALTY_AREA_DEPTH)
+        : carrier.position.y <= PITCH.PENALTY_AREA_DEPTH
+      const carrierX = carrier.position.x
+      const carrierInLateralBox = carrierX >= PITCH.PENALTY_AREA_LEFT
+        && carrierX <= PITCH.PENALTY_AREA_RIGHT
+
+      if (carrierInBox && carrierInLateralBox) {
+        const distToCarrier = Math.hypot(x - carrier.position.x, y - carrier.position.y)
+        const tackleRadius = getTackleRadius(player)
+        const standoffDist = tackleRadius + 1.5  // 1.5 Einheiten Sicherheitszone
+
+        if (distToCarrier < standoffDist) {
+          // Zurück auf Standoff-Distanz, dabei zwischen Ball und Tor bleiben.
+          const dx = x - carrier.position.x
+          const dy = y - carrier.position.y
+          const len = Math.hypot(dx, dy) || 1
+          x = carrier.position.x + (dx / len) * standoffDist
+          y = carrier.position.y + (dy / len) * standoffDist
+          // Bias: zusätzlich leicht torwärts (Tor-Winkel blocken)
+          const goalward = team === 1 ? 1 : -1
+          y += goalward * 1.2
+          reason = 'Stellt im 16er'
+        }
       }
     }
   }

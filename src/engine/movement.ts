@@ -1,8 +1,22 @@
-import type { PlayerData, Position, GameState, MoveAction, GameEvent } from './types'
+import type { PlayerData, Position, GameState, MoveAction, GameEvent, TeamSide } from './types'
 import { name } from './playerName'
 import { getConfidenceModifier } from './confidence'
 import * as T from '../data/tickerTexts'
 import { distance, getMovementRadius, getTackleRadius, clampToPitch, clampToRadius, pointToSegmentDistance } from './geometry'
+import { PITCH } from './constants'
+
+/**
+ * Prüft ob eine Position im eigenen 16er des Spielers liegt.
+ * Wird genutzt für "stellen statt zuwerfen" — Verteidiger im eigenen
+ * 16er initiieren keinen Zweikampf, um Elfmeter zu vermeiden.
+ */
+function isInOwnPenaltyArea(pos: Position, team: TeamSide): boolean {
+  if (pos.x < PITCH.PENALTY_AREA_LEFT || pos.x > PITCH.PENALTY_AREA_RIGHT) return false
+  // Team 1 verteidigt y=100 → eigener 16er bei y >= 83.5
+  // Team 2 verteidigt y=0  → eigener 16er bei y <= 16.5
+  if (team === 1) return pos.y >= (100 - PITCH.PENALTY_AREA_DEPTH)
+  return pos.y <= PITCH.PENALTY_AREA_DEPTH
+}
 
 export interface MoveResult {
   updatedPlayer: PlayerData
@@ -99,7 +113,14 @@ export function applyMove(
     const tackleRadius = getTackleRadius(updatedPlayer)
     const distToCarrier = distance(target, ballCarrier.position)
 
-    if (distToCarrier <= tackleRadius) {
+    // 2026-04-24: Im eigenen 16er initiiert der Verteidiger KEINEN
+    // Zweikampf — "stellen statt zuwerfen". Vermeidet unnötige Elfmeter.
+    // Der Fall "Angreifer dribbelt durch Defender-Radius" (unten) bleibt
+    // aktiv, damit ein echter Durchbruch-Versuch weiter zum Zweikampf
+    // führt — realistisch.
+    const defenderInOwnBox = isInOwnPenaltyArea(target, updatedPlayer.team)
+
+    if (!defenderInOwnBox && distToCarrier <= tackleRadius) {
       tackle = {
         defender: updatedPlayer,
         attacker: ballCarrier,
