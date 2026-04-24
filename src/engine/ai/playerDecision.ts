@@ -104,6 +104,16 @@ export function decideBallAction(
       else if (distToGoal < 14) opt.score += 22  // innerhalb 16er
       else if (distToGoal < 18) opt.score += 10  // Rand 16er
       // 18–20 m: neutral — Option existiert noch, aber ohne Bonus
+
+      // 2026-04-24: Nach Ecke in der Box → sofort schießen.
+      // Corner-Cooldown deckt ~4 Turns nach dem Eckstoß ab, damit auch
+      // der Pass-Empfänger und die 2. Welle den Bonus bekommen (lastSetPiece
+      // wird schon beim ersten Corner-Pass genullt — zu kurz).
+      const inCornerCooldown = state.cornerCooldownUntilMin !== undefined
+        && state.gameTime < state.cornerCooldownUntilMin
+      if (inCornerCooldown && distToGoal < 18) {
+        opt.score += 25
+      }
     }
 
     // Vorrücken belohnen wenn noch vor dem 16er und Raum nach vorne.
@@ -271,10 +281,34 @@ function chooseForcedPass(
 
   // Bewerten (mit Strategie-Kontext)
   const riskAppetite = plan?.riskAppetite ?? 0.5
+  const isCornerTaker = state.lastSetPiece === 'corner' || state.phase === 'corner'
   for (const opt of options) {
     opt.score = (opt.reward * riskAppetite + opt.successChance * (1 - riskAppetite)) * 100
     if (plan) opt.score += getStrategyBonus(opt, plan)
     if (fieldReading) opt.score += getFieldBonus(opt, fieldReading, team)
+
+    // 2026-04-24: Ecken-Taker bevorzugt Flanke in den 16er.
+    // User-Feedback: 587 Ecken → nur 12 Tore. Der Taker spielte zu oft
+    // einen Kurzpass statt eine Hereingabe. Jetzt: wenn Empfänger in der
+    // Gefahrenzone (Strafraum des Gegners) steht, großer Score-Bonus für
+    // die Flanke; Kurzpässe aus der Ecke werden weniger belohnt.
+    if (isCornerTaker && opt.receiverId) {
+      const receiver = state.players.find(p => p.id === opt.receiverId)
+      if (receiver) {
+        const receiverGoalDist = Math.hypot(
+          receiver.position.x - 50,
+          receiver.position.y - oppGoalY,
+        )
+        if (receiverGoalDist < 18) {
+          // Empfänger in der Box → Flanke bevorzugen
+          opt.score += 25
+        } else if (receiverGoalDist > 25) {
+          // Weit vom Tor → Kurzpass aus Ecke uninteressant
+          opt.score -= 10
+        }
+      }
+    }
+
     opt.score += (Math.random() - 0.5) * 6
   }
 

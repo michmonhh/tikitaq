@@ -143,6 +143,13 @@ export interface GameState {
   mustPass: boolean
   setPieceReady: boolean  // Free-kick only: true after user-as-attacker clicked Bereit and AI repositioned defensively
   lastSetPiece: GamePhase | null  // Tracks which set piece was just confirmed (for offside rules)
+  /**
+   * Nach einem Eckstoß bleibt die "Corner-Situation" für einige Turns
+   * aktiv (erhöhte Schuss-Bereitschaft in der Box, 2. Welle nachsetzend).
+   * Enthält die gameTime bis zu der der Corner-Cooldown läuft.
+   * 0 oder undefined = kein aktiver Cooldown.
+   */
+  cornerCooldownUntilMin?: number
   lastEvent: GameEvent | null
   matchStats: { team1: TeamMatchStats; team2: TeamMatchStats }
   ticker: TickerEntry[]

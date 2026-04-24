@@ -98,5 +98,10 @@ export function transitionToCorner(
     mustPass: false,
     setPieceReady: true,
     lastSetPiece: 'corner',
+    // 2026-04-24: Corner-Cooldown für ~2 min (≈ 4 Turns). Gibt den
+    // Ecken-Empfängern Schuss-Bonus und erlaubt der 2. Welle, den
+    // Abpraller unter Druck nachzusetzen. Unabhängig vom lastSetPiece-
+    // Reset beim ersten Pass.
+    cornerCooldownUntilMin: state.gameTime + 2.0,
   }
 }

@@ -20,10 +20,11 @@ export function getFormationHome(player: PlayerData): Position {
 
   // Y-Floor pro Rolle: Stürmer dürfen ihre Heimat in der gegnerischen Hälfte
   // haben (y < 50 für Team 1), Mittelfeld maximal Mittellinie, Abwehr bleibt
-  // in eigener Hälfte. Vorher war der Floor pauschal 50, was ST auf die
-  // Mittellinie festnagelte — User sah das im Replay.
+  // in eigener Hälfte.
+  // 2026-04-24: Stürmer-yFloor 35 → 28 — User-Feedback, Grundlinien-Präsenz
+  // zu niedrig. 28 lässt Stürmer-Heimat im Strafraum-Bereich (16m = y 16.5).
   const role = getRoleGroup(player)
-  const yFloor = role === 'attacker' ? 35 : 50
+  const yFloor = role === 'attacker' ? 28 : 50
   const baseY = Math.max(yFloor, slot.y - slot.push * cf)
 
   if (player.team === 2) {

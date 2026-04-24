@@ -125,21 +125,28 @@ export function offensivePosition(
 
     // In der gegnerischen Hälfte: aggressiv Richtung Grundlinie.
     // 2026-04-22: targetY bei y≈5 (bzw. 95 für team 2) = 5 Einheiten vor Grundlinie.
+    // 2026-04-24: Zug von 0.30–0.65 auf 0.45–0.80 erhöht. Grundlinien-
+    // Präsenz war zu niedrig, LM/RM bleiben im Replay oft zwischen den
+    // 16-ern hängen statt bis zur Grundlinie zu laufen.
     const inOppHalf = team === 1 ? y < 50 : y > 50
     if (inOppHalf) {
-      const baselineY = team === 1 ? 5 : 95
-      // Je näher er schon ist, desto mehr Zug — progressiver Flügellauf.
+      const baselineY = team === 1 ? 4 : 96
       const progress = team === 1 ? (50 - y) / 50 : (y - 50) / 50  // 0–1
-      const pull = 0.30 + progress * 0.35  // 0.30–0.65
+      const pull = 0.45 + progress * 0.35  // 0.45–0.80
       y = y * (1 - pull) + baselineY * pull
     }
   }
 
-  // ── Stürmer in die Box ziehen, wenn Flügelspieler am Ball ──
+  // ── Stürmer in die Box ziehen bei Angriff in gegnerischer Hälfte ──
   // 2026-04-22 — User-Feedback: "Noch kein Flankentor gesehen."
-  // Wenn ein Teamkollege seitlich (x<25 oder x>75) in der gegnerischen
-  // Hälfte den Ball hat, laufen Stürmer und OM in den Strafraum, damit
-  // eine Flanke einen Empfänger findet.
+  // 2026-04-24 erweitert: Auch bei ZENTRALEM Ballbesitz in gegnerischer
+  // Hälfte wird mind. ein Stürmer in die Box gezogen — Grundlinien-
+  // Präsenz war zu niedrig.
+  //
+  // Zwei Stufen:
+  //   Wide-Carrier: Stürmer zu Nah-/Fernpfosten (aggressive Flanken-Vorbereitung)
+  //   Zentraler Carrier in gegn. Hälfte: 1. Stürmer in Box, 2. Stürmer + OM
+  //     gestaffelt
   if (role === 'attacker' || player.positionLabel === 'OM') {
     const carrier = state.players.find(p => p.id === state.ball.ownerId)
     if (carrier && carrier.team === team && carrier.id !== player.id) {
@@ -147,15 +154,27 @@ export function offensivePosition(
       const carrierAdvanced = team === 1
         ? carrier.position.y < 35
         : carrier.position.y > 65
+      const carrierInOppHalf = team === 1
+        ? carrier.position.y < 50
+        : carrier.position.y > 50
+
       if (carrierWide && carrierAdvanced) {
-        // Zielpunkt: zentral, knapp vor dem Tor (innerhalb 16er).
+        // Flanken-Vorbereitung: Stürmer an Nah-/Fernpfosten
         const boxY = team === 1 ? 12 : 88
-        // Stürmer etwas breiter verteilt (Nah-/Fernpfosten).
         const isSecondStriker = player.positionLabel === 'ST' && player.origin.x > 50
         const boxX = player.positionLabel === 'OM' ? 50
                    : isSecondStriker ? 58 : 42
         x = x * 0.35 + boxX * 0.65
         y = y * 0.35 + boxY * 0.65
+      } else if (carrierInOppHalf && role === 'attacker') {
+        // Zentraler/halber Angriff: Stürmer strecken Richtung Strafraum.
+        // Weniger aggressiv als bei Flanke (Zug 0.30 statt 0.65), dafür
+        // KONSTANT bei Ballbesitz in gegnerischer Hälfte.
+        const boxY = team === 1 ? 16 : 84
+        const isSecondStriker = player.positionLabel === 'ST' && player.origin.x > 50
+        const boxX = isSecondStriker ? 55 : 45
+        x = x * 0.70 + boxX * 0.30
+        y = y * 0.60 + boxY * 0.40
       }
     }
   }
