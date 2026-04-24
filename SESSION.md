@@ -1,4 +1,4 @@
-# TIKITAQ — Session-Stand (2026-04-25)
+# TIKITAQ — Session-Stand (2026-04-25, 01:10 Uhr)
 
 > Lebendes Protokoll der aktuellen Chat-Sitzung. Nach einem Chat-Crash hier
 > einsteigen: Abschnitt **"Wo wir stehen"** lesen, dann **"Offen"** für den
@@ -7,42 +7,78 @@
 
 ## Wo wir stehen
 
-- Branch: `dev` bei **`9712373`**, gepusht zu `origin/dev`.
+- Branch: `dev` bei **`8abf688`**, gepusht zu `origin/dev`.
 - **Stufe 1 (Heuristik)**: abgeschlossen, 14 Iterationen in zwei Tagen.
-- **Stufe 2 (Behavior Cloning)**: Python-Pipeline komplett + erster
-  Test-Lauf erfolgreich — **75.3 % Top-1 / 95.6 % Top-3**.
-- **Aktuell läuft**: overnight D-Run (300 RRs, 10 Epochen, ~7.5 h) im
-  Hintergrund. Log: `ml/overnight.log`.
-- **Nächster Schritt**: Reward-Funktion für Stufe 3 definieren, dann
-  RL-Infrastruktur bauen.
+- **Stufe 2 (Behavior Cloning)**: Python-Pipeline komplett + Test-Lauf
+  mit 10 RRs erfolgreich: **75.3 % Top-1 / 95.6 % Top-3**.
+- **Stufe 3 Vorarbeit**: ONNX-Inferenz in TS-Arena + xG-Modul gebaut,
+  `--bc-policy <path>` Flag für Arena-CLI.
+- **Aktuell läuft**: overnight D-Run (300 RRs neue + 47 bereits vorhanden
+  = 347 total, 10 Epochen, ~7.7 h). Start: 01:07 Uhr, Ende erwartet ~08:45.
 
-## Fortschritt heute
+## Fortschritt heute (2026-04-25 Nacht-Session)
 
-### Stufe 2 komplett gebaut
+### Stufe 3 Vorarbeit — parallel zum D-Run gebaut
 
-Komplette Python-Pipeline in `ml/`:
-- `dataset.py`: Streaming- und In-Memory-Dataset (JSONL.gz → PyTorch)
-- `features.py`: State → Tensor (296-dim global, 15-dim per option)
-- `model.py`: Option-basiertes PolicyNet (122k Parameter)
-- `train_bc.py`: Cross-Entropy-Training mit MPS/GPU-Support
-- `evaluate_bc.py`: Top-1/Top-3 Accuracy + Per-Option-Typ-Breakdown
-- `export_onnx.py`: PyTorch → ONNX (482 KB Modell)
-- `overnight.sh`: Orchestrierung für Nacht-Runs (Gen + Training + Export)
-- Streaming-Dataset für >1 GB Daten mit konstantem RAM
+Drei neue Module in einem Commit (8abf688):
 
-### Testlauf verifiziert Pipeline
+**1. xG-Modul** (`src/engine/xg.ts`):
+- Positions-basierte Tor-Wahrscheinlichkeit (Distanz × Winkel × Korridor-
+  Block × TW-Position)
+- Sanity-Check bestanden: 5m zentral → 0.42, 16er-Rand → 0.10,
+  Mittelfeld → 0.02
+- `xgDelta()` für späteres Reward-Shaping
 
-Kleiner Test (10 RRs, 5 Epochen, ~12 Min):
-- val_acc Progression: 0.723 → 0.733 → 0.740 → 0.748
-- **Top-1 Final: 0.753 / Top-3 Final: 0.956**
-- Per-Typ: shoot 96.7 %, through_ball 89.5 %, advance 88 %,
-  short_pass 69 %, dribble 55 %, cross 53 %, long_ball 49 %, hold 37 %
+**2. ONNX-Policy-Adapter** (`src/engine/ai/policy/`):
+- `features.ts` — 1:1-Spiegel von `ml/features.py`
+- `onnxPolicy.ts` — onnxruntime-node-Loader
+- `override.ts` — sync-async Bridge für decideBallAction
 
-### Bugs gefixt
-- `set -o pipefail` + `ls`-Glob-Crash bei leerem Datasets-Verzeichnis
-  → `shopt -s nullglob` + array-basierte Zählung
+**3. `runAIMatch` wird async:**
+- Neuer `onBeforeAITurn`-Hook für Policy-Inferenz vor jedem Zug
+- Alle Scripts angepasst (await)
+- Arena-CLI neue Flags: `--bc-policy <path>` + `--bc-team <1|2>`
 
-## Aktuelle Arena-Metriken (Heuristik, Basis für BC)
+### Smoke-Test erfolgreich
+
+```
+npx tsx scripts/aiArena.ts --home 0 --away 1 --runs 1 \
+  --bc-policy ml/checkpoints/bc_policy.onnx
+→ MUC 1:2 DOR, 157 ms, beide Teams BC-Policy, realistische Stats
+```
+
+### Reward-Funktion definiert (REWARD.md, Commit 858994b)
+
+User-Interview mit 5 Fragen beantwortet. Kernpunkte:
+- Alle Reward-Komponenten sind **team-identity-sensitiv** (confidence)
+- Ballverlust zonen-abhängig
+- Führungs-Verhalten dynamisch mit Confidence
+- Zwischenziele (Ecken, Tackles, Fouls) stark belohnt
+- Defense im 16er: situativ
+
+### Bug: Async-Umbau hat laufenden D-Run gebrochen
+
+Der frühere D-Run wurde durch den runAIMatch-Signature-Wechsel
+(sync → async) unterbrochen bei Run 47. **47 Datasets konnten gerettet
+werden** — leere Fail-Dateien wurden gelöscht. Overnight neu gestartet
+um 01:07, erkennt die 47 existierenden und zählt ab 48 weiter.
+
+## Aktueller overnight D-Run (Status-Snapshot)
+
+- Start: 2026-04-25 01:07
+- Parameter: 300 neue RRs, 10 Epochen Training
+- Gesamt nach Ende: 347 RRs = ~7.6 GB gzip
+- Monitor läuft persistent mit **10-min-Heartbeat** + Meilenstein-Events
+- Erwartetes Ende: ~08:45 morgen
+- Erwartete Top-1 Accuracy: ~82–85 %
+
+Status-Checks möglich via:
+```bash
+tail -f ~/Documents/tikitaq/ml/overnight.log
+ls ~/Documents/tikitaq/ml/datasets/ | wc -l
+```
+
+## Aktuelle Arena-Metriken (Heuristik)
 
 | Metrik | Simuliert | Bundesliga-Ziel |
 |---|---:|---:|
@@ -55,27 +91,19 @@ Kleiner Test (10 RRs, 5 Epochen, ~12 Min):
 Tor-Verteilung ausgewogen: Flanke 31 %, Kurzpass 26 %, Steilpass 23 %,
 Langer Ball 14 %, Solo 7 %, Elfmeter 13 %.
 
-## Aktueller overnight D-Run
-
-Start: nach dem Test-Lauf um 00:29
-Parameter: 300 RRs, 10 Epochen
-Erwartet: ~7.5 h (Gen 2.7 h + Training 5 h + Export 0.1 h)
-Erwartete finale Top-1: ~82-85 %
-
-Status-Check: `tail -f ml/overnight.log`
-
 ## Roadmap
 
 | Phase | Status | Beschreibung |
 |---|---|---|
 | **1 — Heuristik** | ✅ | 5-Schicht-KI, alle strukturellen Fixes |
-| **2 — Behavior Cloning** | 🏃 läuft | Python-Pipeline + BC-Training |
-| 3 — ONNX-Integration | TODO | BC-Netz als TS-Arena-KI einbinden |
-| 4 — A/B-Vergleich | TODO | BC vs Heuristik in der Arena |
-| 5 — Reward-Definition | **in Arbeit** | Reward-Funktion für PPO/RL |
-| 6 — RL-Infrastruktur | TODO | PPO-Setup, ONNX-Inferenz in TS |
-| 7 — RL-Finetune | TODO | Self-Play Gen 1 vs BC-Basis |
-| 8 — League Training | TODO | Pool aus 3-5 Checkpoints |
+| **2 — Behavior Cloning** | 🏃 läuft | Python-Pipeline + BC-Training (D-Run) |
+| 3a — ONNX-Integration TS | ✅ | Bereit, Code gepusht |
+| 3b — Reward-Definition | ✅ | REWARD.md |
+| 3c — xG-Modul | ✅ | xgFromPosition + xgDelta |
+| 4 — A/B BC vs Heuristik | TODO | nach D-Run |
+| 5 — RL-Trajectory-Format | TODO | reward/done/log_prob in JSONL |
+| 6 — PPO-Training | TODO | Python stable-baselines3 |
+| 7 — League Training | TODO | Pool aus 3-5 Checkpoints |
 
 ## Performance-Benchmark (M1 MacBook Air, 8 GB RAM)
 
@@ -84,37 +112,23 @@ Status-Check: `tail -f ml/overnight.log`
 | 1 RR mit JSONL-gzip | 32 s | 22 MB | 350 MB |
 | 10 RRs + 5 Epochen BC | 11.5 min | 227 MB | 350 MB |
 | 300 RRs + 10 Epochen BC | ~7.5 h | 6.6 GB | 2-3 GB |
+| BC-Policy Match-Inferenz | 157 ms / Match | — | — |
 
-## Entscheidungsfragen für Reward-Funktion (Stufe 5)
-
-Parallel zum laufenden BC-Training klären:
-- Ballbesitz-Philosophie? (Aufbau vs Umschalt)
-- Risikofreude? (Ballverlust tolerieren vs. sicher spielen)
-- Tor-Jagd vs Ergebnis-Sichern (bei Führung)
-- Gewicht von Nebenkriegsschauplätzen (Ecken, Fouls ziehen)
-
-## Änderungen heute (chronologisch, neueste zuerst)
+## Änderungen heute (neueste zuerst)
 
 Alle Commits auf `dev`, gepusht zu `origin/dev`:
 
+- **`8abf688`** — feat(ml): ONNX-Inferenz-Pipeline + xG-Modul + async
+  runAIMatch. 14 files changed, +884 LOC.
+- **`858994b`** — docs(ml): Reward-Funktion Design für Stufe 3.
+- **`2b4e4df`** — docs: BC-Pipeline fertig, D-Run läuft.
 - **`9712373`** — feat(ml): Streaming-Dataset + Overnight-Orchestrierung.
-  IterableDataset für große Datenmengen (konstanter RAM), overnight.sh
-  für autonome Nacht-Runs mit Disk-Space-Check.
 - **`b3cff1e`** — feat(ml): Python-Projekt für Behavior-Cloning.
-  Komplette Pipeline: Dataset-Loader, Feature-Encoder, PolicyNet,
-  Training, Eval, ONNX-Export.
 - **`ecacc8d`** — feat(arena): gzip-Kompression für Training-Export.
-  192 MB → 22 MB pro Round Robin.
 - **`d8045b7`** — feat(engine): Corner-Pass in Box = direkter Kopfball.
-  Löst das Turn-Modell-Problem (Gegnerzug zwischen Flanke und Abschluss).
-- **`25ebbde`** — feat(ai): Grundlinien-Präsenz + Ecken-Verwertung.
+- **`25ebbde`** — feat(ai): mehr Grundlinien-Präsenz + Ecken-Verwertung.
 - **`5bf51d3`** — feat(engine): sechs neue Ecken-Quellen +
   Emergency-Clearance.
-- **`b1691a8`** — fix(ai): Verteidiger stellen statt zuwerfen im 16er.
-- **`12da93c`** — fix(ai): Abwehrkette hält zusammen.
-- **`310ac17`** — tune(ai): Antizipation abhängig von Verteidiger-Qualität.
-- **`8c5bc3d`** — fix(ai): Verteidiger halten Tiefenpuffer.
-- **`2e84759`** — feat(replay): MatchIntent-Debug-Overlay.
 
 ## Arbeitsumgebung
 
@@ -123,6 +137,7 @@ Alle Commits auf `dev`, gepusht zu `origin/dev`:
 - Main-Branch unverändert seit 18. April.
 - Dev-Server: `npm run dev` auf http://localhost:5173/
 - Arena-CLI: `npx tsx scripts/aiArena.ts --roundrobin`
+- Arena mit BC-Policy: `... --bc-policy ml/checkpoints/bc_policy.onnx`
 - Training-Export: `--export-training out.jsonl.gz` anhängen
 - BC-Training:
   ```bash
@@ -134,16 +149,13 @@ Alle Commits auf `dev`, gepusht zu `origin/dev`:
   ```bash
   caffeinate -i bash ml/overnight.sh 300 10 > ml/overnight.log 2>&1 &
   ```
-- Diagnose-Skripte:
-  - `scripts/analyzeCornerGoals.ts` — Tore aus Ecken zählen
-  - `scripts/analyzeCornerFlow.ts` — Corner-Event-Kette
-  - `scripts/testBochumBayern.ts` — Qualitätsdifferenzierung
 
 ## Nächster konkreter Schritt
 
 Morgen nach dem D-Run:
 1. Eval-Metriken prüfen (erwartet Top-1 ~82-85 %)
-2. ONNX-Modell in TS-Arena laden (onnxruntime-node)
-3. A/B-Vergleich BC vs Heuristik
-4. Reward-Funktion basierend auf User-Antworten definieren
-5. RL-Infrastruktur aufsetzen
+2. A/B-Vergleich: `--bc-policy` vs Heuristik in Round-Robin
+3. Wenn BC ≥ 95 % Heuristik-Qualität: weiter zu RL
+4. RL-Trajectory-Format bauen (reward/done/log_prob)
+5. Reward-Tracker in GameState einbauen (`xgDelta` + team-confidence)
+6. Python PPO-Setup (stable-baselines3)
