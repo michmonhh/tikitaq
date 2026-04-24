@@ -12,6 +12,10 @@ export interface TackleResult {
   loser: PlayerData
   card?: 'yellow' | 'red' | null
   event: GameEvent
+  /** Wenn true: Verteidiger hat den Ball nahe der eigenen Grundlinie ins
+   *  Toraus geklärt — Ecke für das angreifende Team. Nur bei outcome='won'
+   *  möglich. */
+  deflectedToCorner?: boolean
 }
 
 /**
@@ -88,6 +92,31 @@ export function resolveTackle(encounter: TackleEncounter): TackleResult {
   const won = tackleRoll < winProbability
 
   if (won) {
+    // #2: Tackle nahe der eigenen Grundlinie → Ball ins Toraus geklärt.
+    // Wenn der Zweikampf nahe der Grundlinie stattfindet UND der Angreifer
+    // Druck aus Richtung Tor machte, X % Chance dass der Defender den
+    // Ball ins Aus schießt statt sauber zu klären.
+    const defenderGoalY = defender.team === 1 ? 100 : 0
+    const distFromGoalLine = Math.abs(defender.position.y - defenderGoalY)
+    const nearGoalLine = distFromGoalLine < 10
+    const wideEnough = defender.position.x < 35 || defender.position.x > 65
+    if (nearGoalLine && wideEnough && Math.random() < 0.35) {
+      return {
+        outcome: 'won',
+        inPenaltyArea: false,
+        winner: defender,
+        loser: attacker,
+        card: null,
+        deflectedToCorner: true,
+        event: {
+          type: 'corner',
+          playerId: defender.id,
+          targetId: attacker.id,
+          position: defender.position,
+          message: `${name(defender)} klärt zur Ecke!`,
+        },
+      }
+    }
     return {
       outcome: 'won',
       inPenaltyArea: false,

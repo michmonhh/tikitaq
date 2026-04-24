@@ -208,7 +208,12 @@ export function makePassBall(set: StoreSet, get: StoreGet): GameStore['passBall'
         return
       } else {
         // --- CORNER ---
-        const attackingTeam = opposingTeam
+        // Wer bekommt die Ecke? Normalerweise opposingTeam (der Passer hat
+        // den Ball über seine eigene Grundlinie gespielt). Bei
+        // abgefälschter Flanke / Pass-Deflection im 16er (Felder #6, #10)
+        // bekommt ihn aber der Passer selbst — dann wird
+        // `cornerForAttackingTeam` im PassResult explizit gesetzt.
+        const attackingTeam = result.cornerForAttackingTeam ?? opposingTeam
         // Corner position: near the goal the attacking team targets
         const goalY = attackingTeam === 1 ? 3 : 97
         const cornerX = landingPos.x < 50 ? 4 : 96

@@ -2,7 +2,7 @@ import type { PlayerData, GameState, ShootAction, GameEvent, TeamSide, Position,
 import { name } from './playerName'
 import { getConfidenceModifier } from './confidence'
 import * as T from '../data/tickerTexts'
-import { distance, rawDistance, pointToSegmentDistance, getInterceptRadius } from './geometry'
+import { distance, rawDistance, pointToSegmentDistance, getInterceptRadius, getTackleRadius } from './geometry'
 import { SHOOTING, PITCH } from './constants'
 import { getGoalkeeper } from './formation'
 
@@ -147,6 +147,68 @@ export function applyShot(
   const defendingTeam: TeamSide = attackingTeam === 1 ? 2 : 1
   const goalCenter = getGoalCenter(attackingTeam)
   const keeper = getGoalkeeper(state.players, defendingTeam)
+
+  // Phase 0: Geblockter Schuss?
+  // Ein Verteidiger im Schuss-Korridor (zwischen Schütze und Tor) kann
+  // den Schuss blocken. 2026-04-24 neu: Wenn der Block nahe am Tor
+  // passiert, X % Chance → Ball ins Toraus abgelenkt → Ecke.
+  const defenders = state.players.filter(
+    p => p.team === defendingTeam && p.positionLabel !== 'TW',
+  )
+  let closestBlocker: PlayerData | null = null
+  let closestBlockDist = Infinity
+  for (const def of defenders) {
+    const distToLine = pointToSegmentDistance(def.position, shooter.position, goalCenter)
+    const blockRadius = getTackleRadius(def) * 0.7
+    if (distToLine <= blockRadius && distToLine < closestBlockDist) {
+      // Verteidiger muss VOR dem Tor stehen, nicht hinter dem Schützen
+      const defToGoal = distance(def.position, goalCenter)
+      const shooterToGoal = distance(shooter.position, goalCenter)
+      if (defToGoal < shooterToGoal) {
+        closestBlockDist = distToLine
+        closestBlocker = def
+      }
+    }
+  }
+  if (closestBlocker) {
+    const blockRadius = getTackleRadius(closestBlocker) * 0.7
+    // Block-Chance skaliert mit Pfadnähe + defensive-radius-Stat
+    const proximityFactor = 1 - (closestBlockDist / blockRadius)
+    const defSkill = closestBlocker.stats.defensiveRadius / 100
+    const blockChance = proximityFactor * (0.30 + defSkill * 0.25)  // 0.30–0.55 max
+    if (Math.random() < blockChance) {
+      // Geblockt! Block nahe am Tor kann in die Ecke gehen.
+      const blockerToGoal = distance(closestBlocker.position, goalCenter)
+      const goesToCorner = blockerToGoal < 18 && Math.random() < 0.40
+      if (goesToCorner) {
+        const cornerPos: Position = {
+          x: closestBlocker.position.x < PITCH.CENTER_X ? PITCH.MIN_X : PITCH.MAX_X,
+          y: goalCenter.y,
+        }
+        return {
+          scored: false,
+          savedBy: null,
+          event: {
+            type: 'corner',
+            playerId: shooter.id,
+            position: cornerPos,
+            message: `${name(closestBlocker)} blockt den Schuss zur Ecke!`,
+          },
+        }
+      }
+      // Block ohne Toraus: Schuss abgefälscht, kein Tor, Ball bleibt lose
+      return {
+        scored: false,
+        savedBy: null,
+        event: {
+          type: 'shot_missed',
+          playerId: shooter.id,
+          position: closestBlocker.position,
+          message: `${name(closestBlocker)} blockt den Schuss von ${name(shooter)}!`,
+        },
+      }
+    }
+  }
 
   // Phase 1: Is the shot on target?
   const accuracy = calculateShotAccuracy(shooter, shooter.position, attackingTeam)

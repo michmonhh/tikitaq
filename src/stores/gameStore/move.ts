@@ -8,6 +8,7 @@ import type { GameStore, StoreSet, StoreGet } from './types'
 import { clampKickoffTarget, clampPenaltyTarget, clampSetPieceTarget } from './move/clampers'
 import { handleFoulPenalty } from './move/tacklePenalty'
 import { handleFoulFreeKick } from './move/tackleFreeKick'
+import { transitionToCorner } from './shared/corner'
 
 export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePlayer'] {
   return (playerId, target) => {
@@ -233,6 +234,25 @@ export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePla
             selectedPlayerId: null,
           })
         }
+        return
+      }
+
+      // #2: Verteidiger klärt nahe Grundlinie zur Ecke
+      if (tackleResult.deflectedToCorner) {
+        const attackingTeam = tackleResult.loser.team  // der Angreifer bekommt die Ecke
+        const cornerState = transitionToCorner(tackleState, {
+          attackingTeam,
+          originX: tackleResult.winner.position.x,
+        })
+        const stateWithStats = updateTeamStats(cornerState, attackingTeam, s => ({
+          corners: s.corners + 1,
+        }))
+        set({
+          state: { ...stateWithStats, lastEvent: tackleResult.event },
+          drag: { activePlayerId: null, isDraggingBall: false, dragPosition: null },
+          selectedPlayerId: null,
+        })
+        get().showEvent(tackleResult.event.message, 2000, 'corner')
         return
       }
 

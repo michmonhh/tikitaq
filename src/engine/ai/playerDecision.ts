@@ -23,6 +23,7 @@ import type { BallOption } from './playerDecision/types'
 import {
   evaluateShoot, evaluatePass, evaluateDribbleOptions,
   evaluateAdvance, evaluateHold, evaluateThroughBallSpace,
+  evaluateEmergencyClearance,
 } from './playerDecision/evaluators'
 import { getStrategyBonus, getFieldBonus, getMemoryBonus } from './playerDecision/scoring'
 import { toAction, getReceiverLabel } from './playerDecision/helpers'
@@ -134,6 +135,13 @@ export function decideBallAction(
     // Außerdem brechen wir damit die Steilpass-Monokultur auf.
     // Bonus nur wenn Flanke wirklich auf einen Empfänger in der Box geht.
     if (opt.type === 'cross') opt.score += 12
+
+    // Notfall-Klärung: nur für bedrängte Defender im 16er verfügbar.
+    // Bekommt einen großen Bonus, damit sie gegen Hold/riskanten-Pass
+    // gewinnt — aber nur in der echten Notfall-Situation.
+    // 2026-04-24: strukturell gegen zu wenige Ecken (nur 1.67/Match vs
+    // Bundesliga ~9). Ein Klärungsschlag landet oft im Seitenaus/Toraus.
+    if (opt.reason === 'Klärungsschlag') opt.score += 30
 
     // ── Stufe 4: Intent-Bonus (GOAP-light) ──
     // Pass-Optionen in Intent-Richtung bekommen +6, gegen die Richtung -4.
@@ -327,6 +335,10 @@ function generateOptions(
 
   // 5. Ball behaupten
   options.push(evaluateHold(carrier, team, opponents))
+
+  // 6. Notfall-Klärung (nur für Defender im eigenen 16er unter Druck)
+  const emergencyOpt = evaluateEmergencyClearance(carrier, team, opponents)
+  if (emergencyOpt) options.push(emergencyOpt)
 
   return options
 }

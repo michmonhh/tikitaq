@@ -18,6 +18,13 @@ interface PassResult {
   outOfBounds: 'throw_in' | 'corner' | null
   receiverNewPosition: Position | null  // Through ball: receiver runs here on success
   event: GameEvent
+  /**
+   * Wenn gesetzt: die Ecke geht explizit an dieses Team (nicht wie beim
+   * normalen pass-out-Fall automatisch an opposingTeam). Wird genutzt für
+   * abgefälschte Flanken (#6) und Pass-Deflections im 16er (#10) —
+   * hier bekommt der Passer die Ecke, nicht der Gegner.
+   */
+  cornerForAttackingTeam?: TeamSide
 }
 
 /**
@@ -265,6 +272,30 @@ export function applyPass(
     if (pType === 'ground') {
       const interceptor = checkInterception(passer, target, opponents)
       if (interceptor) {
+        // #10 Deflection im 16er: Ein Interception im Strafraum wird mit
+        // Wahrscheinlichkeit zu einer Abfälschung ins Toraus (Ecke) statt
+        // sauberem Ballgewinn — realistischer Klärungsversuch unter Druck.
+        const oppGoalY = passer.team === 1 ? 0 : 100
+        const interceptInBox = Math.abs(interceptor.position.y - oppGoalY) < PITCH.PENALTY_AREA_DEPTH
+          && interceptor.position.x >= PITCH.PENALTY_AREA_LEFT
+          && interceptor.position.x <= PITCH.PENALTY_AREA_RIGHT
+        if (interceptInBox && Math.random() < 0.25) {
+          const cornerPos: Position = {
+            x: interceptor.position.x < PITCH.CENTER_X ? PITCH.MIN_X : PITCH.MAX_X,
+            y: oppGoalY,
+          }
+          return {
+            success: false, passType: pType, interceptedBy: null, receiver,
+            ballLandingPos: cornerPos, outOfBounds: 'corner', receiverNewPosition: null,
+            cornerForAttackingTeam: passer.team,  // #10: Passer bekommt die Ecke
+            event: {
+              type: 'corner',
+              playerId: passer.id,
+              position: cornerPos,
+              message: `${name(interceptor)} köpft den Ball ins Toraus — Ecke!`,
+            },
+          }
+        }
         return {
           success: false, passType: pType, interceptedBy: interceptor, receiver,
           ballLandingPos: null, outOfBounds: null, receiverNewPosition: null,
@@ -276,6 +307,30 @@ export function applyPass(
             message: T.tickerPassIntercepted(name(passer), name(interceptor)),
           },
         }
+      }
+    }
+    // #6 Abgefälschte Flanke: Wenn eine Cross-Flanke fehlschlägt und ins
+    // Strafraum gehen sollte, X % als Ecke interpretieren (Verteidiger
+    // köpft die Hereingabe über die Grundlinie).
+    const passerWide = passer.position.x < 25 || passer.position.x > 75
+    const oppGoalYForCross = passer.team === 1 ? 0 : 100
+    const targetNearGoal = Math.abs(target.y - oppGoalYForCross) < PITCH.PENALTY_AREA_DEPTH
+    const isCrossAttempt = passerWide && targetNearGoal
+    if (isCrossAttempt && Math.random() < 0.35) {
+      const cornerPos: Position = {
+        x: target.x < PITCH.CENTER_X ? PITCH.MIN_X : PITCH.MAX_X,
+        y: oppGoalYForCross,
+      }
+      return {
+        success: false, passType: pType, interceptedBy: null, receiver,
+        ballLandingPos: cornerPos, outOfBounds: 'corner', receiverNewPosition: null,
+        cornerForAttackingTeam: passer.team,  // #6: Passer bekommt die Ecke
+        event: {
+          type: 'corner',
+          playerId: passer.id,
+          position: cornerPos,
+          message: `Flanke abgewehrt — Ecke!`,
+        },
       }
     }
     // Steilpass in den Raum: Ball landet exakt am Zielpunkt (bewusst gespielt)
@@ -304,6 +359,66 @@ export function applyPass(
         position: landingPos,
         message: T.tickerPassLost(name(passer)),
       },
+    }
+  }
+
+  // #8 TW-Faust-Parade: Bei hohen Bällen/Flanken nahe dem Tor kann der
+  // Torwart den Ball ins Toraus faustet/parieren. Tritt auch bei
+  // "erfolgreichem" Pass auf — der TW fängt ihn ab bevor der Empfänger
+  // dran kommt.
+  if (passType === 'high') {
+    const oppGoalYForKeeper = passer.team === 1 ? 0 : 100
+    const distToGoalLine = Math.abs(target.y - oppGoalYForKeeper)
+    // Nur wenn Ball in TW-Reichweite ans Tor geht (5er-Raum ~6 Einheiten + Toleranz)
+    if (distToGoalLine < 8) {
+      const keeper = opponents.find(o => o.positionLabel === 'TW')
+      if (keeper) {
+        const keeperDistToTarget = Math.hypot(
+          keeper.position.x - target.x,
+          keeper.position.y - target.y,
+        )
+        // TW muss in Reichweite sein — Faustraum ca. 6-8 Einheiten
+        if (keeperDistToTarget < 8) {
+          // Parade-Chance skaliert mit TW-Qualität + Positions-Faktor
+          const keeperQuality = keeper.stats.quality / 100
+          const proximityFactor = 1 - (keeperDistToTarget / 8)
+          const fistChance = proximityFactor * (0.25 + keeperQuality * 0.35)  // 0.25–0.72
+          if (Math.random() < fistChance) {
+            // TW faustet — 50/50 ob Ball ins Aus (Ecke) oder in Keeper-Hände (Fang)
+            const toCorner = Math.random() < 0.55
+            if (toCorner) {
+              const cornerPos: Position = {
+                x: target.x < PITCH.CENTER_X ? PITCH.MIN_X : PITCH.MAX_X,
+                y: oppGoalYForKeeper,
+              }
+              return {
+                success: false, passType, interceptedBy: null, receiver,
+                ballLandingPos: cornerPos, outOfBounds: 'corner', receiverNewPosition: null,
+                cornerForAttackingTeam: passer.team,
+                event: {
+                  type: 'corner',
+                  playerId: passer.id,
+                  targetId: keeper.id,
+                  position: cornerPos,
+                  message: `${name(keeper)} faustet zur Ecke!`,
+                },
+              }
+            }
+            // TW fängt den Ball — pass_intercepted mit keeper als Empfänger
+            return {
+              success: false, passType, interceptedBy: keeper, receiver,
+              ballLandingPos: null, outOfBounds: null, receiverNewPosition: null,
+              event: {
+                type: 'pass_intercepted',
+                playerId: passer.id,
+                targetId: keeper.id,
+                position: keeper.position,
+                message: `${name(keeper)} fängt die Hereingabe!`,
+              },
+            }
+          }
+        }
+      }
     }
   }
 

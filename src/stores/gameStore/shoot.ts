@@ -9,6 +9,7 @@ import { PITCH } from '../../engine/constants'
 import { addTicker, updateTeamStats, directionFromX, addGoalLog, findCornerTaker } from './helpers'
 import { completeShootoutKick } from './shootout'
 import type { GameStore, StoreSet, StoreGet } from './types'
+import { transitionToCorner } from './shared/corner'
 
 export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBall'] {
   return (shooterId, target) => {
@@ -183,6 +184,22 @@ export function makeShootBall(set: StoreSet, get: StoreGet): GameStore['shootBal
       // nach. Ohne diesen Zusatz "vergisst" der Store das Torschuss-Event,
       // und der Replay-Viewer zeigt kein TOR!-Overlay.
       newState = { ...newState, lastEvent: result.event }
+    } else if (result.event.type === 'corner') {
+      // #5 Geblockter Schuss → Ecke (vom Verteidiger abgefälscht ins Toraus)
+      const shooter = state.players.find(p => p.id === shooterId)
+      const preCornerPlayers = state.players.map(p =>
+        p.id === shooterId ? { ...p, hasActed: true } : p,
+      )
+      let preCornerState: GameState = { ...state, players: preCornerPlayers, lastEvent: result.event }
+      preCornerState = updateTeamStats(preCornerState, state.currentTurn, s => ({
+        corners: s.corners + 1,
+      }))
+      newState = transitionToCorner(preCornerState, {
+        attackingTeam: state.currentTurn,
+        originX: shooter?.position.x ?? 50,
+      })
+      newState = { ...newState, lastEvent: result.event }
+      get().showEvent(result.event.message, 2000, 'corner')
     } else if (result.event.type === 'shot_missed') {
       // Shot missed (went wide / over goal) → Abstoß für verteidigendes Team.
       // FIFA Law 16: Gegner müssen außerhalb des 16ers sein, bis der Ball
