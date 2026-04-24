@@ -1,0 +1,23 @@
+# Python venv & bytecode
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Trainings-Daten (zu groß für Git)
+datasets/
+*.jsonl
+*.jsonl.gz
+
+# Modell-Artefakte
+checkpoints/
+*.pt
+*.onnx
+
+# Logs
+*.log
+runs/
+tb_logs/
+
+# Jupyter
+.ipynb_checkpoints/

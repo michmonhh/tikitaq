@@ -1,0 +1,18 @@
+# TIKITAQ ML — Python dependencies
+# Tested on Python 3.11 / 3.12 (macOS ARM64)
+
+# Deep learning core
+torch>=2.2,<3.0
+numpy>=1.26,<3.0
+
+# ONNX export für Browser-Inferenz (onnxruntime-web)
+onnx>=1.16,<2.0
+
+# Tensorboard für Training-Monitoring
+tensorboard>=2.16,<3.0
+
+# Data-Utilities
+tqdm>=4.66,<5.0
+
+# Dev / Test
+pytest>=8.0,<9.0
