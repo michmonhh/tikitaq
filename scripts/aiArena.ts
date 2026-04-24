@@ -13,6 +13,7 @@
  */
 
 import * as fs from 'node:fs'
+import * as zlib from 'node:zlib'
 import { TEAMS, getTeamById } from '../src/data/teams'
 import { runAIMatch } from '../src/engine/simulation/runAIMatch'
 import type { ArenaMatchResult } from '../src/engine/simulation/replayTypes'
@@ -21,12 +22,45 @@ import {
 } from '../src/engine/ai/training'
 
 let trainingOutputPath: string | null = null
+let trainingGzipStream: zlib.Gzip | null = null
+let trainingFileStream: fs.WriteStream | null = null
+
+function openTrainingOutput(path: string): void {
+  trainingOutputPath = path
+  // Endet der Pfad auf .gz oder .jsonl.gz → streamed gzip.
+  // Kompressionsrate ~10-15× bei JSONL-Daten mit redundanten Keys.
+  if (path.endsWith('.gz')) {
+    trainingFileStream = fs.createWriteStream(path, { flags: 'w' })
+    trainingGzipStream = zlib.createGzip({ level: 6 })  // balanced: ~10× compression, fast
+    trainingGzipStream.pipe(trainingFileStream)
+  } else {
+    // Plain JSONL — alte Datei überschreiben
+    fs.writeFileSync(path, '')
+  }
+}
 
 function flushTrainingToFile(): void {
   if (!trainingOutputPath) return
   const lines = drainTrainingBuffer()
   if (lines.length === 0) return
-  fs.appendFileSync(trainingOutputPath, lines.join('\n') + '\n')
+  const payload = lines.join('\n') + '\n'
+  if (trainingGzipStream) {
+    trainingGzipStream.write(payload)
+  } else {
+    fs.appendFileSync(trainingOutputPath, payload)
+  }
+}
+
+function closeTrainingOutput(): Promise<void> {
+  return new Promise((resolve) => {
+    if (trainingGzipStream && trainingFileStream) {
+      trainingGzipStream.end(() => {
+        trainingFileStream!.end(() => resolve())
+      })
+    } else {
+      resolve()
+    }
+  })
 }
 
 function arg(flag: string, fallback?: string): string | undefined {
@@ -45,11 +79,10 @@ async function main() {
   // Cloning-Dataset einlesen kann.
   const exportFile = arg('--export-training')
   if (exportFile) {
-    trainingOutputPath = exportFile
-    // Datei zurücksetzen, damit kein alter Inhalt drinbleibt
-    fs.writeFileSync(exportFile, '')
+    openTrainingOutput(exportFile)
     initTrainingExport(exportFile)
-    console.log(`🤖  Training-Export aktiv → ${exportFile}\n`)
+    const gz = exportFile.endsWith('.gz') ? ' (gzip)' : ''
+    console.log(`🤖  Training-Export aktiv → ${exportFile}${gz}\n`)
   }
 
   if (hasFlag('--roundrobin')) {
@@ -326,7 +359,13 @@ function printAggregate(homeName: string, awayName: string, results: ArenaMatchR
   console.log(`  Ø Passquote         ${pct(agg.home.passAcc).padStart(16)}  ${pct(agg.away.passAcc).padStart(16)}`)
 }
 
-main().catch(err => {
-  console.error(err)
-  process.exit(1)
-})
+;(async () => {
+  try {
+    await main()
+    await closeTrainingOutput()
+  } catch (err) {
+    console.error(err)
+    await closeTrainingOutput()
+    process.exit(1)
+  }
+})()
