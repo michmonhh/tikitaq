@@ -59,8 +59,9 @@ log "  Lernrate: $LR"
 log "════════════════════════════════════════════════════════"
 
 # Outcome-CSV initialisieren falls nicht vorhanden
+# v3 (2026-04-25): + vf_loss, explained_var (Actor-Critic-Diagnostik)
 if [ ! -f "$OUTCOMES_CSV" ]; then
-  echo "iter,goals_per_match,xg_per_team,shots_per_team,box_presence_pct,corners_per_team,home_win_pct,reward_mean,pg_loss_final" > "$OUTCOMES_CSV"
+  echo "iter,goals_per_match,xg_per_team,shots_per_team,box_presence_pct,corners_per_team,home_win_pct,reward_mean,pg_loss_final,vf_loss_final,explained_var_final" > "$OUTCOMES_CSV"
 fi
 
 # Helper: extrahiert eine Zahl nach einem Label aus aiArena-Output
@@ -137,12 +138,14 @@ for i in $(seq 1 "$NUM_ITER"); do
     --entropy-beta 0.01 \
     2>&1 | tee "$PPO_OUT_FILE" | tee -a "$SCRIPT_DIR/rl_loop.log"
 
-  # Reward-mean + final pg_loss aus dem PPO-Output extrahieren
+  # Reward-mean + final pg/vf_loss + explained_var aus dem PPO-Output extrahieren
   REWARD_MEAN=$(grep "Reward stats" "$PPO_OUT_FILE" | grep -oE 'mean=[-0-9.]+' | head -1 | sed 's/mean=//')
   FINAL_PG_LOSS=$(grep "pg_loss=" "$PPO_OUT_FILE" | tail -1 | grep -oE 'pg_loss=[-0-9.]+' | sed 's/pg_loss=//')
+  FINAL_VF_LOSS=$(grep "vf_loss=" "$PPO_OUT_FILE" | tail -1 | grep -oE 'vf_loss=[-0-9.]+' | sed 's/vf_loss=//')
+  FINAL_EV=$(grep "explained_var=" "$PPO_OUT_FILE" | tail -1 | grep -oE 'explained_var=[-0-9.]+' | sed 's/explained_var=//')
 
-  # Outcome-CSV-Zeile schreiben
-  echo "$i,$GPM,$XG,$SHOTS,$BOX,$CORNERS,$HOMEWIN,$REWARD_MEAN,$FINAL_PG_LOSS" >> "$OUTCOMES_CSV"
+  # Outcome-CSV-Zeile schreiben (v3: + vf_loss, explained_var)
+  echo "$i,$GPM,$XG,$SHOTS,$BOX,$CORNERS,$HOMEWIN,$REWARD_MEAN,$FINAL_PG_LOSS,$FINAL_VF_LOSS,$FINAL_EV" >> "$OUTCOMES_CSV"
 
   # ── Phase D: Neuer rl_latest + ONNX ──────────────────────
   cp "$CKPT_DIR/rl_iter${i}.pt" "$CKPT_DIR/rl_latest.pt"

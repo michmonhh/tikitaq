@@ -15,10 +15,18 @@
  *    - Ballverlust eigene Hälfte: -2.0 × (1 + conf/200)
  *    - Ballverlust gegn. Hälfte: -0.5 × (1 - conf/200)
  * 4. **Zwischenziele**: Ecken (+2), Tackles (+1.5), Fouls gezogen (+0.5),
- *    Pass in Box (+1), Box-Präsenz (+0.5)
- * 5. **Defensive**: Tackle im 16er (+3), Elfmeter verursacht (-8),
- *    Karten (-2 / -10)
- * 6. **Führungs-Multiplikator**: dynamisch in den letzten 15 min
+ *    Pass in Box (+1), Box-Präsenz (+0.15/Spieler, max 3 gezählt)
+ * 5. **Schüsse** (v3): on target (+3), off target (+1) — bei Tor
+ *    zusätzlich +15 aus #1.
+ * 6. **Defensive**: Tackle im 16er (+3), Elfmeter verursacht (-8),
+ *    Karten (-2 / -10), Defensive-Tiefe-Malus (v3, bis -1.5/Turn)
+ * 7. **Führungs-Multiplikator**: dynamisch in den letzten 15 min
+ *
+ * Iterations-Historie:
+ *   v1 (2026-04-24): Initial-Design, BOX_PRESENCE = 0.5
+ *   v2 (2026-04-25): Anti-Hacking-Counters (Ecken, Fouls, Rückpässe)
+ *   v3 (2026-04-25): BOX_PRESENCE 0.5→0.15 + Cap 3, Schuss-Reward (+3/+1),
+ *                    Defensive-Tiefe-Malus (Verteidiger zu nah am Stürmer)
  */
 
 import type { GameEvent, GameState, TeamSide } from '../types'
@@ -45,12 +53,35 @@ const TACKLE_WON = 1.5
 const TACKLE_WON_IN_OWN_BOX = 3.0
 const FOUL_DRAWN = 0.5
 const PASS_INTO_BOX = 1.0
-const BOX_PRESENCE_PER_PLAYER = 0.5
+
+// Box-Präsenz: dichtes Signal, das aber leicht zu Camping verleitet.
+// v3 (2026-04-25): von 0.5 → 0.15 reduziert + max 3 zählende Spieler,
+// damit der RL-Bot nicht 4-5 Stürmer im 16er parkiert nur fürs Reward.
+const BOX_PRESENCE_PER_PLAYER = 0.15
+const BOX_PRESENCE_MAX_PLAYERS = 3
+
+// Schuss-Rewards: bisher nur Tore (+15) explizit belohnt — der Schuss
+// selbst war "unsichtbar" außer über xG-Delta. Jetzt expliziter Bonus,
+// damit der Bot lernt: in Strafraum-Nähe lohnt sich abdrücken.
+const SHOT_ON_TARGET = 3.0   // gehalten = Torchance erzwungen
+const SHOT_OFF_TARGET = 1.0  // verfehlt = wenigstens committed
 
 const PENALTY_CAUSED = -8.0
 const FOUL_COMMITTED = -0.5
 const YELLOW_CARD = -2.0
 const RED_CARD = -10.0
+
+// Defensive-Tiefe-Malus (v3 Add-on, 2026-04-25):
+// Ein Verteidiger sollte tiefer (näher am eigenen Tor) stehen als der
+// Stürmer in seiner Lane. Wenn der Buffer zu klein ist oder der
+// Verteidiger gar VOR dem Stürmer steht, ist die Lane "überlaufen".
+// Greift nur wenn der Stürmer in unserer Hälfte ist — sonst irrelevant.
+const DEF_LABELS = new Set(['LV', 'IV', 'RV', 'ZDM'])
+const DEF_LANE_WIDTH = 14         // x-Abstand bis Defender als "in-lane" gilt
+const DEF_DEPTH_TARGET = 8        // gewünschter y-Buffer hinter dem Stürmer
+const DEF_DEPTH_MALUS_PER_Y = 0.04
+const DEF_DEPTH_MAX_PER_PAIR = 0.5
+const DEF_DEPTH_TOTAL_CAP = 1.5
 
 /**
  * Liefert die durchschnittliche Confidence des Teams als 0–100.
@@ -93,6 +124,61 @@ function boxPresenceCount(state: GameState, team: TeamSide): number {
     if (inXBox && inYBox) count++
   }
   return count
+}
+
+/**
+ * Defensive-Tiefe-Malus: Verteidiger in derselben Lane wie ein
+ * gegnerischer Stürmer sollten tiefer stehen (näher zum eigenen Tor).
+ *
+ * Buffer = (defender.y − striker.y) * sign(team), wobei sign(1)=+1
+ *  (Team 1 verteidigt y=100, Verteidiger sollte y > Stürmer.y haben),
+ *  sign(2)=−1.
+ *
+ * Greift nur, wenn der Stürmer in unserer Hälfte steht — sonst ist die
+ * Position taktisch ohne Bedrohung.
+ *
+ * Pro Paar maximal `DEF_DEPTH_MAX_PER_PAIR` Malus, gesamt-Cap
+ * `DEF_DEPTH_TOTAL_CAP`. Größenordnung bewusst klein gehalten, um
+ * andere Reward-Signale nicht zu überschreiben.
+ */
+function defensiveDepthMalus(state: GameState, team: TeamSide): number {
+  const sign = team === 1 ? 1 : -1
+  const defenders = state.players.filter(p =>
+    p.team === team && DEF_LABELS.has(p.positionLabel),
+  )
+  if (defenders.length === 0) return 0
+
+  const oppStrikers = state.players.filter(p =>
+    p.team !== team && p.positionLabel === 'ST',
+  )
+  if (oppStrikers.length === 0) return 0
+
+  let malus = 0
+  for (const striker of oppStrikers) {
+    // Stürmer muss in unserer Hälfte sein, damit es bedrohlich ist
+    const inOurHalf = team === 1 ? striker.position.y > 50 : striker.position.y < 50
+    if (!inOurHalf) continue
+
+    // Bester (= tiefster) in-lane Verteidiger für diesen Stürmer
+    let bestBuffer = -Infinity
+    for (const def of defenders) {
+      const dx = Math.abs(def.position.x - striker.position.x)
+      if (dx > DEF_LANE_WIDTH) continue
+      const buffer = (def.position.y - striker.position.y) * sign
+      if (buffer > bestBuffer) bestBuffer = buffer
+    }
+    // Kein in-lane Verteidiger gefunden → keine Bestrafung HIER (das wäre
+    // ein anderes Problem: "Lane offen", schwer einzeln zu bewerten).
+    if (bestBuffer === -Infinity) continue
+
+    if (bestBuffer < DEF_DEPTH_TARGET) {
+      const severity = DEF_DEPTH_TARGET - bestBuffer  // 0..>16
+      const pairMalus = Math.min(severity * DEF_DEPTH_MALUS_PER_Y, DEF_DEPTH_MAX_PER_PAIR)
+      malus -= pairMalus
+    }
+  }
+
+  return Math.max(malus, -DEF_DEPTH_TOTAL_CAP)
 }
 
 /**
@@ -274,6 +360,13 @@ export function computeStepReward(
         const shooter = after.players.find(p => p.id === turnEvent.playerId)
         if (shooter?.team === team) {
           noteShotByTeam(team)
+          // Schuss-Bonus: gehalten/getroffen = on target (+3),
+          // verfehlt = off target (+1). Bei Tor zusätzlich +15 aus #1.
+          if (turnEvent.type === 'shot_missed') {
+            reward += SHOT_OFF_TARGET
+          } else {
+            reward += SHOT_ON_TARGET
+          }
         }
         break
       }
@@ -281,10 +374,17 @@ export function computeStepReward(
   }
 
   // ── 5. Box-Präsenz (nur wenn wir den Ball haben) ──
+  // Cap: max BOX_PRESENCE_MAX_PLAYERS gezählt — verhindert Reward-Hacking
+  // durch Ankleben aller Stürmer am 5er.
   if (ownerAfter === team) {
-    const boxCount = boxPresenceCount(after, team)
-    if (boxCount > 0) reward += boxCount * BOX_PRESENCE_PER_PLAYER
+    const rawBoxCount = boxPresenceCount(after, team)
+    const cappedBoxCount = Math.min(rawBoxCount, BOX_PRESENCE_MAX_PLAYERS)
+    if (cappedBoxCount > 0) reward += cappedBoxCount * BOX_PRESENCE_PER_PLAYER
   }
+
+  // ── 6. Defensive-Tiefe (jederzeit relevant) ──
+  // Verteidiger zu hoch / nicht in der Lane = leicht überlaufbar.
+  reward += defensiveDepthMalus(after, team)
 
   return reward
 }

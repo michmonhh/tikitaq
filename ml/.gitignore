@@ -22,6 +22,10 @@ tb_logs/
 # RL-Run-Daten (Trajectories + Iter-Logs)
 rl_data/
 
+# Archivierte alte Run-Stände (v2 etc.) — bleibt lokal
+archive_v2/
+archive_*/
+
 # Outcome-CSV bleibt im Repo (klein + dokumentarisch wertvoll)
 # rl_outcomes.csv NICHT ignorieren
 

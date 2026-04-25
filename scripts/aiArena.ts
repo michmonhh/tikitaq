@@ -14,6 +14,7 @@
 
 import * as fs from 'node:fs'
 import * as zlib from 'node:zlib'
+import { finished } from 'node:stream/promises'
 import { TEAMS, getTeamById } from '../src/data/teams'
 import { runAIMatch } from '../src/engine/simulation/runAIMatch'
 import type { ArenaMatchResult } from '../src/engine/simulation/replayTypes'
@@ -59,16 +60,15 @@ function flushTrainingToFile(): void {
   }
 }
 
-function closeTrainingOutput(): Promise<void> {
-  return new Promise((resolve) => {
-    if (trainingGzipStream && trainingFileStream) {
-      trainingGzipStream.end(() => {
-        trainingFileStream!.end(() => resolve())
-      })
-    } else {
-      resolve()
-    }
-  })
+async function closeTrainingOutput(): Promise<void> {
+  // Wichtig: gzip.end() löst über pipe() automatisch ein file.end() aus.
+  // Wir warten auf 'finish'/'close' am File-Stream, sonst kann der
+  // Prozess vor dem Flushen exit'en und der Gzip-EOS-Marker fehlt
+  // → "Compressed file ended before EOS marker" beim Lesen.
+  if (trainingGzipStream && trainingFileStream) {
+    trainingGzipStream.end()
+    await finished(trainingFileStream)
+  }
 }
 
 function arg(flag: string, fallback?: string): string | undefined {
@@ -97,6 +97,11 @@ async function main() {
   // --bc-team <1|2>: nur für ein Team (A/B-Experiment).
   // --sample: stochastische Aktion-Wahl statt argmax (für RL-Trajectory-
   //           Sammlung — sonst hat das Netz keine Exploration).
+  // --opponent-policy <path>: separate Policy für das andere Team (League-
+  //           Training). Genutzt zusammen mit --bc-team — z.B.
+  //           "--bc-policy rl.onnx --bc-team 1 --opponent-policy bc.onnx"
+  //           bedeutet: Team 1 = RL (sample, Trajectory-Export),
+  //           Team 2 = BC (argmax, kein Export).
   const bcPolicyPath = arg('--bc-policy')
   const sampleMode = hasFlag('--sample')
   let bcPolicy: OnnxPolicy | null = null
@@ -113,16 +118,48 @@ async function main() {
     }
   }
 
+  const opponentPolicyPath = arg('--opponent-policy')
+  let opponentPolicy: OnnxPolicy | null = null
+  let opponentTeam: TeamSide | null = null
+  if (opponentPolicyPath) {
+    if (!bcPolicy || bcTeam === null) {
+      console.error('--opponent-policy erfordert --bc-policy mit --bc-team 1|2')
+      process.exit(1)
+    }
+    console.log(`🤖  Lade Opponent-Policy: ${opponentPolicyPath}`)
+    opponentPolicy = await loadOnnxPolicy(opponentPolicyPath)
+    opponentTeam = (bcTeam === 1 ? 2 : 1) as TeamSide
+    console.log(`   aktiviert für Team ${opponentTeam} (argmax, ohne Trajectory-Export)\n`)
+  }
+
   // Baue den onBeforeAITurn Hook
-  const matchOptions = bcPolicy
+  // bcPolicy + bcTeam: das "trainierende" Team (nutzt sample/argmax + Export)
+  // opponentPolicy + opponentTeam: das "feste" Gegner-Team (immer argmax,
+  //   kein Trajectory-Export — diese Decisions sollen nicht das Training stören)
+  const matchOptions = (bcPolicy || opponentPolicy)
     ? {
         onBeforeAITurn: async (state: GameState, team: TeamSide) => {
-          if (bcTeam !== null && team !== bcTeam) return
+          // Welche Policy ist für dieses Team aktiv?
+          const isBcTeam = bcPolicy && (bcTeam === null || bcTeam === team)
+          const isOppTeam = opponentPolicy && opponentTeam === team
+          if (!isBcTeam && !isOppTeam) return
+
           const carrier = getBallCarrier(state.players, state.ball.ownerId)
           if (!carrier || carrier.team !== team) return
           if (carrier.positionLabel === 'TW' || state.mustPass) return
           const options = generateOptions(carrier, state, team)
           if (options.length === 0) return
+
+          if (isOppTeam) {
+            // Opponent: argmax, kein Trajectory-Export
+            const chosenIndex = await opponentPolicy!.chooseOption(
+              state, team, carrier, options, getIntent(team), 'argmax',
+            )
+            setPolicyDecision(carrier.id, {
+              options, chosenIndex, source: 'bc-policy',
+            })
+            return
+          }
 
           // Im RL-Modus brauchen wir log_prob; im BC-Modus reicht argmax.
           if (isTrainingExportActive() || sampleMode) {
@@ -133,7 +170,6 @@ async function main() {
             setPolicyDecision(carrier.id, {
               options, chosenIndex: choice.chosenIndex, source: 'bc-policy',
             })
-            // LastDecision für Trajectory-Logging füllen (wenn Export aktiv)
             if (isTrainingExportActive()) {
               setLastDecision({
                 state, team, carrier, options,

@@ -45,7 +45,15 @@ def main() -> None:
         hidden_dim=ckpt["hidden_dim"],
         dropout=ckpt["dropout"],
     )
-    model.load_state_dict(ckpt["model_state"])
+    # strict=False: BC-Checkpoints haben keinen value_head — der wird beim
+    # Export ohnehin nicht aufgerufen (forward() nutzt ihn nicht). Fehlende
+    # Keys werden mit Default-Init aufgefüllt, das ist hier harmlos.
+    res = model.load_state_dict(ckpt["model_state"], strict=False)
+    if res.missing_keys:
+        print(f"  ℹ Frische Init für {len(res.missing_keys)} Keys "
+              f"(value_head wird im Export nicht genutzt)")
+    if res.unexpected_keys:
+        print(f"  ⚠ Unerwartete Keys ignoriert: {res.unexpected_keys}")
     model.eval()
 
     # Dummy-Input in den erwarteten Dimensionen

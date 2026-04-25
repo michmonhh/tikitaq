@@ -1,19 +1,27 @@
 """
-TIKITAQ ML — Policy-Netz für Behavior Cloning.
+TIKITAQ ML — Policy-Netz für Behavior Cloning + RL Actor-Critic.
 
 Architektur:
 - Context-Encoder: MLP über die Global-Features → Kontext-Vektor
-- Option-Scorer: MLP über (Context, Option-Features) → Skalar pro Option
+- Option-Scorer (Actor): MLP über (Context, Option-Features) → Skalar pro Option
+- Value-Head (Critic): MLP über Context → V(s)
 - Softmax über alle gültigen Options → Wahrscheinlichkeitsverteilung
 
 Das ist strukturell analog zur Heuristik-KI, die jede Option einzeln
 bewertet und dann das Argmax wählt — nur dass der Scorer gelernt ist
 statt handgeschrieben.
 
+Value-Head (seit RL v3, 2026-04-25):
+- Wird für Actor-Critic-PPO genutzt (Advantage = Return − V(s) statt
+  normalisierter Return).
+- Im BC-Training nicht aktiv (kein Value-Loss). Wird im RL frisch
+  initialisiert wenn BC-Checkpoint keine Value-Weights hat.
+- Beim ONNX-Export ignoriert — der Browser braucht nur die Scores.
+
 Invariante Eigenschaften:
 - Funktioniert mit variabler Anzahl Options (dank mask + padding).
 - Output-Dimension = max_options, Softmax respektiert den Mask.
-- Differenzierbar durchgehend, inkl. torch.onnx.export-tauglich.
+- forward() differenzierbar, inkl. torch.onnx.export-tauglich.
 """
 
 from __future__ import annotations
@@ -48,7 +56,7 @@ class PolicyNet(nn.Module):
             nn.ReLU(),
         )
 
-        # Option-Scorer: (context, option) → score
+        # Option-Scorer (Actor): (context, option) → score
         # Shared MLP wird für jede Option separat angewendet (broadcasting)
         self.option_scorer = nn.Sequential(
             nn.Linear(context_dim + option_dim, hidden_dim),
@@ -59,32 +67,66 @@ class PolicyNet(nn.Module):
             nn.Linear(hidden_dim, 1),
         )
 
+        # Value-Head (Critic): context → V(s) [Skalar]
+        # Kleiner als der Actor, weil Value-Schätzung typischerweise
+        # weniger Kapazität braucht. Beim ONNX-Export bleibt diese Sub-
+        # Sequenz unbenutzt, weil forward() sie nicht aufruft.
+        self.value_head = nn.Sequential(
+            nn.Linear(context_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1),
+        )
+
+    def _context(self, global_feat: torch.Tensor) -> torch.Tensor:
+        return self.context_enc(global_feat)
+
+    def _scores_from_context(
+        self,
+        context: torch.Tensor,
+        options: torch.Tensor,
+        mask: torch.Tensor,
+    ) -> torch.Tensor:
+        N = options.shape[1]
+        ctx = context.unsqueeze(1).expand(-1, N, -1)
+        combined = torch.cat([ctx, options], dim=-1)
+        scores = self.option_scorer(combined).squeeze(-1)
+        neg_inf = torch.finfo(scores.dtype).min
+        return scores.masked_fill(mask == 0, neg_inf)
+
     def forward(
         self,
         global_feat: torch.Tensor,   # [B, global_dim]
         options: torch.Tensor,       # [B, max_options, option_dim]
         mask: torch.Tensor,          # [B, max_options]
     ) -> torch.Tensor:
-        """Gibt Logits pro Option zurück, gemasked für Padding."""
-        B, N, _ = options.shape
+        """Gibt Logits pro Option zurück, gemasked für Padding.
 
-        # Context: [B, context_dim]
-        context = self.context_enc(global_feat)
+        ONNX-Export ruft genau diese Methode auf — daher hier KEINE
+        Value-Head-Aufrufe, sonst wäre der ONNX-Graph größer als nötig.
+        """
+        context = self._context(global_feat)
+        return self._scores_from_context(context, options, mask)
 
-        # Broadcast context auf alle Options: [B, N, context_dim]
-        context_expanded = context.unsqueeze(1).expand(-1, N, -1)
+    def forward_with_value(
+        self,
+        global_feat: torch.Tensor,
+        options: torch.Tensor,
+        mask: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Wie forward(), aber liefert zusätzlich V(s) [B].
 
-        # Concat mit option features: [B, N, context_dim + option_dim]
-        combined = torch.cat([context_expanded, options], dim=-1)
+        Genutzt im RL-Training (Actor-Critic). Reuse vom Context spart
+        einen Forward-Pass durch den Encoder.
+        """
+        context = self._context(global_feat)
+        scores = self._scores_from_context(context, options, mask)
+        value = self.value_head(context).squeeze(-1)
+        return scores, value
 
-        # Score jede Option: [B, N, 1] → [B, N]
-        scores = self.option_scorer(combined).squeeze(-1)
-
-        # Invalide Options auf -inf setzen, damit sie nach Softmax 0 sind
-        neg_inf = torch.finfo(scores.dtype).min
-        scores = scores.masked_fill(mask == 0, neg_inf)
-
-        return scores
+    def value(self, global_feat: torch.Tensor) -> torch.Tensor:
+        """Nur V(s) — für GAE/Bootstrap, ohne Action-Sampling-Overhead."""
+        context = self._context(global_feat)
+        return self.value_head(context).squeeze(-1)
 
     def predict(
         self,
