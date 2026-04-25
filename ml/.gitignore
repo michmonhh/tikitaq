@@ -19,5 +19,11 @@ checkpoints/
 runs/
 tb_logs/
 
+# RL-Run-Daten (Trajectories + Iter-Logs)
+rl_data/
+
+# Outcome-CSV bleibt im Repo (klein + dokumentarisch wertvoll)
+# rl_outcomes.csv NICHT ignorieren
+
 # Jupyter
 .ipynb_checkpoints/
