@@ -13,6 +13,7 @@
 import { useGameStore } from '../../stores/gameStore'
 import { executeAITurn, initAIPlan, getAIReasoning } from '../ai'
 import { computeStepReward } from '../ai/reward'
+import { resetRewardState } from '../ai/rewardState'
 import { consumeLastDecision } from '../ai/policy/lastDecision'
 import { recordDecision, isTrainingExportActive } from '../ai/training'
 import { PITCH } from '../constants'
@@ -63,6 +64,9 @@ export async function runAIMatch(
 
   // initGame setzt nur Team 2 als KI. Team 1 auch:
   initAIPlan(initialState.players, 1)
+
+  // Anti-Hacking-Counter pro Match zurücksetzen
+  resetRewardState()
 
   const snapshots: ReplaySnapshot[] = []
   let turn = 0

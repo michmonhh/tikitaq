@@ -24,6 +24,11 @@
 import type { GameEvent, GameState, PlayerData, TeamSide } from '../types'
 import { PITCH } from '../constants'
 import { xgFromPosition } from '../xg'
+import {
+  cornerRewardFactor, foulDrawnRewardFactor, backwardPassExtraMalus,
+  noteCorner, noteShotByTeam, noteFoulDrawn,
+  notePossessionChange, noteBackwardPass, noteForwardPass,
+} from './rewardState'
 
 const GOAL_REWARD = 15.0
 const CONCEDE_REWARD = -15.0
@@ -170,6 +175,7 @@ export function computeStepReward(
     reward += inOwnHalf(after.ball.position, team)
       ? POSSESSION_GAIN_OWN_HALF
       : POSSESSION_GAIN_OPP_HALF
+    notePossessionChange(team)
   } else if (ownerBefore === team && ownerAfter !== null && ownerAfter !== team) {
     // Ballverlust direkt an Gegner
     if (inOwnHalf(after.ball.position, team)) {
@@ -177,6 +183,7 @@ export function computeStepReward(
     } else {
       reward += POSSESSION_LOSS_OPP_HALF_BASE * (1 - conf / 200) * lossMult
     }
+    notePossessionChange(team)
   }
 
   // ── 4. Zwischenziele aus Event ──
@@ -185,7 +192,11 @@ export function computeStepReward(
       case 'corner': {
         // Wer bekommt die Ecke? Hier: das angreifende Team — ist team selbst, falls es Ecken-empfänger ist
         const cornerTeam = ballOwnerTeam(after)
-        if (cornerTeam === team) reward += CORNER_WON
+        if (cornerTeam === team) {
+          // Anti-Hacking: 3+ Ecken in Folge ohne Schuss → ⅓ Reward
+          reward += CORNER_WON * cornerRewardFactor(team)
+          noteCorner(team)
+        }
         break
       }
       case 'tackle_won': {
@@ -206,7 +217,9 @@ export function computeStepReward(
           reward += FOUL_COMMITTED
         } else {
           // Wir wurden gefoult → Foul gezogen (ist gut)
-          reward += FOUL_DRAWN
+          // Anti-Hacking: 3+ Fouls in Folge → halber Reward
+          reward += FOUL_DRAWN * foulDrawnRewardFactor(team)
+          noteFoulDrawn(team)
         }
         break
       }
@@ -227,19 +240,40 @@ export function computeStepReward(
         break
       }
       case 'pass_complete': {
-        // Pass in den 16er?
-        if (turnEvent.passKind === 'cross' || turnEvent.passKind === 'through_ball') {
-          const passer = after.players.find(p => p.id === turnEvent.playerId)
-          if (passer?.team === team) {
-            const oppGoalY = team === 1 ? 0 : 100
-            const target = turnEvent.position
-            if (target) {
+        const passer = after.players.find(p => p.id === turnEvent.playerId)
+        if (passer?.team === team) {
+          // Vorwärts/Rückwärts-Klassifikation für Anti-Spam
+          const target = turnEvent.position
+          if (target) {
+            const beforePos = before.ball.position
+            const isForward = team === 1
+              ? target.y < beforePos.y - 1   // gegen Tor (kleinere y) für Team 1
+              : target.y > beforePos.y + 1
+            if (isForward) {
+              noteForwardPass(team)
+            } else {
+              noteBackwardPass(team)
+              reward += backwardPassExtraMalus(team)  // Negativ ab 6+ in Folge
+            }
+            // Pass in den 16er?
+            if (turnEvent.passKind === 'cross' || turnEvent.passKind === 'through_ball') {
+              const oppGoalY = team === 1 ? 0 : 100
               const inBox = target.x >= PITCH.PENALTY_AREA_LEFT
                 && target.x <= PITCH.PENALTY_AREA_RIGHT
                 && Math.abs(target.y - oppGoalY) < PITCH.PENALTY_AREA_DEPTH
               if (inBox) reward += PASS_INTO_BOX
             }
           }
+        }
+        break
+      }
+      case 'shot_scored':
+      case 'shot_saved':
+      case 'shot_missed': {
+        // Schuss vom Team → Ecken-Counter resetten (Angriff hat Chance erzeugt)
+        const shooter = after.players.find(p => p.id === turnEvent.playerId)
+        if (shooter?.team === team) {
+          noteShotByTeam(team)
         }
         break
       }
