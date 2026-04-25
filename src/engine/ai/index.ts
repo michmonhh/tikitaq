@@ -25,8 +25,10 @@ import { createInitialPlan, reviewStrategy, REVIEW_MINUTES } from './teamPlan'
 import { readField } from './fieldReading'
 import { createMatchMemory, recordEvent } from './memory'
 import { updateConfidence } from './identity'
-import { decideBallAction } from './playerDecision'
+import { decideBallAction, generateOptions } from './playerDecision'
 import { refreshIntent, getIntent, resetIntents } from './matchIntent'
+import { getActivePolicy, isPolicyActiveForTeam } from './policy/manager'
+import { setPolicyDecision } from './policy/override'
 
 // ══════════════════════════════════════════
 //  Modul-State
@@ -143,6 +145,41 @@ export function recordSaveEvent(savingTeam: TeamSide): void {
 // ══════════════════════════════════════════
 //  Einstiegspunkt
 // ══════════════════════════════════════════
+
+/**
+ * Async-Variante: lässt eine geladene ML-Policy den Ballführer-Zug
+ * vorberechnen, bevor der reguläre executeAITurn läuft. Browser-Code
+ * (Match-/Arena-Screen) sollte diese Variante nutzen, damit RL/BC-
+ * Modelle einfach durch `setActivePolicy()` aktiviert werden können.
+ *
+ * Im Server-/CLI-Code ist die Variante mit explizitem onBeforeAITurn-
+ * Hook (in runAIMatch) gleichberechtigt — beide Wege füllen den gleichen
+ * Policy-Override-Slot.
+ */
+export async function executeAITurnAsync(state: GameState): Promise<PlayerAction[]> {
+  const active = getActivePolicy()
+  if (active && isPolicyActiveForTeam(state.currentTurn)) {
+    const carrier = getBallCarrier(state.players, state.ball.ownerId)
+    if (carrier && carrier.team === state.currentTurn
+        && carrier.positionLabel !== 'TW' && !state.mustPass) {
+      const team = state.currentTurn
+      const options = generateOptions(carrier, state, team)
+      if (options.length > 0) {
+        try {
+          const chosenIndex = await active.policy.chooseOption(
+            state, team, carrier, options, getIntent(team), active.mode,
+          )
+          setPolicyDecision(carrier.id, {
+            options, chosenIndex, source: 'bc-policy',
+          })
+        } catch (err) {
+          console.error('[ai] policy inference failed, fallback to heuristic:', err)
+        }
+      }
+    }
+  }
+  return executeAITurn(state)
+}
 
 export function executeAITurn(state: GameState): PlayerAction[] {
   const team: TeamSide = state.currentTurn

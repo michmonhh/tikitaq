@@ -61,8 +61,8 @@ export interface GameStore {
   confirmKickoff: () => void
   confirmSetPieceReady: () => void
   confirmPenaltyDefense: () => void
-  executeAI: () => void
-  executeAIAnimated: () => void
+  executeAI: () => Promise<void>
+  executeAIAnimated: () => Promise<void>
   aiRunning: boolean
 
   showEvent: (message: string, durationMs?: number, eventType?: string) => void

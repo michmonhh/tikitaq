@@ -9,6 +9,7 @@ import { tally } from '../engine/shootout'
 import { useUIStore } from '../stores/uiStore'
 import { useMatchSync } from '../hooks/useMatchSync'
 import { useGameLoop } from '../hooks/useGameLoop'
+import { useAIMode } from '../hooks/useAIMode'
 import { GameSidebar } from '../components/GameSidebar'
 import { Button } from '../components/Button'
 import { getTeamById } from '../data/teams'
@@ -27,6 +28,11 @@ export function MatchScreen() {
   const simulateRemainingOfMatchday = useSeasonStore(s => s.simulateRemainingOfMatchday)
   const finalizedRef = useRef(false)
   const seasonDoneRef = useRef(false)
+
+  // KI-Modus-Hook lädt persisted Mode beim Mount und aktiviert die Policy
+  // (heuristic / bc / rl). Hat keine UI hier — die Wahl wird im Arena- oder
+  // Settings-Screen getroffen.
+  useAIMode()
 
   const team1 = matchConfig ? getTeamById(matchConfig.team1Id) : null
   const team2 = matchConfig ? getTeamById(matchConfig.team2Id) : null

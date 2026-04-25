@@ -1,5 +1,5 @@
 import type { PlayerAction, Position, TickerEntry, TeamSide } from '../../engine/types'
-import { executeAITurn, getAIReasoning, getAITickerMessages } from '../../engine/ai'
+import { executeAITurn, executeAITurnAsync, getAIReasoning, getAITickerMessages } from '../../engine/ai'
 import { animator } from '../../canvas/Animator'
 import { isSetPiecePhase } from './helpers'
 import type { GameStore, StoreSet, StoreGet } from './types'
@@ -9,13 +9,13 @@ import type { GameStore, StoreSet, StoreGet } from './types'
 const MAX_CHAIN_REPLANS = 2
 
 export function makeExecuteAI(set: StoreSet, get: StoreGet): GameStore['executeAI'] {
-  return () => {
+  return async () => {
     const { state } = get()
     if (!state) return
     set({ selectedPlayerId: null })
 
     try {
-      const actions = executeAITurn(state)
+      const actions = await executeAITurnAsync(state)
       set({ aiReasoning: getAIReasoning() })
 
       // AI-Ticker-Nachrichten verarbeiten (Taktikwechsel etc.)
@@ -52,7 +52,7 @@ export function makeExecuteAI(set: StoreSet, get: StoreGet): GameStore['executeA
  * Wrapped in try-catch to prevent permanent "AI Thinking" hang.
  */
 export function makeExecuteAIAnimated(set: StoreSet, get: StoreGet): GameStore['executeAIAnimated'] {
-  return () => {
+  return async () => {
     const { state } = get()
     if (!state || get().aiRunning) return
 
@@ -81,7 +81,7 @@ export function makeExecuteAIAnimated(set: StoreSet, get: StoreGet): GameStore['
 
     let actions: PlayerAction[]
     try {
-      actions = executeAITurn(state)
+      actions = await executeAITurnAsync(state)
     } catch (err) {
       console.error('[AI] executeAITurn crashed:', err)
       clearTimeout(safetyTimer)

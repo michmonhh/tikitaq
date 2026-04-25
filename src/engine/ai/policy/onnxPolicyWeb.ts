@@ -1,20 +1,12 @@
 /**
- * TIKITAQ — ONNX-Policy-Loader für Node-Inferenz.
+ * Browser-Variante des ONNX-Policy-Loaders (onnxruntime-web).
  *
- * Lädt ein trainiertes BC-Netz (als .onnx-Datei, exportiert von
- * ml/export_onnx.py) und liefert eine Policy-Funktion, die für einen
- * gegebenen State + Optionen die beste Option zurückgibt.
- *
- * Funktioniert nur in Node (onnxruntime-node). Für Browser würden wir
- * onnxruntime-web nutzen — selber Code, anderes Import.
- *
- * Nutzung:
- *   const policy = await loadOnnxPolicy('/path/to/bc_policy.onnx')
- *   const chosenIdx = await policy.chooseOption(state, team, carrier, options, intent)
- *   const bestOption = options[chosenIdx]
+ * Identische Schnittstelle wie `onnxPolicy.ts` (Node-Variante), nur das
+ * Backend ist anders. Wird von der React-UI in Arena-Screen und Match-
+ * Screen genutzt.
  */
 
-import * as ort from 'onnxruntime-node'
+import * as ort from 'onnxruntime-web'
 import type { GameState, PlayerData, TeamSide } from '../../types'
 import type { BallOption } from '../playerDecision/types'
 import type { MatchIntent } from '../matchIntent'
@@ -25,24 +17,22 @@ import {
 } from './features'
 import type { OnnxPolicy, PolicyChoice } from './types'
 
-export type { OnnxPolicy, PolicyChoice }
-
 /**
- * Lädt das ONNX-Modell und gibt eine Policy zurück.
- *
- * @param modelPath Pfad zur .onnx-Datei
- * @param maxOptions Muss zum Training passen (Default 16).
+ * Lädt das ONNX-Modell aus einer URL (z.B. `/bc_policy.onnx`).
+ * Im Browser-Build sollte das Modell als statisches Asset in `public/`
+ * verfügbar sein.
  */
-export async function loadOnnxPolicy(
-  modelPath: string,
+export async function loadOnnxPolicyWeb(
+  modelUrl: string,
   maxOptions: number = 16,
 ): Promise<OnnxPolicy> {
-  const session = await ort.InferenceSession.create(modelPath, {
-    executionProviders: ['cpu'],  // Node hat kein MPS, CPU reicht für Inferenz
+  // Wir verwenden den WASM-Backend von onnxruntime-web (kompatibel mit
+  // allen Browsern, kein WebGPU nötig).
+  const session = await ort.InferenceSession.create(modelUrl, {
+    executionProviders: ['wasm'],
     graphOptimizationLevel: 'all',
   })
 
-  // Input-Namen validieren
   const inputNames = session.inputNames
   const expected = ['global', 'options', 'mask']
   for (const name of expected) {
@@ -61,8 +51,6 @@ export async function loadOnnxPolicy(
     intent: MatchIntent | null,
   ): Promise<Float32Array> {
     const enc = encodeStateForPolicy(state, team, carrier, options, intent, maxOptions)
-
-    // Batch-Dimension 1, shape [1, GLOBAL_DIM]
     const globalTensor = new ort.Tensor('float32', enc.globalFeat, [1, GLOBAL_FEATURE_DIM])
     const optionsTensor = new ort.Tensor(
       'float32', enc.optionsFlat, [1, maxOptions, OPTION_FEATURE_DIM],
@@ -74,8 +62,6 @@ export async function loadOnnxPolicy(
       options: optionsTensor,
       mask: maskTensor,
     })
-
-    // Output "scores" hat shape [1, maxOptions]
     const scoresTensor = results['scores']
     if (!scoresTensor) {
       throw new Error(`ONNX-Output hat nicht "scores": ${Object.keys(results)}`)
@@ -83,9 +69,6 @@ export async function loadOnnxPolicy(
     return scoresTensor.data as Float32Array
   }
 
-  /**
-   * Numerisch stabile Softmax über die ersten numValid Logits.
-   */
   function softmax(logits: Float32Array, numValid: number): number[] {
     let max = -Infinity
     for (let i = 0; i < numValid; i++) {
@@ -108,24 +91,21 @@ export async function loadOnnxPolicy(
       acc += probs[i]
       if (r <= acc) return i
     }
-    return probs.length - 1  // numerischer Fallback
+    return probs.length - 1
   }
 
-  function pickIndex(scores: Float32Array, numValid: number, mode: 'argmax' | 'sample'): {
-    chosenIndex: number; logProb: number; probs: number[]
-  } {
+  function pickIndex(scores: Float32Array, numValid: number, mode: 'argmax' | 'sample'): PolicyChoice {
     const probs = softmax(scores, numValid)
     let chosen: number
     if (mode === 'sample') {
       chosen = sampleFromDistribution(probs)
     } else {
-      // argmax
       chosen = 0
       for (let i = 1; i < numValid; i++) {
         if (probs[i] > probs[chosen]) chosen = i
       }
     }
-    const logProb = Math.log(probs[chosen] + 1e-12)  // ε-Schutz vor log(0)
+    const logProb = Math.log(probs[chosen] + 1e-12)
     return { chosenIndex: chosen, logProb, probs }
   }
 
@@ -137,7 +117,7 @@ export async function loadOnnxPolicy(
       return result.chosenIndex
     },
 
-    async chooseOptionWithLogProb(state, team, carrier, options, intent, mode = 'sample') {
+    async chooseOptionWithLogProb(state, team, carrier, options, intent, mode = 'argmax') {
       const scores = await rawScores(state, team, carrier, options, intent)
       const numOpts = Math.min(options.length, maxOptions)
       return pickIndex(scores, numOpts, mode)
@@ -152,10 +132,3 @@ export async function loadOnnxPolicy(
     },
   }
 }
-
-/**
- * Synchrone Policy-Variante: wenn das Netz schon geladen ist, können wir
- * den Forward-Pass blockierend aufrufen. onnxruntime-node's session.run
- * ist aber async — wir wrappen trotzdem, um die Signatur einheitlich zu
- * halten.
- */

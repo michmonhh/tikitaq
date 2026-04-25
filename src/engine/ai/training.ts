@@ -162,7 +162,7 @@ function serializePlayer(p: PlayerData) {
       shortPassing: p.stats.shortPassing,
       highPassing: p.stats.highPassing,
       tackling: p.stats.tackling,
-      shooting: p.stats.shooting,
+      finishing: p.stats.finishing,
       defensiveRadius: p.stats.defensiveRadius,
       ballShielding: p.stats.ballShielding,
       quality: p.stats.quality,

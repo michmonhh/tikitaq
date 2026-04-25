@@ -180,3 +180,46 @@
   margin-top: var(--space-sm);
   font-variant-numeric: tabular-nums;
 }
+
+/* KI-Modus-Switch (Heuristik / BC / RL) */
+.aiModeRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+  margin: var(--space-md) 0;
+}
+.aiModeLabel {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.aiModeBtn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.aiModeBtn:hover { border-color: var(--accent); }
+.aiModeBtn:disabled { opacity: 0.4; cursor: default; }
+.aiModeActive {
+  background: var(--accent);
+  color: #0a1410;
+  border-color: var(--accent);
+}
+.aiModeStatus {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-style: italic;
+}
+.aiModeError {
+  color: #ef4444;
+  font-size: var(--text-xs);
+}

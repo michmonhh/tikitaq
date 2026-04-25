@@ -21,7 +21,7 @@
  * 6. **Führungs-Multiplikator**: dynamisch in den letzten 15 min
  */
 
-import type { GameEvent, GameState, PlayerData, TeamSide } from '../types'
+import type { GameEvent, GameState, TeamSide } from '../types'
 import { PITCH } from '../constants'
 import { xgFromPosition } from '../xg'
 import {

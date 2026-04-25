@@ -7,11 +7,13 @@ import { TeamSelector } from '../components/TeamSelector'
 import { getTeamById } from '../data/teams'
 import { runAIMatch } from '../engine/simulation/runAIMatch'
 import type { ArenaTeamStats } from '../engine/simulation/replayTypes'
+import { useAIMode } from '../hooks/useAIMode'
 import styles from './ArenaScreen.module.css'
 
 export function ArenaScreen() {
   const navigate = useUIStore(s => s.navigate)
   const { lastResult, running, error, setRunning, setResult, setError } = useArenaStore()
+  const { mode: aiMode, setMode: setAiMode, isLoading: aiLoading, error: aiError } = useAIMode()
 
   const [homeId, setHomeId] = useState(1)  // Dortmund
   const [awayId, setAwayId] = useState(0)  // München
@@ -25,10 +27,10 @@ export function ArenaScreen() {
     setRunning(true)
     setError(null)
     // setTimeout gibt dem Browser die Chance, das "Simuliert…"-UI zu rendern
-    // bevor der synchrone Orchestrator den Main-Thread blockiert.
-    setTimeout(() => {
+    // bevor der Orchestrator den Main-Thread blockiert.
+    setTimeout(async () => {
       try {
-        const result = runAIMatch(homeId, awayId, { record: true })
+        const result = await runAIMatch(homeId, awayId, { record: true })
         setResult(result)
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
@@ -79,6 +81,23 @@ export function ArenaScreen() {
             </>
           )}
         </button>
+      </div>
+
+      <div className={styles.aiModeRow}>
+        <span className={styles.aiModeLabel}>KI-Modus:</span>
+        {(['heuristic', 'bc', 'rl'] as const).map(m => (
+          <button
+            key={m}
+            type="button"
+            className={`${styles.aiModeBtn} ${aiMode === m ? styles.aiModeActive : ''}`}
+            disabled={aiLoading}
+            onClick={() => setAiMode(m)}
+          >
+            {m === 'heuristic' ? 'Heuristik' : m.toUpperCase()}
+          </button>
+        ))}
+        {aiLoading && <span className={styles.aiModeStatus}>lädt…</span>}
+        {aiError && <span className={styles.aiModeError}>{aiError}</span>}
       </div>
 
       <div className={styles.actions}>
