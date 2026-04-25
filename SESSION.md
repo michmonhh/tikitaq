@@ -1,4 +1,4 @@
-# TIKITAQ — Session-Stand (2026-04-25, 12:15 Uhr)
+# TIKITAQ — Session-Stand (2026-04-25, 15:10 Uhr — v3-Update)
 
 > Lebendes Protokoll der aktuellen Chat-Sitzung. Nach einem Chat-Crash hier
 > einsteigen: Abschnitt **"Wo wir stehen"** lesen, dann **"Offen"** für den
@@ -7,15 +7,17 @@
 
 ## Wo wir stehen
 
-- Branch: `dev` bei **`68bdc79`** (Anti-Hacking commit), gepusht.
-- **Stufe 1 (Heuristik)**: ✅ abgeschlossen
-- **Stufe 2 (BC)**: ✅ Pipeline + Modell trainiert (val_acc 0.775, fast
-  identisches Spielverhalten wie Heuristik)
-- **Stufe 3 (RL)**: ✅ Komplett gebaut + erste Ergebnisse
-  - PPO-Pipeline funktioniert
-  - Erster Run (5 Iter) brachte BC → Bundesliga-Niveau (Tore 3.07/Match)
-  - Anti-Hacking-Schutz eingebaut nach erstem Run
-  - Aktuell läuft Run v2 (30 Iter × 3 RR × LR 1e-4) mit Outcome-Logging
+- Branch: `dev` bei **`1e0965f`** (v3 Reward + Actor-Critic + League).
+- **Stufe 1 (Heuristik)**: ✅
+- **Stufe 2 (BC)**: ✅ val_acc 0.775
+- **Stufe 3a–3i (PPO + Self-Play)**: ✅
+- **Stufe 3 v2** (30 Iter): ✅ abgeschlossen — siehe `archive_v2/`
+  - Ergebnis: Tore 3.02, xG 1.55, Schüsse 3.9, Box 23.1% — Trend bei
+    Iter 30 noch nicht abgeebbt
+- **Stufe 3 v3** (laufend, gestartet 14:58): 80 Iter × 3 RR Self-Play
+  mit Actor-Critic + überarbeitetem Reward (siehe unten)
+- **Browser-Integration**: ✅ RL-Policy hardcoded in `useAIMode`,
+  ArenaScreen zeigt nur Status (kein UI-Toggle mehr)
 
 ## Stufe 3 — Was gebaut wurde (heute Nacht/Morgen)
 
@@ -85,11 +87,41 @@ Tore folgen mit Verzögerung (Iter 11: 2.99 fast Bundesliga-Ziel 3.00).
 
 ## Caveat: gzip-Streaming-Bug
 
-Bei jedem Trajectory-Export bekommt das Python-RL-Dataset eine Warnung
-"Compressed file ended before the end-of-stream marker was reached". Die
-Robustness-Logik (übersprungene Datei → trotzdem laden was geht) fängt das
-ab. Aber der Bug ist im aiArena-gzip-Closer und sollte irgendwann gefixt
-werden. Daten sind nutzbar, kein Datenverlust.
+~~Bei jedem Trajectory-Export bekommt das Python-RL-Dataset eine Warnung
+"Compressed file ended before the end-of-stream marker was reached".~~
+✅ **Gefixt in `1e0965f`** — `closeTrainingOutput` nutzt jetzt
+`stream/promises.finished()` statt manuellem callback-chaining.
+Iter-3-Trajectories sind die ersten, die mit sauberem EOS-Marker
+geschrieben werden.
+
+## v3-Änderungen (2026-04-25 ab ~14:30)
+
+User-Direktive: **B → C → A → E** plus Defensive-Tiefe-Malus.
+
+### B) Reward-Engineering
+- Box-Präsenz: 0.5 → 0.15 pro Spieler, Cap 3 (Max +0.45/Turn statt
+  potentiell +2.5)
+- Schuss-Reward neu: on target +3, off target +1
+- Defensive-Tiefe-Malus: Verteidiger-Buffer < 8y in derselben Lane wie
+  ein Stürmer in eigener Hälfte → progressiver Malus, gesamt-Cap
+  -1.5/Turn
+
+### C) Actor-Critic
+- `PolicyNet` bekommt `value_head` (Context → V(s))
+- `forward()` weiter Actor-only (für ONNX); `forward_with_value()` für
+  Training
+- `train_rl.py`: Advantage = Return − V(s), MSE-Value-Loss + per-
+  Mini-Batch-Adv-Norm
+- Outcome-CSV: + vf_loss, explained_var
+
+### E) League-Training
+- Neuer Schalter `--opponent-policy <path>` in `aiArena.ts` für
+  asymmetrische Matchups (Team 1 RL trainiert, Team 2 fix BC/Heuristik)
+- `ml/rl_loop_league.sh`: pro Iter 1 self + 1 vs heuristik + 1 vs
+  Pool (BC oder alter Snapshot, alle 10 Iter ein Snapshot)
+
+### Run v3 — Erwartete Laufzeit
+80 Iter × 3 RR × ~28s + ~12s PPO = **~110 min** — gestartet 14:58.
 
 ## Roadmap
 
@@ -106,9 +138,13 @@ werden. Daten sind nutzbar, kein Datenverlust.
 | 3g — Self-Play-Loop | ✅ |
 | 3h — Anti-Hacking | ✅ |
 | 3i — Outcome-Logging | ✅ |
-| 3j — Run v2 (30 Iter, 3 RR) | 🏃 läuft |
-| 4 — Value-Network (Actor-Critic) | TODO falls v2 instabil |
-| 5 — League Training | später |
+| 3j — Run v2 (30 Iter, 3 RR) | ✅ |
+| 3k — Browser-Integration (RL hardcoded) | ✅ |
+| 3l — Reward v3 (Box↓, Schüsse↑, Def-Tiefe) | ✅ |
+| 3m — Actor-Critic (Value-Network) | ✅ |
+| 3n — Run v3 (80 Iter mit AC + neuem Reward) | 🏃 läuft seit 14:58 |
+| 3o — League Training Skript | ✅ (rl_loop_league.sh) |
+| 3p — League-Run | TODO nach v3 |
 
 ## Performance-Benchmark
 
@@ -143,8 +179,16 @@ werden. Daten sind nutzbar, kein Datenverlust.
 
 ## Nächster konkreter Schritt
 
-Run v2 abwarten (~30 min noch), dann:
-1. `rl_outcomes.csv` analysieren — wo war das Maximum?
-2. Mit dem besten Checkpoint Round-Robin-Vergleich vs. BC und Heuristik
-3. Wenn weiter Plateau → Value-Network (Actor-Critic) bauen
-4. Wenn Trend klar nach oben → längeren Run (50-100 Iter)
+Run v3 läuft (~110 min, ETA ~16:50). Sobald fertig:
+1. `python ml/plot_outcomes.py --csv rl_outcomes.csv` für Trend-Plot
+2. Final-Checkpoint nach `public/rl_policy.onnx` kopieren (Browser nutzt
+   den schon hardcoded)
+3. Falls Trend weiter nach oben: League-Run starten
+   (`./ml/rl_loop_league.sh 50 1e-4`)
+4. Falls Trend abebbt: bei v3-Bestand stehenbleiben, Replay im Browser
+   bewerten (D), Reward weiter feintunen (B-2)
+
+## Plot-Script
+
+`ml/plot_outcomes.py` — visualisiert die CSV als 6er-Plot:
+Performance / Volume / Box-Präsenz / Heimsieg / Reward / Critic-Diagnostik.
