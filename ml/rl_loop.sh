@@ -21,12 +21,14 @@
 set -e
 shopt -s nullglob
 
-NUM_ITER="${1:-10}"
-RR_PER_ITER="${2:-1}"
+NUM_ITER="${1:-30}"
+RR_PER_ITER="${2:-3}"           # 3 RR/Iter = 3× mehr Trajectories für stabilere PPO-Updates
+LR="${3:-1e-4}"                 # niedrigere LR ggü. Default 3e-4
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RL_DATA_DIR="$SCRIPT_DIR/rl_data"
 CKPT_DIR="$SCRIPT_DIR/checkpoints"
+OUTCOMES_CSV="$SCRIPT_DIR/rl_outcomes.csv"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -53,7 +55,20 @@ log "═════════════════════════
 log "TIKITAQ RL Self-Play Loop"
 log "  Iterationen: $NUM_ITER"
 log "  Round Robins pro Iteration: $RR_PER_ITER"
+log "  Lernrate: $LR"
 log "════════════════════════════════════════════════════════"
+
+# Outcome-CSV initialisieren falls nicht vorhanden
+if [ ! -f "$OUTCOMES_CSV" ]; then
+  echo "iter,goals_per_match,xg_per_team,shots_per_team,box_presence_pct,corners_per_team,home_win_pct,reward_mean,pg_loss_final" > "$OUTCOMES_CSV"
+fi
+
+# Helper: extrahiert eine Zahl nach einem Label aus aiArena-Output
+parse_metric() {
+  local label="$1"
+  local file="$2"
+  grep -E "$label" "$file" | head -1 | grep -oE '[0-9]+\.[0-9]+|[0-9]+' | head -1
+}
 
 for i in $(seq 1 "$NUM_ITER"); do
   log ""
@@ -62,20 +77,43 @@ for i in $(seq 1 "$NUM_ITER"); do
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   # ── Phase A: Trajectory-Sammlung ─────────────────────────
-  TRAJ_FILE="$RL_DATA_DIR/iter${i}.jsonl.gz"
   log "Phase A: $RR_PER_ITER × Round-Robin mit Sampling..."
+
+  ITER_STATS_FILE="$RL_DATA_DIR/iter${i}_stats.txt"
+  : > "$ITER_STATS_FILE"
 
   for j in $(seq 1 "$RR_PER_ITER"); do
     SUB_TRAJ="$RL_DATA_DIR/iter${i}_part${j}.jsonl.gz"
     log "  Round-Robin $j/$RR_PER_ITER → $(basename "$SUB_TRAJ")"
-    (cd "$PROJECT_ROOT" && \
-      npx tsx scripts/aiArena.ts \
-        --roundrobin \
-        --bc-policy "$CKPT_DIR/rl_policy.onnx" \
-        --sample \
-        --export-training "$SUB_TRAJ" \
-      > /dev/null 2>&1) || log "  ⚠ Run $j fehlgeschlagen"
+    # Letzten Run mit Stats-Capture (für Outcome-Logging) — vorherige
+    # Runs ohne, weil deren Stats identisch wären (selbe Policy)
+    if [ "$j" -eq "$RR_PER_ITER" ]; then
+      (cd "$PROJECT_ROOT" && \
+        npx tsx scripts/aiArena.ts \
+          --roundrobin \
+          --bc-policy "$CKPT_DIR/rl_policy.onnx" \
+          --sample \
+          --export-training "$SUB_TRAJ" \
+        > "$ITER_STATS_FILE" 2>&1) || log "  ⚠ Run $j fehlgeschlagen"
+    else
+      (cd "$PROJECT_ROOT" && \
+        npx tsx scripts/aiArena.ts \
+          --roundrobin \
+          --bc-policy "$CKPT_DIR/rl_policy.onnx" \
+          --sample \
+          --export-training "$SUB_TRAJ" \
+        > /dev/null 2>&1) || log "  ⚠ Run $j fehlgeschlagen"
+    fi
   done
+
+  # Outcome-Stats aus dem letzten Run extrahieren
+  GPM=$(parse_metric "Tore pro Match" "$ITER_STATS_FILE")
+  XG=$(parse_metric "xG / Team" "$ITER_STATS_FILE")
+  SHOTS=$(parse_metric "Schüsse / Team" "$ITER_STATS_FILE")
+  BOX=$(parse_metric "Box-Präsenz / Team" "$ITER_STATS_FILE")
+  CORNERS=$(parse_metric "Eckbälle / Team" "$ITER_STATS_FILE")
+  HOMEWIN=$(parse_metric "Heimsieg" "$ITER_STATS_FILE")
+  log "  Outcomes: Tore/Match=$GPM  xG=$XG  Schüsse=$SHOTS  Box=${BOX}%  Ecken=$CORNERS  Heimsieg=${HOMEWIN}%"
 
   # ── Phase B: Trajectories validieren ─────────────────────
   TRAJ_FILES=("$RL_DATA_DIR"/iter${i}_part*.jsonl.gz)
@@ -88,15 +126,23 @@ for i in $(seq 1 "$NUM_ITER"); do
 
   # ── Phase C: PPO-Update ──────────────────────────────────
   log "Phase B: PPO-Update auf rl_latest.pt..."
+  PPO_OUT_FILE="$RL_DATA_DIR/iter${i}_ppo.txt"
   python train_rl.py \
     --bc-checkpoint "$CKPT_DIR/rl_latest.pt" \
     --data "${TRAJ_FILES[@]}" \
     --output "$CKPT_DIR/rl_iter${i}.pt" \
     --epochs 4 \
-    --lr 3e-4 \
+    --lr "$LR" \
     --clip-eps 0.2 \
     --entropy-beta 0.01 \
-    2>&1 | tee -a "$SCRIPT_DIR/rl_loop.log"
+    2>&1 | tee "$PPO_OUT_FILE" | tee -a "$SCRIPT_DIR/rl_loop.log"
+
+  # Reward-mean + final pg_loss aus dem PPO-Output extrahieren
+  REWARD_MEAN=$(grep "Reward stats" "$PPO_OUT_FILE" | grep -oE 'mean=[-0-9.]+' | head -1 | sed 's/mean=//')
+  FINAL_PG_LOSS=$(grep "pg_loss=" "$PPO_OUT_FILE" | tail -1 | grep -oE 'pg_loss=[-0-9.]+' | sed 's/pg_loss=//')
+
+  # Outcome-CSV-Zeile schreiben
+  echo "$i,$GPM,$XG,$SHOTS,$BOX,$CORNERS,$HOMEWIN,$REWARD_MEAN,$FINAL_PG_LOSS" >> "$OUTCOMES_CSV"
 
   # ── Phase D: Neuer rl_latest + ONNX ──────────────────────
   cp "$CKPT_DIR/rl_iter${i}.pt" "$CKPT_DIR/rl_latest.pt"

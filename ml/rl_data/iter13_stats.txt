@@ -1,0 +1,96 @@
+🤖  Training-Export aktiv → /Users/michael/Documents/tikitaq/ml/rl_data/iter13_part3.jsonl.gz (gzip)
+
+🧠  Lade BC-Policy: /Users/michael/Documents/tikitaq/ml/checkpoints/rl_policy.onnx
+   aktiviert für beide Teams, SAMPLING
+
+🏟  Round-Robin — 18 Teams, 306 Matches (Hin- + Rückspiele)
+
+  10/306 — 1s — letzte: MUC 2–0 BER
+  20/306 — 2s — letzte: DOR 1–1 LEV
+  30/306 — 3s — letzte: DOR 2–1 BOC
+  40/306 — 3s — letzte: LEI 1–2 HOF
+  50/306 — 4s — letzte: LEI 6–1 BRE
+  60/306 — 5s — letzte: LEV 2–1 GLA
+  70/306 — 5s — letzte: FFM 1–3 DOR
+  80/306 — 6s — letzte: FFM 2–1 AUG
+  90/306 — 7s — letzte: STU 1–2 FFM
+  100/306 — 7s — letzte: STU 1–0 WOB
+  110/306 — 8s — letzte: HOF 2–0 KIE
+  120/306 — 9s — letzte: MAI 1–5 MUC
+  130/306 — 9s — letzte: MAI 1–1 HEI
+  140/306 — 10s — letzte: KIE 0–3 LEV
+  150/306 — 11s — letzte: KIE 1–0 FRE
+  160/306 — 11s — letzte: GLA 0–1 HOF
+  170/306 — 12s — letzte: GLA 1–2 PAU
+  180/306 — 13s — letzte: BER 2–0 GLA
+  190/306 — 13s — letzte: HEI 1–1 LEI
+  200/306 — 14s — letzte: HEI 2–0 BOC
+  210/306 — 15s — letzte: AUG 2–2 STU
+  220/306 — 15s — letzte: AUG 2–1 BRE
+  230/306 — 16s — letzte: BOC 2–0 KIE
+  240/306 — 17s — letzte: FRE 0–4 DOR
+  250/306 — 17s — letzte: FRE 1–0 HEI
+  260/306 — 18s — letzte: WOB 1–2 FFM
+  270/306 — 19s — letzte: WOB 3–0 FRE
+  280/306 — 19s — letzte: BRE 2–0 MAI
+  290/306 — 20s — letzte: PAU 0–3 MUC
+  300/306 — 21s — letzte: PAU 1–1 BER
+  306/306 — 21s — letzte: PAU 0–4 BRE
+
+Tabelle:
+  #  Team              Sp  S  U  N   T:T     ±   Pkt
+   1  MUC               34  25  5  4   92:30   +62    80
+   2  LEV               34  23  6  5   79:35   +44    75
+   3  LEI               34  19  9  6   68:38   +30    66
+   4  DOR               34  18  6  10   56:40   +16    60
+   5  STU               34  17  6  11   50:46    +4    57
+   6  HOF               34  16  8  10   51:35   +16    56
+   7  WOB               34  17  4  13   51:44    +7    55
+   8  FFM               34  13  11  10   53:46    +7    50
+   9  FRE               34  14  5  15   39:43    -4    47
+  10  BER               34  12  8  14   38:38    +0    44
+  11  GLA               34  13  5  16   32:44   -12    44
+  12  BRE               34  12  7  15   48:63   -15    43
+  13  AUG               34  10  7  17   38:63   -25    37
+  14  KIE               34  9  5  20   32:53   -21    32
+  15  HEI               34  6  11  17   27:48   -21    29
+  16  MAI               34  8  5  21   34:63   -29    29
+  17  BOC               34  8  5  21   30:61   -31    29
+  18  PAU               34  7  5  22   29:57   -28    26
+
+⏱  Gesamt-Simulationszeit: 21.1s
+
+Tor-Typen:
+  Aus dem Spiel:    743  (87.7%)
+  Elfmeter:         104  (12.3%)
+  Eigentor:           0  (0.0%)
+  Bundesliga-Referenz: ~86 % aus dem Spiel, ~10 % Elfmeter, ~4 % Eigentor
+
+Entstehung der 743 Open-Play-Tore:
+  Steilpass (through):   189  (25.4%)
+  Kurzpass:              173  (23.3%)
+  Langer Ball:           102  (13.7%)
+  Flanke:                220  (29.6%)
+  Alleingang / solo:      59  (7.9%)
+
+Vergleich mit realen Bundesliga-Durchschnitten:
+                              Simuliert     Bundesliga    Δ
+  ─────────────────────────────────────────────────────────────
+  Tore pro Match                    2.77          3.00       -0.23  (-8%)
+  Heimsieg                           45%           43%         +2%  (+5%)
+  Unentschieden                      19%           25%         -6%  (-23%)
+  Auswärtssieg                       36%           32%         +4%  (+11%)
+  xG / Team                         1.45          1.50       -0.05  (-3%)
+  Schüsse / Team                     3.6          12.5        -8.9  (-71%)
+  Schüsse a. Tor / Team              2.7           4.5        -1.8  (-41%)
+  Pässe / Team                        31           450        -419  (-93%)
+  Passquote                        88.0%         82.0%       +6.0%  (+7%)
+  Ballbesitz / Team                51.1%         50.0%       +1.1%  (+2%)
+  Box-Präsenz / Team               22.0%         25.0%       -3.0%  (-12%)
+  Tacklings gewonnen           10.9/Team     17.0/Team    -6.1/Team  (-36%)
+  Fouls / Team                       7.0          12.0        -5.0  (-41%)
+  Gelbe Karten / Team               0.97          1.80       -0.83  (-46%)
+  Rote Karten / Team               0.002         0.050      -0.048  (-97%)
+  Eckbälle / Team                    1.1           4.5        -3.4  (-75%)
+
+  (Referenz: DFL/Opta-Durchschnitte der letzten Bundesliga-Spielzeiten)

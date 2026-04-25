@@ -1,0 +1,19 @@
+Device: mps
+  Geladen: /Users/michael/Documents/tikitaq/ml/checkpoints/rl_latest.pt (val_acc=0.775)
+
+Lade 3 Trajectory-Datei(en)...
+⚠ Skipping iter16_part1.jsonl.gz: Compressed file ended before the end-of-stream marker was reached
+⚠ Skipping iter16_part2.jsonl.gz: Compressed file ended before the end-of-stream marker was reached
+⚠ Skipping iter16_part3.jsonl.gz: Compressed file ended before the end-of-stream marker was reached
+  Loaded 69460 RL transitions from 612 trajectories
+  Reward stats: mean=0.797 std=2.454
+  Return stats (post-normalize): mean=0.000 std=1.000
+  Geladen in 25.0s
+
+Training 4 PPO-Epochen...
+  [1/4] pg_loss=0.0033 entropy=0.693 (4.6s)
+  [2/4] pg_loss=0.0014 entropy=0.698 (4.1s)
+  [3/4] pg_loss=0.0000 entropy=0.699 (4.0s)
+  [4/4] pg_loss=-0.0013 entropy=0.698 (4.2s)
+
+Gespeichert: /Users/michael/Documents/tikitaq/ml/checkpoints/rl_iter16.pt
