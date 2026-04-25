@@ -163,6 +163,43 @@ Gegner.
 `public/rl_policy.onnx` wurde aktualisiert (493 KB, von Iter 80).
 Der Browser nutzt automatisch den neuen v3-Stand.
 
+### League-Run v3.5 (E, 18:13–19:19)
+30 Iter League-Training auf v3-Basis: pro Iter 1 self + 1 vs Heuristik
++ 1 vs Pool (BC + Snapshots).
+
+**Self-Play-Outcomes Mittel (last 10 iter)**:
+| Metrik | v3-pure | **League v3.5** |
+|---|---:|---:|
+| Tore/Match | 3.19 | 3.17 |
+| xG/Team | 1.69 | 1.71 |
+| Schüsse/Team | 4.27 | 4.34 |
+| Box-Präsenz % | 22.67 | 22.48 |
+| explained_var | 0.114 | **0.147** ↑ |
+
+Praktisch identische Self-Play-Stats. Aber **explained_var stieg von
+0.114 auf 0.147 (+30%)** — der Critic erklärt jetzt 15% der Return-
+Varianz. Diversifizierte Trajectories haben gegen die Stochastik geholfen.
+
+**Eval-Tournament (League vs feste Gegner)**:
+| Gegner | v3-pure W% | League W% | Δ |
+|---|---:|---:|---:|
+| Heuristik | 42.5 | 41.5 | -1.0 |
+| BC | 41.5 | **44.0** | +2.5 |
+| RL v2 | 41.5 | **44.0** | +2.5 |
+
+League ist robuster gegen unbekannte Gegner (BC, v2), aber leicht
+schwächer gegen Heuristik. Trade-off zwischen Spezialisierung und
+Generalisierung.
+
+**Deploy-Entscheidung**: `public/rl_policy.onnx` bleibt **v3-pure**
+(offensiver), League als Alternative in
+`ml/checkpoints/rl_policy.onnx` und `archive/v3_pure/rl_policy.onnx`.
+
+Snapshots aus League sind in `ml/checkpoints/snapshots/`:
+- snap_iter10.onnx
+- snap_iter20.onnx
+- snap_iter30.onnx
+
 ## Roadmap
 
 | Phase | Status |
@@ -219,19 +256,17 @@ Der Browser nutzt automatisch den neuen v3-Stand.
 
 ## Nächster konkreter Schritt
 
-✅ **A abgeschlossen.** Plot in `ml/outcomes_v3.png`, Eval-Summary
-in `ml/eval_results/summary.txt`, ONNX deployed.
+✅ **B → C → A → E komplett durch.** Status:
+- v3-pure (80 Iter): deployed in `public/rl_policy.onnx`
+- League v3.5 (30 Iter auf v3-Basis): in `ml/checkpoints/rl_policy.onnx`
+- Beide Eval-Resultate dokumentiert oben.
 
-🏁 **E (League-Training) startet jetzt** mit `rl_loop_league.sh 30 1e-4`
-— 30 Iter à 3 RR (1 self + 1 vs heuristik + 1 vs Pool aus BC + Snapshots).
-Geschätzte Laufzeit: ~3 RR × 30 Iter × ~28s + 30 × ~12s = ~50 min trajectory
-+ ~6 min training = **~60 min**. ETA ~19:10.
-
-Nach E:
-1. Eval `eval_v3.sh` nochmal — League-trainierter v3 sollte robuster
-   gegen Heuristik/BC sein als v3 ohne League
-2. Falls deutlicher Sprung: ONNX nach public/ neu kopieren
-3. Falls kein Sprung: bei v3-Stand bleiben, Browser-Replay anschauen
+**Bei deinem nächsten Login**:
+1. Browser auf, Arena starten — v3 spielt automatisch (argmax-Modus)
+2. Replay anschauen: macht v3 stilistisch was Erkennbares anders als BC/Heuristik?
+3. Wenn ja: D-Phase (Replay-Analyse) starten
+4. Wenn League besser sein soll: `cp ml/checkpoints/rl_policy.onnx public/`
+   und Browser-Hard-Reload
 
 ## Plot-Script
 
