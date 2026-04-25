@@ -13,7 +13,7 @@ import styles from './ArenaScreen.module.css'
 export function ArenaScreen() {
   const navigate = useUIStore(s => s.navigate)
   const { lastResult, running, error, setRunning, setResult, setError } = useArenaStore()
-  const { mode: aiMode, setMode: setAiMode, isLoading: aiLoading, error: aiError } = useAIMode()
+  const { mode: aiMode, isLoading: aiLoading, error: aiError } = useAIMode()
 
   const [homeId, setHomeId] = useState(1)  // Dortmund
   const [awayId, setAwayId] = useState(0)  // München
@@ -84,19 +84,14 @@ export function ArenaScreen() {
       </div>
 
       <div className={styles.aiModeRow}>
-        <span className={styles.aiModeLabel}>KI-Modus:</span>
-        {(['heuristic', 'bc', 'rl'] as const).map(m => (
-          <button
-            key={m}
-            type="button"
-            className={`${styles.aiModeBtn} ${aiMode === m ? styles.aiModeActive : ''}`}
-            disabled={aiLoading}
-            onClick={() => setAiMode(m)}
-          >
-            {m === 'heuristic' ? 'Heuristik' : m.toUpperCase()}
-          </button>
-        ))}
-        {aiLoading && <span className={styles.aiModeStatus}>lädt…</span>}
+        <span className={styles.aiModeLabel}>KI:</span>
+        {aiLoading && <span className={styles.aiModeStatus}>RL-Modell lädt…</span>}
+        {!aiLoading && !aiError && aiMode === 'rl' && (
+          <span className={styles.aiModeStatus}>RL aktiv (beide Teams)</span>
+        )}
+        {!aiLoading && !aiError && aiMode !== 'rl' && (
+          <span className={styles.aiModeStatus}>Heuristik (Fallback)</span>
+        )}
         {aiError && <span className={styles.aiModeError}>{aiError}</span>}
       </div>
 

@@ -1,41 +1,49 @@
 /**
- * React-Hook: KI-Modus-Auswahl im Browser.
+ * React-Hook: KI-Policy-Loader im Browser.
  *
- * Lädt eine ONNX-Policy aus public/ und registriert sie im globalen
- * Policy-Manager. Gibt Status-Informationen für die UI zurück.
+ * AKTUELL HARDCODED auf RL. Lädt rl_policy.onnx beim Mount und registriert
+ * sie im globalen Policy-Manager. Sobald geladen, wird IMMER die RL-Policy
+ * für die KI-Entscheidungen genutzt.
  *
- * Nutzung:
- *   const { mode, setMode, isLoading, error } = useAIMode()
- *   <select value={mode} onChange={e => setMode(e.target.value)}>
- *     <option value="heuristic">Heuristik</option>
- *     <option value="bc">BC</option>
- *     <option value="rl">RL</option>
- *   </select>
+ * Status-Felder für die UI:
+ *   - mode: aktuell aktiver Modus ('rl' wenn geladen, sonst 'heuristic'
+ *           als Fallback)
+ *   - isLoading: true während Modell lädt
+ *   - error: Fehlermeldung wenn Laden fehlschlug
+ *
+ * setMode bleibt im Interface erhalten für später, wenn wir wieder Toggle
+ * wollen — derzeit ist die Funktion ein No-op.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { loadOnnxPolicyWeb } from '../engine/ai/policy/onnxPolicyWeb'
-import { setActivePolicy, clearActivePolicy } from '../engine/ai/policy/manager'
-import type { OnnxPolicy } from '../engine/ai/policy/types'
+import { setActivePolicy } from '../engine/ai/policy/manager'
 
 export type AIMode = 'heuristic' | 'bc' | 'rl'
 
-const MODEL_URLS: Record<Exclude<AIMode, 'heuristic'>, string> = {
-  bc: '/bc_policy.onnx',
-  rl: '/rl_policy.onnx',
+const FORCED_MODEL_URL = '/rl_policy.onnx'
+
+// Singleton-Promise: das Modell wird nur einmal pro Tab geladen
+let loadingPromise: Promise<void> | null = null
+let loadedSuccessfully = false
+let loadError: string | null = null
+
+async function ensurePolicyLoaded(): Promise<void> {
+  if (loadingPromise) return loadingPromise
+  loadingPromise = (async () => {
+    try {
+      const policy = await loadOnnxPolicyWeb(FORCED_MODEL_URL)
+      setActivePolicy({ policy, teams: 'all', mode: 'argmax' })
+      loadedSuccessfully = true
+      console.log('[useAIMode] RL-Policy geladen und aktiv für beide Teams')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      loadError = `Modell-Ladefehler: ${msg}`
+      console.error('[useAIMode] Laden fehlgeschlagen:', e)
+    }
+  })()
+  return loadingPromise
 }
-
-const STORAGE_KEY = 'tikitaq.aiMode'
-
-function getStoredMode(): AIMode {
-  if (typeof window === 'undefined') return 'heuristic'
-  const stored = window.localStorage.getItem(STORAGE_KEY)
-  if (stored === 'bc' || stored === 'rl' || stored === 'heuristic') return stored
-  return 'heuristic'
-}
-
-// Cache für geladene Policies — Reload teuer, daher nur einmal pro Mode laden
-const policyCache = new Map<AIMode, OnnxPolicy>()
 
 export function useAIMode(): {
   mode: AIMode
@@ -43,54 +51,20 @@ export function useAIMode(): {
   isLoading: boolean
   error: string | null
 } {
-  const [mode, setModeState] = useState<AIMode>(() => getStoredMode())
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [, force] = useState(0)
 
-  const setMode = useCallback(async (newMode: AIMode) => {
-    setError(null)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, newMode)
-    }
-
-    if (newMode === 'heuristic') {
-      clearActivePolicy()
-      setModeState('heuristic')
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      let policy = policyCache.get(newMode)
-      if (!policy) {
-        policy = await loadOnnxPolicyWeb(MODEL_URLS[newMode])
-        policyCache.set(newMode, policy)
-      }
-      setActivePolicy({
-        policy,
-        teams: 'all',
-        mode: 'argmax',  // im Live-Spiel deterministisch
-      })
-      setModeState(newMode)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      setError(`Modell-Ladefehler: ${msg}`)
-      // Fallback zur Heuristik
-      clearActivePolicy()
-      setModeState('heuristic')
-      console.error('[useAIMode]', e)
-    } finally {
-      setIsLoading(false)
-    }
+  useEffect(() => {
+    let cancelled = false
+    ensurePolicyLoaded().then(() => {
+      if (!cancelled) force(x => x + 1)
+    })
+    return () => { cancelled = true }
   }, [])
 
-  // Beim Mount: persisted mode wieder aktivieren
-  useEffect(() => {
-    const stored = getStoredMode()
-    if (stored !== 'heuristic') {
-      setMode(stored)
-    }
-  }, [setMode])
-
-  return { mode, setMode, isLoading, error }
+  return {
+    mode: loadedSuccessfully ? 'rl' : 'heuristic',
+    setMode: async () => { /* no-op solange hardcoded */ },
+    isLoading: loadingPromise !== null && !loadedSuccessfully && loadError === null,
+    error: loadError,
+  }
 }
