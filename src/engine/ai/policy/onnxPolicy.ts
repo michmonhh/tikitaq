@@ -24,15 +24,41 @@ import {
   OPTION_FEATURE_DIM,
 } from './features'
 
+export interface PolicyChoice {
+  /** Index der gewählten Option */
+  chosenIndex: number
+  /** Log-Wahrscheinlichkeit der gewählten Aktion (für Policy-Gradient) */
+  logProb: number
+  /** Wahrscheinlichkeitsverteilung über alle valide Options (Länge = numValid) */
+  probs: number[]
+}
+
 export interface OnnxPolicy {
-  /** Wählt den Index der besten Option per Forward-Pass durchs Netz. */
+  /**
+   * Wählt eine Option. Im Argmax-Modus deterministisch (für BC-Inferenz),
+   * im Sampling-Modus stochastisch entsprechend Softmax (für RL).
+   */
   chooseOption(
     state: GameState,
     team: TeamSide,
     carrier: PlayerData,
     options: BallOption[],
     intent: MatchIntent | null,
+    mode?: 'argmax' | 'sample',
   ): Promise<number>
+
+  /**
+   * Wie chooseOption, gibt aber zusätzlich logProb und Probabilities zurück
+   * (gebraucht für RL-Trajectory-Logging).
+   */
+  chooseOptionWithLogProb(
+    state: GameState,
+    team: TeamSide,
+    carrier: PlayerData,
+    options: BallOption[],
+    intent: MatchIntent | null,
+    mode?: 'argmax' | 'sample',
+  ): Promise<PolicyChoice>
 
   /** Gibt die rohen Logits pro Option zurück (für Debugging / log-probs). */
   scoreOptions(
@@ -103,20 +129,64 @@ export async function loadOnnxPolicy(
     return scoresTensor.data as Float32Array
   }
 
+  /**
+   * Numerisch stabile Softmax über die ersten numValid Logits.
+   */
+  function softmax(logits: Float32Array, numValid: number): number[] {
+    let max = -Infinity
+    for (let i = 0; i < numValid; i++) {
+      if (logits[i] > max) max = logits[i]
+    }
+    const exps: number[] = new Array(numValid)
+    let sum = 0
+    for (let i = 0; i < numValid; i++) {
+      exps[i] = Math.exp(logits[i] - max)
+      sum += exps[i]
+    }
+    for (let i = 0; i < numValid; i++) exps[i] /= sum
+    return exps
+  }
+
+  function sampleFromDistribution(probs: number[]): number {
+    const r = Math.random()
+    let acc = 0
+    for (let i = 0; i < probs.length; i++) {
+      acc += probs[i]
+      if (r <= acc) return i
+    }
+    return probs.length - 1  // numerischer Fallback
+  }
+
+  function pickIndex(scores: Float32Array, numValid: number, mode: 'argmax' | 'sample'): {
+    chosenIndex: number; logProb: number; probs: number[]
+  } {
+    const probs = softmax(scores, numValid)
+    let chosen: number
+    if (mode === 'sample') {
+      chosen = sampleFromDistribution(probs)
+    } else {
+      // argmax
+      chosen = 0
+      for (let i = 1; i < numValid; i++) {
+        if (probs[i] > probs[chosen]) chosen = i
+      }
+    }
+    const logProb = Math.log(probs[chosen] + 1e-12)  // ε-Schutz vor log(0)
+    return { chosenIndex: chosen, logProb, probs }
+  }
+
   return {
-    async chooseOption(state, team, carrier, options, intent) {
+    async chooseOption(state, team, carrier, options, intent, mode = 'argmax') {
       const scores = await rawScores(state, team, carrier, options, intent)
       const numOpts = Math.min(options.length, maxOptions)
-      // Argmax nur über valide Optionen (erste numOpts)
-      let bestIdx = 0
-      let bestScore = -Infinity
-      for (let i = 0; i < numOpts; i++) {
-        if (scores[i] > bestScore) {
-          bestScore = scores[i]
-          bestIdx = i
-        }
-      }
-      return bestIdx
+      const result = pickIndex(scores, numOpts, mode)
+      return result.chosenIndex
+    },
+
+    async chooseOptionWithLogProb(state, team, carrier, options, intent, mode = 'sample') {
+      const scores = await rawScores(state, team, carrier, options, intent)
+      const numOpts = Math.min(options.length, maxOptions)
+      return pickIndex(scores, numOpts, mode)
     },
 
     scoreOptions(state, team, carrier, options, intent) {

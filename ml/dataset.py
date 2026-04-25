@@ -48,14 +48,27 @@ def _open_maybe_gz(path: Path) -> Iterable[str]:
 
 
 def iter_records(paths: list[Path]) -> Iterator[dict[str, Any]]:
-    """Iteriert durch alle Records in den angegebenen Dateien (streaming)."""
+    """
+    Iteriert durch alle Records in den angegebenen Dateien (streaming).
+    Bei korrupten gzip-Dateien (z.B. unvollständig geschrieben) wird die
+    Datei übersprungen statt das gesamte Training zu killen.
+    """
     for path in paths:
-        with _open_maybe_gz(path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                yield json.loads(line)
+        try:
+            with _open_maybe_gz(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        yield json.loads(line)
+                    except json.JSONDecodeError:
+                        # Einzelne korrupte Zeile am Ende einer abgeschnittenen
+                        # Datei → ignorieren
+                        continue
+        except (EOFError, OSError) as e:
+            print(f"⚠ Skipping corrupt file {path.name}: {e}", flush=True)
+            continue
 
 
 def count_records(paths: list[Path]) -> int:

@@ -22,6 +22,8 @@ import {
 } from '../src/engine/ai/training'
 import { loadOnnxPolicy, type OnnxPolicy } from '../src/engine/ai/policy/onnxPolicy'
 import { setPolicyDecision, clearPolicyDecisions } from '../src/engine/ai/policy/override'
+import { setLastDecision } from '../src/engine/ai/policy/lastDecision'
+import { isTrainingExportActive } from '../src/engine/ai/training'
 import { getBallCarrier } from '../src/engine/formation'
 import { generateOptions } from '../src/engine/ai/playerDecision'
 import { getIntent } from '../src/engine/ai/matchIntent'
@@ -92,38 +94,62 @@ async function main() {
   }
 
   // --bc-policy <path>: ONNX-Modell laden und als KI statt Heuristik nutzen.
-  // Gilt für beide Teams (oder via --bc-team <1|2> nur für eines, falls man
-  // ein A/B-Experiment will).
+  // --bc-team <1|2>: nur für ein Team (A/B-Experiment).
+  // --sample: stochastische Aktion-Wahl statt argmax (für RL-Trajectory-
+  //           Sammlung — sonst hat das Netz keine Exploration).
   const bcPolicyPath = arg('--bc-policy')
+  const sampleMode = hasFlag('--sample')
   let bcPolicy: OnnxPolicy | null = null
-  let bcTeam: TeamSide | null = null  // null = beide Teams nutzen die Policy
+  let bcTeam: TeamSide | null = null
   if (bcPolicyPath) {
     console.log(`🧠  Lade BC-Policy: ${bcPolicyPath}`)
     bcPolicy = await loadOnnxPolicy(bcPolicyPath)
     const teamArg = arg('--bc-team')
     if (teamArg === '1' || teamArg === '2') {
       bcTeam = Number(teamArg) as TeamSide
-      console.log(`   aktiviert für Team ${bcTeam}\n`)
+      console.log(`   aktiviert für Team ${bcTeam}${sampleMode ? ', SAMPLING' : ''}\n`)
     } else {
-      console.log(`   aktiviert für beide Teams\n`)
+      console.log(`   aktiviert für beide Teams${sampleMode ? ', SAMPLING' : ''}\n`)
     }
   }
-  // Baue den onBeforeAITurn Hook (identisch für alle Matches).
+
+  // Baue den onBeforeAITurn Hook
   const matchOptions = bcPolicy
     ? {
         onBeforeAITurn: async (state: GameState, team: TeamSide) => {
           if (bcTeam !== null && team !== bcTeam) return
           const carrier = getBallCarrier(state.players, state.ball.ownerId)
           if (!carrier || carrier.team !== team) return
-          if (carrier.positionLabel === 'TW' || state.mustPass) return  // Forced passes bleiben heuristisch
+          if (carrier.positionLabel === 'TW' || state.mustPass) return
           const options = generateOptions(carrier, state, team)
           if (options.length === 0) return
-          const chosenIndex = await bcPolicy!.chooseOption(
-            state, team, carrier, options, getIntent(team),
-          )
-          setPolicyDecision(carrier.id, {
-            options, chosenIndex, source: 'bc-policy',
-          })
+
+          // Im RL-Modus brauchen wir log_prob; im BC-Modus reicht argmax.
+          if (isTrainingExportActive() || sampleMode) {
+            const choice = await bcPolicy!.chooseOptionWithLogProb(
+              state, team, carrier, options, getIntent(team),
+              sampleMode ? 'sample' : 'argmax',
+            )
+            setPolicyDecision(carrier.id, {
+              options, chosenIndex: choice.chosenIndex, source: 'bc-policy',
+            })
+            // LastDecision für Trajectory-Logging füllen (wenn Export aktiv)
+            if (isTrainingExportActive()) {
+              setLastDecision({
+                state, team, carrier, options,
+                chosenIndex: choice.chosenIndex,
+                logProb: choice.logProb,
+                probs: choice.probs,
+              })
+            }
+          } else {
+            const chosenIndex = await bcPolicy!.chooseOption(
+              state, team, carrier, options, getIntent(team), 'argmax',
+            )
+            setPolicyDecision(carrier.id, {
+              options, chosenIndex, source: 'bc-policy',
+            })
+          }
         },
       }
     : {}

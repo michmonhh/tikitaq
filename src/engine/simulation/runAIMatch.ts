@@ -12,6 +12,9 @@
 
 import { useGameStore } from '../../stores/gameStore'
 import { executeAITurn, initAIPlan, getAIReasoning } from '../ai'
+import { computeStepReward } from '../ai/reward'
+import { consumeLastDecision } from '../ai/policy/lastDecision'
+import { recordDecision, isTrainingExportActive } from '../ai/training'
 import { PITCH } from '../constants'
 import { resolvePenalty, aiChoosePenaltyDirection } from '../shooting'
 import { handleGoalScored } from '../turn'
@@ -158,6 +161,11 @@ export async function runAIMatch(
       await options.onBeforeAITurn(s, s.currentTurn)
     }
 
+    // Letzte Decision konsumieren (gefüllt von decideBallAction oder
+    // dem Policy-Hook). Wird nach dem Turn mit reward + done aufgefüllt.
+    const lastDecision = isTrainingExportActive() ? consumeLastDecision() : null
+    const stateBefore = lastDecision ? lastDecision.state : null
+
     try {
       const actions = executeAITurn(s)
 
@@ -207,6 +215,30 @@ export async function runAIMatch(
       console.error('[arena] AI turn crashed:', err)
     }
     pendingEvent = store.getState().state?.lastEvent ?? null
+
+    // Trajectory-Eintrag mit Reward schreiben (RL-Felder).
+    // Funktioniert nur wenn decideBallAction eine LastDecision gesetzt hat
+    // (passiert nur bei aktivem Training-Export und mit Ballbesitz).
+    if (lastDecision && stateBefore && isTrainingExportActive()) {
+      const stateAfter = store.getState().state
+      if (stateAfter) {
+        const turnEvent = pendingEvent
+        const reward = computeStepReward(stateBefore, stateAfter, lastDecision.team, turnEvent)
+        // done wird erst beim letzten Turn auf true gesetzt — wir wissen
+        // hier noch nicht ob das der letzte ist; wir setzen done=false
+        // und korrigieren den finalen Eintrag im Match-Cleanup.
+        recordDecision(
+          stateBefore, lastDecision.team, lastDecision.carrier,
+          lastDecision.options, lastDecision.chosenIndex,
+          {
+            reward,
+            done: false,
+            logProb: lastDecision.logProb,
+            probs: lastDecision.probs,
+          },
+        )
+      }
+    }
     // Wenn sich die Phase während des Turns in eine Set-Piece-Phase
     // geändert hat (Pass ins Aus → corner / throw_in, Foul → free_kick,
     // Foul im 16er → penalty), DARF endCurrentTurn nicht gerufen werden.

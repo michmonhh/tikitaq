@@ -29,8 +29,9 @@ import { getStrategyBonus, getFieldBonus, getMemoryBonus } from './playerDecisio
 import { toAction, getReceiverLabel } from './playerDecision/helpers'
 import { lookaheadValue, AI_LOOKAHEAD_ENABLED, AI_LOOKAHEAD_WEIGHT } from './playerDecision/lookahead'
 import { getIntent, getIntentPassBonus } from './matchIntent'
-import { recordDecision, isTrainingExportActive } from './training'
+import { isTrainingExportActive } from './training'
 import { consumePolicyDecision } from './policy/override'
+import { setLastDecision } from './policy/lastDecision'
 
 /**
  * Entscheidet was der Ballführer tut.
@@ -62,6 +63,8 @@ export function decideBallAction(
     const best = override.options[override.chosenIndex]
     if (best) {
       reasoning.set(carrier.id, `[${override.source}] ${best.reason}`)
+      // LastDecision-Slot für Trajectory-Logging ist im Override-Pfad bereits
+      // vom onBeforeAITurn-Hook gefüllt worden (mit logProb).
       return toAction(carrier, best)
     }
   }
@@ -227,12 +230,14 @@ export function decideBallAction(
   options.sort((a, b) => b.score - a.score)
   const best = options[0]
 
-  // ML-Readiness: State-Action-Paar aufzeichnen (wenn Export aktiv).
-  // Die Arena setzt via initTrainingExport() eine Zieldatei, der Live-
-  // Browser-Code bekommt keinen Dateizugriff und Export bleibt aus.
+  // LastDecision-Slot füllen — der Orchestrator (runAIMatch) liest ihn
+  // nach dem Turn aus, fügt state_after + reward hinzu, und ruft dann
+  // recordDecision. Damit hat das RL-Training kompletten Kontext.
   if (isTrainingExportActive()) {
-    const chosenIndex = 0  // nach sort() ist best an Position 0
-    recordDecision(state, team, carrier, options, chosenIndex)
+    setLastDecision({
+      state, team, carrier,
+      options, chosenIndex: 0,  // nach sort() ist best an Position 0
+    })
   }
 
   reasoning.set(carrier.id, best.reason)

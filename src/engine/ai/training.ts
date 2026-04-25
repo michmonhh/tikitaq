@@ -92,12 +92,24 @@ export function drainTrainingBuffer(): string[] {
 
 // ── Aufzeichnung ──
 
+export interface DecisionExtras {
+  /** Reward, der aus dem Übergang dieses Turns resultierte (post-hoc). */
+  reward?: number
+  /** True wenn dies der letzte Turn des Matches ist. */
+  done?: boolean
+  /** Log-Wahrscheinlichkeit der gewählten Aktion (für RL). */
+  logProb?: number
+  /** Wahrscheinlichkeitsverteilung über die Optionen (gleiche Länge wie options). */
+  probs?: number[]
+}
+
 export function recordDecision(
   state: GameState,
   team: TeamSide,
   carrier: PlayerData,
   options: BallOption[],
   chosenIndex: number,
+  extras: DecisionExtras = {},
 ): void {
   if (!exportActive) return
   if (!currentMatchId) return
@@ -108,7 +120,7 @@ export function recordDecision(
   const teammates = state.players.filter(p => p.team === team && p.id !== carrier.id)
   const opponents = state.players.filter(p => p.team !== team)
 
-  const record = {
+  const record: Record<string, unknown> = {
     match_id: currentMatchId,
     turn: turnIdx,
     team,
@@ -125,6 +137,14 @@ export function recordDecision(
     options: options.map(serializeOption),
     chosen_option_index: chosenIndex,
     ai_version: 'stage4',
+  }
+
+  // RL-Felder optional anhängen (nur wenn vom Aufrufer mitgegeben)
+  if (extras.reward !== undefined) record.reward = +extras.reward.toFixed(4)
+  if (extras.done !== undefined) record.done = extras.done
+  if (extras.logProb !== undefined) record.log_prob = +extras.logProb.toFixed(4)
+  if (extras.probs !== undefined) {
+    record.probs = extras.probs.map(p => +p.toFixed(4))
   }
 
   bufferedLines.push(JSON.stringify(record))
