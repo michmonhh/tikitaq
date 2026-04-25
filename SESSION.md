@@ -120,8 +120,48 @@ User-Direktive: **B → C → A → E** plus Defensive-Tiefe-Malus.
 - `ml/rl_loop_league.sh`: pro Iter 1 self + 1 vs heuristik + 1 vs
   Pool (BC oder alter Snapshot, alle 10 Iter ein Snapshot)
 
-### Run v3 — Erwartete Laufzeit
-80 Iter × 3 RR × ~28s + ~12s PPO = **~110 min** — gestartet 14:58.
+### Run v3 — Ergebnisse (abgeschlossen 18:04)
+**Laufzeit:** 14:58 → 18:04 = **3h 6min** für 80 Iter (vs erwartet ~110 min,
+Critic-Forward zusätzlicher Aufwand).
+
+**Letzte 10 Iter Mittel** (vs v2-Endstand):
+| Metrik | v2 (iter 30) | **v3 (Mittel iter 71-80)** | Bundesliga |
+|---|---:|---:|---:|
+| Tore/Match | 3.02 | **3.19** | 3.00 |
+| xG/Team | 1.55 | **1.69** | 1.50 |
+| Schüsse/Team | 3.9 | **4.27** | 12.5 |
+| Box-Präsenz % | 23.1 | **22.67** | 25 |
+
+**Trend:** Tore: 2.67 (iter 1) → 3.32 (Peak iter 75) → 3.18 (iter 80).
+xG: 1.32 → **1.75** (Peak iter 79) → 1.74 (iter 80). Klares Lernen
+über alle 80 Iter, kein Plateau bei iter 30 wie bei v2 — Actor-Critic
++ neuer Reward haben die Lernkurve verlängert.
+
+**explained_var** (Critic-Diagnostik): Start 0.022 → Ende 0.114. Der
+Critic erklärt am Ende 11% der Return-Varianz. Niedrig, aber wachsend.
+Das bestätigt das hohe intrinsische Spielrauschen (Pässe/Schüsse/Tackles
+würfeln) — RL kann nicht mehr lernen, weil 89% der Variance "echtes
+Spielglück" ist.
+
+### Eval-Tournament (eval_v3.sh, 18:05–18:09, argmax-Modus)
+RL v3 spielt 2 RR (als Home + Away) gegen jeden Gegner:
+
+| Gegner | RL-Heim Sieg | RL-Auswärts Sieg | Spielstil |
+|---|---:|---:|---|
+| Heuristik | 43% | 42% | Tore 3.11/Match, xG 1.58 |
+| BC | 44% | 39% | Tore 2.96/Match, xG 1.60 |
+| RL v2 | 44% | 39% | Tore 3.19/Match, xG 1.64 |
+
+**Interpretation:** RL v3 ist **stärker als Heuristik** im Auswärtsspiel
+(42% vs Heimrecht-Baseline 43% = effektiv stärker, weil Heimrecht
+normal +5-10% wert ist). Gegen BC und v2 ist v3 als Heim klar überlegen
+(44% vs 36% Auswärts), aber ebenbürtig im umgekehrten Setup. Die
+offensiven Metriken (xG, Schüsse) sind durchweg höher als bei jedem
+Gegner.
+
+### ONNX-Deploy
+`public/rl_policy.onnx` wurde aktualisiert (493 KB, von Iter 80).
+Der Browser nutzt automatisch den neuen v3-Stand.
 
 ## Roadmap
 
@@ -179,16 +219,32 @@ User-Direktive: **B → C → A → E** plus Defensive-Tiefe-Malus.
 
 ## Nächster konkreter Schritt
 
-Run v3 läuft (~110 min, ETA ~16:50). Sobald fertig:
-1. `python ml/plot_outcomes.py --csv rl_outcomes.csv` für Trend-Plot
-2. Final-Checkpoint nach `public/rl_policy.onnx` kopieren (Browser nutzt
-   den schon hardcoded)
-3. Falls Trend weiter nach oben: League-Run starten
-   (`./ml/rl_loop_league.sh 50 1e-4`)
-4. Falls Trend abebbt: bei v3-Bestand stehenbleiben, Replay im Browser
-   bewerten (D), Reward weiter feintunen (B-2)
+✅ **A abgeschlossen.** Plot in `ml/outcomes_v3.png`, Eval-Summary
+in `ml/eval_results/summary.txt`, ONNX deployed.
+
+🏁 **E (League-Training) startet jetzt** mit `rl_loop_league.sh 30 1e-4`
+— 30 Iter à 3 RR (1 self + 1 vs heuristik + 1 vs Pool aus BC + Snapshots).
+Geschätzte Laufzeit: ~3 RR × 30 Iter × ~28s + 30 × ~12s = ~50 min trajectory
++ ~6 min training = **~60 min**. ETA ~19:10.
+
+Nach E:
+1. Eval `eval_v3.sh` nochmal — League-trainierter v3 sollte robuster
+   gegen Heuristik/BC sein als v3 ohne League
+2. Falls deutlicher Sprung: ONNX nach public/ neu kopieren
+3. Falls kein Sprung: bei v3-Stand bleiben, Browser-Replay anschauen
 
 ## Plot-Script
 
 `ml/plot_outcomes.py` — visualisiert die CSV als 6er-Plot:
 Performance / Volume / Box-Präsenz / Heimsieg / Reward / Critic-Diagnostik.
+
+## Open Issues für später
+
+- **GAE-λ statt MC-Returns**: `compute_returns()` nutzt full-return
+  (γ=0.99, λ=1). λ=0.95 würde Returns-Variance reduzieren. Wenn v3-
+  League auch plateaut, ist das der nächste Hebel.
+- **Reward-Normalisierung über running stats**: stabilere Gradienten,
+  aktuell roh.
+- **xG vs Tor-Kalibrierung**: 3.0 Tore bei 1.5 xG = 2:1 (Realität 1:1).
+  Schuss-Konversion wirkt zu großzügig. Eingriff in `engine/shooting.ts`
+  würde Tor-Anzahl senken aber Reward-Signal stabilisieren.

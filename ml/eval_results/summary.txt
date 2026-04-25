@@ -1,0 +1,13 @@
+TIKITAQ Eval — 2026-04-25 18:09:33
+RL v3: /Users/michael/Documents/tikitaq/ml/checkpoints/rl_policy.onnx
+
+Gegner       | Tore/M     | xG         | Schüsse   | Box%       | Heim%     
+─────────────┼────────────┼────────────┼────────────┼────────────┼────────────
+heuristik    | 3.11       | 1.58       | 3.90       | 22.1       | 40        
+bc           | 2.96       | 1.60       | 4.05       | 22.7       | 40        
+rl_v2        | 3.19       | 1.64       | 4.10       | 22.7       | 42        
+
+Hinweis: Werte sind gemittelt aus RL-als-Heim + RL-als-Auswärts.
+Heimsieg% = wie oft das spielende Heim-Team gewann (45-50% bei
+starker Policy unabhängig vom Opponent — bei schwachem Gegner
+kann RL als Heim deutlich >50% gewinnen).
