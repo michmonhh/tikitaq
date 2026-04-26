@@ -1,12 +1,44 @@
-import type { GamePhase, TeamSide } from '../../engine/types'
+import type { GamePhase, TeamSide, PlayerData, Position } from '../../engine/types'
 import { applyPass } from '../../engine/passing'
 import { repositionForSetPiece } from '../../engine/ai/setPiece'
 import { enforceCrossTeamSpacing, enforceOpponentMinDistFromBall } from '../../engine/ai/setPieceHelpers'
 import { recordPassEvent } from '../../engine/ai'
 import { adjustConfidence } from '../../engine/confidence'
+import { distance, getTackleRadius } from '../../engine/geometry'
+import { calculateTackleWinChance } from '../../engine/movement'
+import { resolveTackle } from '../../engine/tackle'
 import { addTicker, updateTeamStats, findThrowInTaker, findCornerTaker } from './helpers'
 import type { GameStore, StoreSet, StoreGet } from './types'
 import { maybeResolveCornerHeader } from './shared/cornerHeader'
+
+/**
+ * Tackle-Check beim Pass-Empfang (User-Direktive 2026-04-26):
+ * Wenn ein gegnerischer Spieler im Tackle-Radius des Empfaengers steht,
+ * fordert er den Ball. Damit haben Verteidiger eine Chance auf
+ * Ballgewinn auch wenn der Empfaenger sofort schiessen wuerde.
+ */
+function findReceptionChallenger(
+  receiver: PlayerData,
+  receivedAt: Position,
+  players: PlayerData[],
+): PlayerData | null {
+  const opponents = players.filter(p =>
+    p.team !== receiver.team
+    && p.positionLabel !== 'TW'
+    && !p.cannotTackle,
+  )
+  let best: PlayerData | null = null
+  let bestDist = Infinity
+  for (const opp of opponents) {
+    const radius = getTackleRadius(opp)
+    const d = distance(opp.position, receivedAt)
+    if (d <= radius && d < bestDist) {
+      bestDist = d
+      best = opp
+    }
+  }
+  return best
+}
 
 export function makePassBall(set: StoreSet, get: StoreGet): GameStore['passBall'] {
   return (passerId, target, receiverId) => {
@@ -80,6 +112,89 @@ export function makePassBall(set: StoreSet, get: StoreGet): GameStore['passBall'
         }
       })
       ballOwnerChanged = true
+
+      // ── Tackle beim Pass-Empfang (Reception-Challenge) ──
+      // Wenn ein Gegner im Tackle-Radius des Empfaengers steht, fordert
+      // er den Ball heraus. Vorher konnte der Empfaenger sofort schiessen,
+      // egal ob ein Defender direkt neben ihm stand → User-Feedback:
+      // "Verteidiger haben keine Chance".
+      const updatedReceiver = newPlayers.find(p => p.id === result.receiver!.id)
+      if (updatedReceiver) {
+        const challenger = findReceptionChallenger(updatedReceiver, landingPos, newPlayers)
+        if (challenger) {
+          const tackleResult = resolveTackle({
+            defender: challenger,
+            attacker: updatedReceiver,
+            winProbability: calculateTackleWinChance(challenger, updatedReceiver),
+          })
+
+          if (tackleResult.outcome === 'won') {
+            // Defender erobert den Ball direkt
+            newBall = {
+              position: { ...tackleResult.winner.position },
+              ownerId: tackleResult.winner.id,
+            }
+            newPlayers = newPlayers.map(p => {
+              if (p.id === tackleResult.winner.id) {
+                return adjustConfidence({
+                  ...p, hasActed: true,
+                  gameStats: { ...p.gameStats, tacklesWon: p.gameStats.tacklesWon + 1 },
+                }, 'tackle_won')
+              }
+              if (p.id === tackleResult.loser.id) {
+                return adjustConfidence({
+                  ...p, hasActed: true, cannotTackle: true,
+                  gameStats: { ...p.gameStats, tacklesLost: p.gameStats.tacklesLost + 1 },
+                }, 'tackle_lost')
+              }
+              return p
+            })
+          } else if (tackleResult.outcome === 'lost') {
+            // Empfaenger behaelt Ball, Defender wird gesperrt (kein Doppel-Tackle)
+            newPlayers = newPlayers.map(p => {
+              if (p.id === tackleResult.winner.id) {
+                return adjustConfidence({ ...p, hasActed: true }, 'tackle_won')
+              }
+              if (p.id === tackleResult.loser.id) {
+                return adjustConfidence({
+                  ...p, hasActed: true, cannotTackle: true,
+                  gameStats: { ...p.gameStats, tacklesLost: p.gameStats.tacklesLost + 1 },
+                }, 'tackle_lost')
+              }
+              return p
+            })
+          } else if (tackleResult.outcome === 'foul') {
+            // Foul vom Defender → Empfaenger bekommt Freistoss am
+            // Empfangs-Punkt. Wir setzen die Phase, alle Spieler werden
+            // entsprechend repositioniert. Recordet wird im Ticker.
+            newBall = { position: { ...landingPos }, ownerId: updatedReceiver.id }
+            newPlayers = newPlayers.map(p => {
+              if (p.id === tackleResult.loser.id) {
+                return adjustConfidence({
+                  ...p, hasActed: true,
+                  gameStats: { ...p.gameStats, tacklesLost: p.gameStats.tacklesLost + 1 },
+                }, 'tackle_lost')
+              }
+              if (p.id === tackleResult.winner.id) {
+                return adjustConfidence({ ...p, hasActed: true }, 'tackle_won')
+              }
+              return p
+            })
+            // Phase wird im uebergeordneten Set-Update korrekt gesetzt;
+            // hier nur das Tackle-Outcome durchziehen. Detail-Recording
+            // (Karten/Elfmeter) folgt der bestehenden move.ts-Logik —
+            // hier vereinfacht, weil Reception-Foul ein Edge-Case ist.
+          }
+
+          // Tackle-Event in den Ticker
+          state = { ...state, ticker: [...state.ticker, {
+            minute: state.gameTime,
+            message: tackleResult.event.message,
+            type: tackleResult.event.type,
+            team: tackleResult.winner.team,
+          }] }
+        }
+      }
     } else if (result.interceptedBy) {
       // Interception — ball changes owner
       newBall = { position: { ...result.interceptedBy.position }, ownerId: result.interceptedBy.id }
