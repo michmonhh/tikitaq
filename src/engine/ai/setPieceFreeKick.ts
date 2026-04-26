@@ -113,19 +113,27 @@ export function positionOffensiveFreekick(
   const defenders = players.filter(p => isDefender(p.positionLabel))
   const goalkeeper = players.find(p => p.positionLabel === 'TW')
 
-  // Wir ermitteln EINEN naechstgelegenen Spieler (ausser Schuetze) als
-  // einzige zulaessige Short-Option. Der Schuetze selbst steht am ballPos
-  // — das ist nicht in `players` enthalten, weil er bereits seine action
-  // hat, daher hier ignorieren wir ihn implizit.
-  const allFieldPlayers = [...attackers, ...midfielders, ...defenders]
-  const nearestFieldPlayer = allFieldPlayers
-    .map(p => ({ p, d: distance(p.position, ballPos) }))
-    .sort((a, b) => a.d - b.d)[0]?.p ?? null
+  // Short-Option-Regel (User 2026-04-26):
+  //   - Angriffsdrittel: GENAU EIN Spieler als kurze Pass-Option zulaessig
+  //   - Mittelfeld + eigene Haelfte: NUR der Schuetze am Ball, alle
+  //     anderen halten Mindestabstand
+  // `shortOptionId` ist im Angriffsdrittel-Modus die Spieler-ID der
+  // einzigen erlaubten Short-Option (nearest field player), in den
+  // anderen Modi null (keine Ausnahme von keepout).
+  let shortOptionId: string | null = null
+  if (goalDist <= 35) {
+    const allFieldPlayers = [...attackers, ...midfielders, ...defenders]
+    const nearest = allFieldPlayers
+      .map(p => ({ p, d: distance(p.position, ballPos) }))
+      .sort((a, b) => a.d - b.d)[0]?.p ?? null
+    shortOptionId = nearest?.id ?? null
+  }
 
-  /** Push pro Spieler — Short-Option-Spieler bekommt sein wunsch-Target,
-   *  alle anderen werden via enforceShooterKeepout vom Schuetzen weg. */
+  /** Push pro Spieler — Short-Option-Spieler (nur Angriffsdrittel)
+   *  bekommt sein wunsch-Target, alle anderen werden via
+   *  enforceShooterKeepout vom Schuetzen weg. */
   const push = (p: PlayerData, target: Position) => {
-    const isShort = nearestFieldPlayer?.id === p.id
+    const isShort = shortOptionId !== null && shortOptionId === p.id
     actions.push(moveAction(p, enforceShooterKeepout(target, ballPos, isShort)))
   }
 
@@ -166,18 +174,11 @@ export function positionOffensiveFreekick(
     }
   } else if (goalDist <= 65) {
     // ─── Midfield: balanced positioning ───────────────────────────
-    // Genau EIN Mittelfeldspieler als kurze Option (nearestFieldPlayer).
-    // Andere Mids breit verteilt am Halfraum bzw Fluegel.
+    // KEINE kurze Option am Ball — der Schuetze schlaegt direkt einen
+    // langen Ball, alle anderen verteilen sich breit. shortOptionId
+    // ist null in diesem Modus → enforceShooterKeepout pusht alle
+    // Spieler aus dem 12er-Radius weg.
     for (const mid of midfielders) {
-      if (mid.id === nearestFieldPlayer?.id) {
-        // Short option seitlich versetzt
-        push(mid, {
-          x: ballPos.x + (mid.position.x >= ballPos.x ? 9 : -9),
-          y: shiftToward(ballPos.y, 4, team),
-        })
-        continue
-      }
-      // Andere Mids — auf Fluegel oder Halfraum
       const xTarget =
         mid.positionLabel === 'LM' ? 20 :
         mid.positionLabel === 'RM' ? 80 :
@@ -211,18 +212,9 @@ export function positionOffensiveFreekick(
     }
   } else {
     // ─── Own half: compact und sicher ──────────────────────────────
-    // Eigener Freistoss tief in der eigenen Haelfte. Hier ist eine
-    // tiefere Verteidigung gerechtfertigt, ABER auch hier max EIN
-    // Mid in der Schuetzen-Naehe.
+    // KEINE kurze Option am Ball. Der Schuetze (typ. IV/TW) loest die
+    // Situation lang, alle Mids stehen weiter vorn als Anspielstationen.
     for (const mid of midfielders) {
-      if (mid.id === nearestFieldPlayer?.id) {
-        push(mid, {
-          x: ballPos.x + (mid.position.x >= ballPos.x ? 10 : -10),
-          y: shiftToward(ballPos.y, 6, team),
-        })
-        continue
-      }
-      // Andere Mids hochstellen als Anlauf-Punkte
       push(mid, {
         x: mid.positionLabel === 'LM' ? 22 : mid.positionLabel === 'RM' ? 78 : 50,
         y: shiftToward(ballPos.y, 18, team),
