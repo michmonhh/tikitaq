@@ -1,0 +1,394 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg, #1a1a1a);
+  color: var(--text, #f0f0f0);
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  overflow: hidden;
+}
+
+/* ─── Header ─── */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--bg-elevated, #242424);
+  border-bottom: 1px solid var(--border, #333);
+}
+
+.backBtn {
+  background: none;
+  border: 1px solid var(--border, #444);
+  color: var(--text-muted, #aaa);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.backBtn:hover {
+  background: var(--bg-hover, #2c2c2c);
+  color: var(--text, #f0f0f0);
+}
+
+.matchupHeader {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.teamNameH {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.vs {
+  color: var(--text-muted, #888);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ─── Formations-Bar ─── */
+.formationBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 20px;
+  background: var(--bg-elevated, #1f1f1f);
+  border-bottom: 1px solid var(--border, #333);
+  position: relative;
+  font-size: 14px;
+}
+
+.formationLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted, #aaa);
+}
+
+.formationCurrent {
+  background: var(--accent, #4ec27c);
+  color: #000;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.formationCurrent:hover {
+  filter: brightness(1.1);
+}
+
+.opponentFormation {
+  color: var(--text-muted, #888);
+  font-size: 13px;
+}
+
+.formationMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 20px;
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  background: var(--bg-elevated, #2a2a2a);
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+
+.formationBtn {
+  background: var(--bg, #1a1a1a);
+  color: var(--text, #f0f0f0);
+  border: 1px solid var(--border, #444);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.formationBtn:hover {
+  background: var(--bg-hover, #2c2c2c);
+  border-color: var(--accent, #4ec27c);
+}
+
+.formationActive {
+  background: var(--accent, #4ec27c);
+  color: #000;
+  border-color: var(--accent, #4ec27c);
+}
+
+/* ─── Body 3-Spalter ─── */
+.body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 280px 1fr 280px;
+  gap: 16px;
+  padding: 16px 20px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.sidePanel {
+  background: var(--bg-elevated, #232323);
+  border-radius: 10px;
+  padding: 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pitchWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.pitchSvg {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* ─── Player Discs ─── */
+.playerDisc {
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.playerDisc:hover {
+  transform: scale(1.08);
+}
+
+/* ─── Bench-Panel ─── */
+.benchHeader {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted, #888);
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border, #333);
+}
+
+.benchList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.benchEmpty {
+  color: var(--text-muted, #888);
+  font-style: italic;
+  font-size: 13px;
+  text-align: center;
+  padding: 16px 8px;
+}
+
+.benchRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 6px;
+  transition: background 0.1s;
+}
+
+.benchRow:hover {
+  background: var(--bg-hover, #2c2c2c);
+}
+
+.benchDisc {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+.benchInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.benchName {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.benchSubline {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted, #888);
+}
+
+.benchQuality {
+  color: var(--accent, #4ec27c);
+  font-weight: 600;
+}
+
+/* ─── Stats-Panel ─── */
+.playerHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border, #333);
+}
+
+.playerName {
+  display: flex;
+  flex-direction: column;
+}
+
+.playerFirstName {
+  font-size: 12px;
+  color: var(--text-muted, #aaa);
+  font-weight: 400;
+}
+
+.playerLastName {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text, #f0f0f0);
+  line-height: 1.1;
+}
+
+.playerPos {
+  background: var(--accent, #4ec27c);
+  color: #000;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.qualityBadge {
+  background: linear-gradient(90deg, #f5b400, #f59000);
+  color: #000;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 13px;
+  margin: 8px 0 12px;
+  text-align: center;
+}
+
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.statRow {
+  display: grid;
+  grid-template-columns: 90px 1fr 28px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.statLabel {
+  color: var(--text-muted, #aaa);
+}
+
+.statBarWrap {
+  background: rgba(255, 255, 255, 0.08);
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.statBar {
+  background: linear-gradient(90deg, #4ec27c, #6ed999);
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.2s;
+}
+
+.statVal {
+  color: var(--text, #f0f0f0);
+  font-weight: 600;
+  text-align: right;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border, #333);
+  margin: 14px 0 10px;
+}
+
+.formFitness {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 1024px) {
+  .body {
+    grid-template-columns: 220px 1fr 220px;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .header {
+    padding: 8px 14px;
+  }
+
+  .matchupHeader {
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 768px) {
+  .body {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    overflow-y: auto;
+  }
+
+  .pitchWrap {
+    order: -1;
+    min-height: 50vh;
+  }
+
+  .sidePanel {
+    max-height: 280px;
+  }
+}

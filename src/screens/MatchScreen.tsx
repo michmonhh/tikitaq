@@ -47,7 +47,11 @@ export function MatchScreen() {
     if (!matchConfig || !team1 || !team2) return
     finalizedRef.current = false
     seasonDoneRef.current = false
-    initGame(matchConfig.team1Id, matchConfig.team2Id, matchConfig.isVsAI, matchConfig.mustDecide ?? false)
+    initGame(
+      matchConfig.team1Id, matchConfig.team2Id,
+      matchConfig.isVsAI, matchConfig.mustDecide ?? false,
+      matchConfig.formation1, matchConfig.formation2,
+    )
 
     // Duel: determine which team this player controls
     if (matchConfig.isDuel) {

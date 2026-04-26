@@ -7,7 +7,7 @@ import { getTeamById } from '../data/teams'
 import styles from './QuickGameScreen.module.css'
 
 export function QuickGameScreen() {
-  const { navigate, startMatch } = useUIStore()
+  const { navigate, startPlanning } = useUIStore()
   const [team1Id, setTeam1Id] = useState(1)  // Dortmund
   const [team2Id, setTeam2Id] = useState(0)  // München
   const [selecting, setSelecting] = useState<1 | 2 | null>(null)
@@ -16,7 +16,9 @@ export function QuickGameScreen() {
   const team2 = getTeamById(team2Id)
 
   const handlePlay = () => {
-    startMatch({
+    // Vor dem Match in den Planning-Screen — User wählt Formation,
+    // sieht Aufstellung. Mit "PLAY" geht's dann ins eigentliche Match.
+    startPlanning({
       team1Id,
       team2Id,
       isVsAI: true,

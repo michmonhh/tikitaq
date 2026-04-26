@@ -11,6 +11,7 @@ import { ArenaScreen } from './screens/ArenaScreen'
 import { ReplayScreen } from './screens/ReplayScreen'
 import { AuthScreen } from './screens/AuthScreen'
 import { MatchScreen } from './screens/MatchScreen'
+import { MatchPlanningScreen } from './screens/MatchPlanningScreen'
 
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
 
@@ -63,6 +64,8 @@ export default function App() {
       content = <ArenaScreen />; break
     case 'replay':
       content = <ReplayScreen />; break
+    case 'match-planning':
+      content = <MatchPlanningScreen />; break
     case 'match':
       content = <MatchScreen />; break
     default:

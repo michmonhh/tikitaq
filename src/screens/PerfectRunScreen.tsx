@@ -9,7 +9,7 @@ import { getTeamById } from '../data/teams'
 import styles from './PerfectRunScreen.module.css'
 
 export function PerfectRunScreen() {
-  const { navigate, startMatch } = useUIStore()
+  const { navigate, startPlanning } = useUIStore()
   const userId = useAuthStore(s => s.user?.id)
   const { xp, campaigns, loading, error, load, startCampaign, deleteActiveCampaign } = usePerfectRunStore()
 
@@ -38,7 +38,7 @@ export function PerfectRunScreen() {
   const launchNextMatch = (campaign: Campaign) => {
     const opponentId = campaign.opponentOrder[campaign.opponentsBeaten]
     if (opponentId == null) return
-    startMatch({
+    startPlanning({
       team1Id: campaign.teamId,
       team2Id: opponentId,
       isVsAI: true,

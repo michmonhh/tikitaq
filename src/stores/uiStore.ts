@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { FormationType } from '../engine/types'
 
 export type Screen =
   | 'intro'
@@ -10,6 +11,7 @@ export type Screen =
   | 'season'
   | 'arena'
   | 'replay'
+  | 'match-planning'
   | 'match'
 
 export interface MatchConfig {
@@ -26,6 +28,14 @@ export interface MatchConfig {
   // Wenn true, muss das Spiel entschieden werden — bei Gleichstand nach 90min
   // Verlängerung + ggf. Elfmeterschießen. Default false → Remis ist möglich.
   mustDecide?: boolean
+  // Formationen pro Team. Default = team's preferredFormation. Werden im
+  // MatchPlanningScreen vom User für seine Mannschaft überschrieben.
+  formation1?: FormationType
+  formation2?: FormationType
+  // Zurück-Navigation aus dem Planning-Screen — wo kam der User her?
+  // (relevant z.B. für Saison-Modus, wo der Back-Button zur Saison-Übersicht
+  // führen soll, nicht ins Hauptmenü.)
+  planningOrigin?: Screen
 }
 
 interface UIStore {
@@ -33,7 +43,12 @@ interface UIStore {
   matchConfig: MatchConfig | null
 
   navigate: (screen: Screen) => void
+  /** Direkt ins Match (überspringt Planning). */
   startMatch: (config: MatchConfig) => void
+  /** Geht erst in den MatchPlanningScreen, dann ins Match. */
+  startPlanning: (config: MatchConfig) => void
+  /** Vom Planning aus ins Match — übernimmt die im Planning gewählte Formation. */
+  confirmPlanningAndStart: (formation1: FormationType, formation2: FormationType) => void
   goBack: () => void
 }
 
@@ -45,6 +60,20 @@ export const useUIStore = create<UIStore>((set, get) => ({
 
   startMatch: (config) => set({ screen: 'match', matchConfig: config }),
 
+  startPlanning: (config) => set({
+    screen: 'match-planning',
+    matchConfig: { ...config, planningOrigin: get().screen },
+  }),
+
+  confirmPlanningAndStart: (formation1, formation2) => {
+    const cfg = get().matchConfig
+    if (!cfg) return
+    set({
+      screen: 'match',
+      matchConfig: { ...cfg, formation1, formation2 },
+    })
+  },
+
   goBack: () => {
     const { screen, matchConfig } = get()
     switch (screen) {
@@ -52,6 +81,12 @@ export const useUIStore = create<UIStore>((set, get) => ({
         // Perfect Run matches return to the campaign menu, not main menu
         const next: Screen = matchConfig?.campaignId ? 'perfect-run' : 'main-menu'
         set({ screen: next, matchConfig: null })
+        break
+      }
+      case 'match-planning': {
+        // Zurück woher der User kam (QuickGame, Arena, Saison, etc.)
+        const next: Screen = matchConfig?.planningOrigin ?? 'main-menu'
+        set({ screen: next })
         break
       }
       case 'quick-game':

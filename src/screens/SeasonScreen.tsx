@@ -276,7 +276,7 @@ function FormDots({ form }: { form: ('W' | 'D' | 'L')[] }) {
 // ──────────────────────────────────────────────────────────────────
 
 function MatchdayTab({ season }: { season: Season }) {
-  const startMatch = useUIStore(s => s.startMatch)
+  const startPlanning = useUIStore(s => s.startPlanning)
   const userId = useAuthStore(s => s.user?.id)
   const { simulateRemainingOfMatchday, loading } = useSeasonStore()
 
@@ -298,7 +298,7 @@ function MatchdayTab({ season }: { season: Season }) {
 
   const handlePlay = () => {
     if (!userFixture) return
-    startMatch({
+    startPlanning({
       team1Id: userFixture.homeId,
       team2Id: userFixture.awayId,
       isVsAI: true,
