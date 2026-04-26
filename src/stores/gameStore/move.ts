@@ -177,10 +177,15 @@ export function makeMovePlayer(set: StoreSet, get: StoreGet): GameStore['movePla
           return p
         })
       } else {
-        // Lost
+        // Lost — der Verteidiger hat den Tackle versucht und verloren.
+        // User-Direktive 2026-04-26: dieser Verteidiger darf im naechsten
+        // Zug NICHT erneut tackeln, falls der Ballfuehrer durch seinen
+        // Radius dribbelt. Daher cannotTackle: true setzen — wird durch
+        // turn.ts beim Wechsel zurueck zum Verteidiger-Team wieder
+        // resettet, sodass es im uebernaechsten Zug wieder funktioniert.
         newPlayers = newPlayers.map(p => {
           if (p.id === tackleResult.winner.id) return adjustConfidence({ ...p, hasActed: true }, 'tackle_won')
-          if (p.id === tackleResult.loser.id) return adjustConfidence({ ...p, hasActed: true, gameStats: { ...p.gameStats, tacklesLost: p.gameStats.tacklesLost + 1 } }, 'tackle_lost')
+          if (p.id === tackleResult.loser.id) return adjustConfidence({ ...p, hasActed: true, cannotTackle: true, gameStats: { ...p.gameStats, tacklesLost: p.gameStats.tacklesLost + 1 } }, 'tackle_lost')
           return p
         })
       }
