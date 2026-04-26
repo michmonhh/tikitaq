@@ -28,24 +28,33 @@ from typing import Any
 import torch
 
 # ── Feld-Konstanten ─────────────────────────────────────────────
+#
+# ROLE_LABELS v4 (2026-04-26): + "ZM" (zentraler Box-to-Box-Mid).
+# Wird gebraucht für die Formationen 4-1-4-1 und 3-4-1-2. Vorher wurden
+# ZM-Spieler als Role-zero-Vector kodiert → indistinguierbar von Ghost-
+# Padding. Jetzt eigene Identität.
+#
+# Achtung: Encoder muss 1:1 mit src/engine/ai/policy/features.ts
+# übereinstimmen. Bei Änderungen IMMER beide Files anfassen, sonst
+# Modell liefert Unsinn.
 
-ROLE_LABELS = ["TW", "IV", "LV", "RV", "ZDM", "LM", "RM", "OM", "ST"]
+ROLE_LABELS = ["TW", "IV", "LV", "RV", "ZDM", "ZM", "LM", "RM", "OM", "ST"]
 OPTION_TYPES = [
     "shoot", "short_pass", "long_ball", "through_ball",
     "cross", "dribble", "advance", "hold",
 ]
 INTENT_SIDES = ["left", "center", "right"]
 
-# Player-Feature pro Spieler: 2 pos + 9 role one-hot + fitness + confidence = 13
-PLAYER_FEAT_DIM = 13
+# Player-Feature pro Spieler: 2 pos + 10 role one-hot + fitness + confidence = 14
+PLAYER_FEAT_DIM = 2 + len(ROLE_LABELS) + 2
 
 # Global-Feature-Dimension:
 #   3 (ball xy + possession-indicator=1)
-#   + 13 (carrier features)
+#   + PLAYER_FEAT_DIM (carrier features)
 #   + 4 (score_diff, game_time, intent_turns_valid, team)
 #   + 3 (intent one-hot)
-#   + 10 * 13 (teammates; max 10, Position-Label-basiert einsortiert)
-#   + 11 * 13 (opponents; max 11)
+#   + 10 * PLAYER_FEAT_DIM (teammates; max 10)
+#   + 11 * PLAYER_FEAT_DIM (opponents; max 11)
 GLOBAL_FEATURE_DIM = 3 + PLAYER_FEAT_DIM + 4 + 3 + 10 * PLAYER_FEAT_DIM + 11 * PLAYER_FEAT_DIM
 
 # Option-Feature-Dimension:
@@ -61,7 +70,7 @@ OPTION_FEATURE_DIM = 8 + 2 + 1 + 1 + 1 + 2
 # ── Einzel-Encoder ──────────────────────────────────────────────
 
 def _role_onehot(label: str) -> list[float]:
-    """9-dimensional one-hot Vektor für positionLabel."""
+    """One-hot Vektor für positionLabel (Länge = len(ROLE_LABELS))."""
     out = [0.0] * len(ROLE_LABELS)
     if label in ROLE_LABELS:
         out[ROLE_LABELS.index(label)] = 1.0

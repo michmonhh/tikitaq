@@ -13,16 +13,22 @@ import type { GameState, PlayerData, TeamSide } from '../../types'
 import type { BallOption } from '../playerDecision/types'
 import type { MatchIntent } from '../matchIntent'
 
-// ── Konstanten (spiegeln Python) ──────────────────────────────
+// ── Konstanten (spiegeln Python features.py) ──────────────────
+//
+// v4 (2026-04-26): + 'ZM' für 4-1-4-1 und 3-4-1-2. Vorher wurden
+// ZM-Spieler im Role-One-Hot als all-zeros codiert (= identisch mit
+// Ghost-Padding). Jetzt eigene Identität.
+// MUSS synchron zu ml/features.py bleiben.
 
-export const ROLE_LABELS = ['TW', 'IV', 'LV', 'RV', 'ZDM', 'LM', 'RM', 'OM', 'ST'] as const
+export const ROLE_LABELS = ['TW', 'IV', 'LV', 'RV', 'ZDM', 'ZM', 'LM', 'RM', 'OM', 'ST'] as const
 export const OPTION_TYPES = [
   'shoot', 'short_pass', 'long_ball', 'through_ball',
   'cross', 'dribble', 'advance', 'hold',
 ] as const
 export const INTENT_SIDES = ['left', 'center', 'right'] as const
 
-export const PLAYER_FEAT_DIM = 13
+// 2 pos + 10 role one-hot + fitness + confidence = 14
+export const PLAYER_FEAT_DIM = 2 + ROLE_LABELS.length + 2
 export const GLOBAL_FEATURE_DIM = 3 + PLAYER_FEAT_DIM + 4 + 3 + 10 * PLAYER_FEAT_DIM + 11 * PLAYER_FEAT_DIM
 export const OPTION_FEATURE_DIM = 8 + 2 + 1 + 1 + 1 + 2
 
