@@ -87,10 +87,11 @@ export const SHOOTING = {
 
   // Save probability factors.
   // 2026-04-22: BASE_SAVE_CHANCE 0.5 → 0.35, DISTANCE_PENALTY 0.01 → 0.005.
-  // Nahdistanz-Schüsse (<= 10 m) hatten vorher saveChance ~0.65–0.75 und
-  // Torchancen ~20 %; realistisch sind eher 50–60 % Konversion aus dem
-  // Fünfmeterraum. Ergebnis im 306-RR: Ø Tore/Match steigt Richtung 1–2.
-  BASE_SAVE_CHANCE: 0.35,
+  // 2026-04-26 (v4): BASE_SAVE_CHANCE 0.35 → 0.38 — leichte Verschärfung,
+  // weil Tore-Niveau v3 leicht über Bundesliga (3.20 vs 3.0). Erste
+  // Korrektur (0.42) war zu drastisch, ergab 1.95 Tore. 0.38 zielt auf
+  // ~2.6–2.9 Tore/Match.
+  BASE_SAVE_CHANCE: 0.38,
   KEEPER_QUALITY_WEIGHT: 0.004,  // Per keeper quality point
   SHOOTER_FINISHING_WEIGHT: 0.004, // Per shooter finishing point
   DISTANCE_PENALTY: 0.005, // Per unit distance from goal center

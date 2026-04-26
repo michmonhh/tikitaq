@@ -41,6 +41,13 @@ export const DEF_BEHAVIOR: Record<DefenseStrategy, Record<RoleGroup, PositionCon
     midfielder: { verticalOffset: 0, ballAttractionY: 0, ballAttractionX: 0, widthScale: 1.0 },
     attacker:   { verticalOffset: 0, ballAttractionY: 0, ballAttractionX: 0, widthScale: 1.0 },
   },
+  catenaccio: {
+    // Sehr tief, eng, kein Ball-Anziehung in der Höhe — die Kette steht.
+    // Stürmer halten als Konter-Anker eher hoch (Ballverlust für Konter).
+    defender:   { verticalOffset: -8, ballAttractionY: 0.10, ballAttractionX: 0.18, widthScale: 0.92 },
+    midfielder: { verticalOffset: -6, ballAttractionY: 0.14, ballAttractionX: 0.16, widthScale: 0.88 },
+    attacker:   { verticalOffset: 2,  ballAttractionY: 0.00, ballAttractionX: 0.08, widthScale: 0.85 },
+  },
 }
 
 // ── Offensiv-Verhalten pro Strategie ──
@@ -80,6 +87,9 @@ export const PRESS_CONFIG: Record<DefenseStrategy, PressingConfig> = {
   mid_press:   { maxPressers: 1, radius: 15, allowDefenders: false },
   deep_block:  { maxPressers: 1, radius: 12, allowDefenders: false },
   man_marking: { maxPressers: 1, radius: 15, allowDefenders: false },
+  // Catenaccio drückt fast nicht — der Block steht und wartet ab.
+  // Pressing nur wenn der Carrier ganz nah ans 16er kommt.
+  catenaccio:  { maxPressers: 1, radius: 8,  allowDefenders: false },
 }
 
 export const GEGENPRESS_CONFIG: PressingConfig = { maxPressers: 2, radius: 22, allowDefenders: false }

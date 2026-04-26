@@ -18,6 +18,8 @@ export type DefenseStrategy =
   | 'mid_press'     // Mittelfeldpressing
   | 'deep_block'    // Tiefer Abwehrblock
   | 'man_marking'   // Manndeckung über das ganze Feld
+  | 'catenaccio'    // 5er-Kette + Libero-artiges Mauern, kein Pressing,
+                    // sehr eng, lebt von Kontern
 
 /** Offensivstrategie: wie greift die Mannschaft an? */
 export type AttackStrategy =

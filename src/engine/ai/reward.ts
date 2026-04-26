@@ -27,6 +27,12 @@
  *   v2 (2026-04-25): Anti-Hacking-Counters (Ecken, Fouls, Rückpässe)
  *   v3 (2026-04-25): BOX_PRESENCE 0.5→0.15 + Cap 3, Schuss-Reward (+3/+1),
  *                    Defensive-Tiefe-Malus (Verteidiger zu nah am Stürmer)
+ *   v4 (2026-04-26): Defense-First — User will eine "unüberwindbare Defense":
+ *                    - CONCEDE_REWARD: -15 → -25
+ *                    - TACKLE_WON: 1.5 → 3.0; im 16er: 3.0 → 6.0
+ *                    - POSSESSION_LOSS_OWN_HALF_BASE: -2.0 → -3.0
+ *                    - xG-Conceded-Delta (NEU): −15 × Δ Gegner-xG pro Turn
+ *                    - Cleansheet-Bonus: +30 am Match-Ende (kein Gegentor)
  */
 
 import type { GameEvent, GameState, TeamSide } from '../types'
@@ -38,19 +44,28 @@ import {
   notePossessionChange, noteBackwardPass, noteForwardPass,
 } from './rewardState'
 
+// Reward v4 (2026-04-26): defensiv biased — User-Direktive "ich will eine
+// unueberwindbare Defense trainieren". Aenderungen ggue v3:
+// - Tor-Konzession: -15 -> -25
+// - Tackle-Won: 1.5 -> 3.0
+// - Tackle im 16er: 3.0 -> 6.0
+// - Ballverlust eigene Haelfte: -2.0 -> -3.0 (Basis)
+// - Cleansheet-Bonus: +30 (siehe computeTerminalReward)
+// - xG-Conceded-Delta: -15 * delta (dichtes defensives Signal)
 const GOAL_REWARD = 15.0
-const CONCEDE_REWARD = -15.0
+const CONCEDE_REWARD = -25.0  // v4: doppelt so schmerzhaft
 
 const XG_WEIGHT = 10.0
+const XG_CONCEDED_WEIGHT = 15.0  // v4: Gegner-xG generiert dichten neg. Reward
 
 const POSSESSION_GAIN_OWN_HALF = 2.0
 const POSSESSION_GAIN_OPP_HALF = 1.0
-const POSSESSION_LOSS_OWN_HALF_BASE = -2.0
+const POSSESSION_LOSS_OWN_HALF_BASE = -3.0  // v4: 2.0 -> 3.0 (Konter-Risiko)
 const POSSESSION_LOSS_OPP_HALF_BASE = -0.5
 
 const CORNER_WON = 2.0
-const TACKLE_WON = 1.5
-const TACKLE_WON_IN_OWN_BOX = 3.0
+const TACKLE_WON = 3.0           // v4: 1.5 -> 3.0
+const TACKLE_WON_IN_OWN_BOX = 6.0 // v4: 3.0 -> 6.0
 const FOUL_DRAWN = 0.5
 const PASS_INTO_BOX = 1.0
 
@@ -241,6 +256,7 @@ export function computeStepReward(
   // Nur sinnvoll, wenn das Team in beiden States den Ball hat oder hatte.
   const xgMult = endGameMultipliers(after, team).xg
   const opponents = after.players.filter(p => p.team !== team)
+  const ourPlayers = after.players.filter(p => p.team === team)
   const ballerBefore = before.players.find(p => p.id === before.ball.ownerId)
   const ballerAfter = after.players.find(p => p.id === after.ball.ownerId)
 
@@ -248,6 +264,21 @@ export function computeStepReward(
     const xgBefore = xgFromPosition(before.ball.position, team, opponents)
     const xgAfter = xgFromPosition(after.ball.position, team, opponents)
     reward += (xgAfter - xgBefore) * XG_WEIGHT * xgMult
+  }
+
+  // ── 2b. xG-Conceded-Delta (v4, dichtes defensives Signal) ──
+  // Wenn der Gegner den Ball hat, generiert er xG. Jede Erhöhung des
+  // Gegner-xG ist negativer Reward für uns. Damit lernt die Policy,
+  // den Gegner aus gefährlichen Positionen herauszudrängen, statt erst
+  // beim Schuss zu reagieren.
+  const oppTeam: TeamSide = team === 1 ? 2 : 1
+  if (ballerBefore?.team === oppTeam && ballerAfter?.team === oppTeam) {
+    const oppXgBefore = xgFromPosition(before.ball.position, oppTeam, ourPlayers)
+    const oppXgAfter = xgFromPosition(after.ball.position, oppTeam, ourPlayers)
+    // Gegner-xG-Anstieg → unser Verlust. End-Game-Multiplikator wird hier
+    // bewusst NICHT angewendet — der defensive Druck soll konstant hoch
+    // bewertet bleiben, egal wie das Spiel steht.
+    reward -= (oppXgAfter - oppXgBefore) * XG_CONCEDED_WEIGHT
   }
 
   // ── 3. Ballbesitz-Dynamik ──
@@ -391,13 +422,26 @@ export function computeStepReward(
 
 /**
  * Terminal-Reward: am Match-Ende für jedes Team ein einmaliges Signal.
+ *
+ * v4 (2026-04-26): Cleansheet-Bonus +30 — kein Gegentor kassiert ist
+ * der wertvollste defensive Output und wird stark belohnt. Greift
+ * additiv zum Sieg/Unentschieden/Niederlage-Signal.
  */
 export function computeTerminalReward(
   finalState: GameState,
   team: TeamSide,
 ): number {
   const goalDiff = goalDifference(finalState, team)
-  if (goalDiff > 0) return 20.0
-  if (goalDiff < 0) return -10.0
-  return 5.0
+  const goalsConceded = team === 1
+    ? finalState.score.team2
+    : finalState.score.team1
+  const cleansheet = goalsConceded === 0
+  const cleansheetBonus = cleansheet ? 30.0 : 0.0
+
+  let outcome: number
+  if (goalDiff > 0) outcome = 20.0
+  else if (goalDiff < 0) outcome = -10.0
+  else outcome = 5.0
+
+  return outcome + cleansheetBonus
 }

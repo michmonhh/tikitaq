@@ -95,8 +95,69 @@ export function decidePositioning(
         // Erster Presser: direkt auf den Ballführer
         return { target: carrier.position, reason: gp ? 'Gegenpressing' : 'Pressing' }
       }
-      // Zweiter Presser: Passweg abschneiden (Richtung eigenes Tor versetzt)
+      // ── Zweiter Presser: Pass-Linien-Cascade ──
+      //
+      // Vorher: generischer Versatz "8 Einheiten zur Seite, 8 nach hinten".
+      // Verbesserung 2026-04-26: Identifiziere den GEFÄHRLICHSTEN Pass-
+      // Empfänger des Carriers (= nächster freier Mitspieler in unserer
+      // Tor-Richtung) und stelle dich zwischen Carrier und ihn. Damit
+      // wird die wichtigste Pass-Linie aktiv geschlossen, statt nur
+      // generisch zu blockieren.
+      //
+      // Threat-Score eines Mates: y-Position Richtung unser Tor — je
+      // näher er am unseren Tor steht, desto gefährlicher ist der Pass
+      // zu ihm. Plus Bonus für "frei", d.h. weit weg vom nächsten
+      // eigenen Defender. Pragmatischer Score, kein xG-Modell.
       const fwd = team === 1 ? -1 : 1
+      const carrierMates = state.players.filter(p =>
+        p.team === carrier.team
+        && p.id !== carrier.id
+        && p.positionLabel !== 'TW',
+      )
+      const ownDefenders = state.players.filter(p =>
+        p.team === team && p.id !== player.id,
+      )
+      const advancingMates = carrierMates.filter(m => {
+        // Mate muss in unsere Tor-Richtung gerichtet sein (oder seitlich)
+        const matesAhead = team === 1
+          ? m.position.y >= carrier.position.y - 5
+          : m.position.y <= carrier.position.y + 5
+        const closeEnough = distance(carrier.position, m.position) < 32
+        return matesAhead && closeEnough
+      })
+
+      if (advancingMates.length > 0) {
+        let bestMate = advancingMates[0]
+        let bestScore = -Infinity
+        for (const m of advancingMates) {
+          // y-Position Richtung unser Tor — je tiefer in unsere Hälfte,
+          // desto gefährlicher
+          const dangerY = team === 1 ? m.position.y : 100 - m.position.y
+          // Marken-Distanz zum nächsten eigenen Defender (=unmarked-Bonus)
+          const nearestDefDist = ownDefenders.reduce(
+            (min, d) => Math.min(min, distance(d.position, m.position)),
+            Infinity,
+          )
+          const score = dangerY + Math.min(15, nearestDefDist)
+          if (score > bestScore) {
+            bestScore = score
+            bestMate = m
+          }
+        }
+
+        // Stehe zwischen Carrier und gefährlichstem Mate (45/55-Mix mit
+        // leichtem Bias zum Mate — wir wollen seine Bewegung antizipieren).
+        const cutOff = {
+          x: carrier.position.x * 0.42 + bestMate.position.x * 0.58,
+          y: carrier.position.y * 0.42 + bestMate.position.y * 0.58,
+        }
+        return {
+          target: cutOff,
+          reason: gp ? 'Gegenpressing (Pass-Linie)' : 'Pressing (Pass-Linie)',
+        }
+      }
+
+      // Fallback: kein Mate erkennbar → generischer Versatz Richtung Tor
       const cutOff = {
         x: carrier.position.x + (player.position.x > carrier.position.x ? 8 : -8),
         y: carrier.position.y + fwd * 8,

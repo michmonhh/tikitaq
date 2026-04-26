@@ -95,7 +95,7 @@ export function calculateShotAccuracy(
     baseAccuracy += 0.10
   }
 
-  // Finishing stat modulates: low finishing reduces, high finishing boosts
+  // Finishing stat modulates: low finishing reduces, high finishing boosts.
   const accuracy = baseAccuracy * (0.6 + finishing * 0.5) * getConfidenceModifier(shooter)
   return Math.max(0.05, Math.min(0.95, accuracy))
 }

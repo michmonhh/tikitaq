@@ -64,9 +64,9 @@ export function defensivePosition(
   // Bei 82/78/72 steht der höchste Angreifer bei Team 1 zwischen y=18 und y=28
   // (also am oder im 16er), wenn der Gegner in Ballbesitz ist.
   const maxFromGoal: Record<RoleGroup, Record<DefenseStrategy, number>> = {
-    defender:   { high_press: 40, mid_press: 35, deep_block: 28, man_marking: 35 },
-    midfielder: { high_press: 55, mid_press: 48, deep_block: 40, man_marking: 48 },
-    attacker:   { high_press: 82, mid_press: 78, deep_block: 72, man_marking: 78 },
+    defender:   { high_press: 40, mid_press: 35, deep_block: 28, man_marking: 35, catenaccio: 22 },
+    midfielder: { high_press: 55, mid_press: 48, deep_block: 40, man_marking: 48, catenaccio: 34 },
+    attacker:   { high_press: 82, mid_press: 78, deep_block: 72, man_marking: 78, catenaccio: 70 },
   }
   const ceiling = maxFromGoal[role][defStrat]
   if (team === 1 && y < (100 - ceiling)) y = 100 - ceiling

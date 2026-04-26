@@ -42,6 +42,10 @@ const VALID_COMBOS: ComboTemplate[] = [
   // Man Marking: Chaos, gegen Ballbesitz-Teams
   { defense: 'man_marking', attack: 'counter',    transition: 'fall_back' },
   { defense: 'man_marking', attack: 'direct',     transition: 'fall_back' },
+  // Catenaccio: extreme Defensive, lebt von Kontern. Passt zu Underdog-
+  // Teams gegen klar überlegene Gegner.
+  { defense: 'catenaccio', attack: 'counter',     transition: 'fall_back' },
+  { defense: 'catenaccio', attack: 'direct',      transition: 'fall_back' },
 ]
 
 // ══════════════════════════════════════════
@@ -117,6 +121,18 @@ function scoreDefense(
       return (str.opponentHasStarPlayer ? 30 : 0)
         + str.defense * 10
         - (str.opponentHasFastAttack ? 15 : 0)
+
+    case 'catenaccio':
+      // Catenaccio ist die Underdog-Notbremse: nur sinnvoll wenn wir
+      // klar unterlegen sind und der Gegner Druck macht. Belohnt
+      // Defensiv-Stärke und Konter-Tempo.
+      return (100 - id.selfImage) * 0.40
+        + (str.opponentHasFastAttack ? 12 : 0)
+        + (str.overall < -0.2 ? 25 : 0)        // klar schwächer
+        + str.pace * 10                          // brauchen wir für Konter
+        + (100 - id.confidence) * 0.20
+        - (id.selfImage > 65 ? 20 : 0)         // Top-Teams spielen kein Catenaccio
+        - (str.ownDefenseIsFast ? 6 : 0)       // schnelle Abwehr braucht keinen Block
   }
 }
 
@@ -153,6 +169,8 @@ function synergyBonus(def: DefenseStrategy, atk: AttackStrategy): number {
   if (def === 'deep_block' && atk === 'counter') return 8       // Mourinho
   if (def === 'mid_press' && atk === 'counter') return 5        // Simeone
   if (def === 'man_marking' && atk === 'counter') return 6      // Chaos + Konter
+  if (def === 'catenaccio' && atk === 'counter') return 12      // Italien klassisch
+  if (def === 'catenaccio' && atk === 'direct') return 8        // Lange Bälle aus Block
   return 0
 }
 
@@ -168,6 +186,7 @@ function buildReason(
     mid_press: 'Mittelfeldpressing',
     deep_block: 'Tiefer Block',
     man_marking: 'Manndeckung',
+    catenaccio: 'Catenaccio',
   }
   const atkNames: Record<AttackStrategy, string> = {
     possession: 'Ballbesitz',
@@ -207,6 +226,7 @@ export function reviewStrategy(
   memory: MatchMemory,
 ): { newStrategy: StrategyCombo; tickerMessage: string } | null {
   const stats = team === 1 ? state.matchStats.team1 : state.matchStats.team2
+  const oppStats = team === 1 ? state.matchStats.team2 : state.matchStats.team1
   const score = team === 1 ? state.score : { team1: state.score.team2, team2: state.score.team1 }
 
   // Confidence-Rahmen weiten bei Führung/Rückstand
@@ -216,6 +236,13 @@ export function reviewStrategy(
 
   // Performance-Indikatoren
   const ownShots = stats.shotsOnTarget + stats.shotsOff
+  const oppShots = oppStats.shotsOnTarget + oppStats.shotsOff
+  const oppXG = oppStats.xG
+  // Erwartete Schüsse/xG bis zur aktuellen Minute (linear skaliert
+  // gegen 4 Schüsse/Match und 1.5 xG/Match Bundesliga-Niveau).
+  const minutesPlayed = Math.max(state.gameTime, 1)
+  const expectedOppShots = (4.0 / 90) * minutesPlayed
+  const expectedOppXG = (1.5 / 90) * minutesPlayed
 
   // Memory-Erkenntnisse
   const avoiding = getAvoiding(memory)
@@ -254,6 +281,39 @@ export function reviewStrategy(
   if (score.team2 - score.team1 >= 2 && state.gameTime > 55) {
     needsChange = true
     changeReason = 'Großer Rückstand — alles nach vorn'
+  }
+
+  // ── Defense-Trigger (neu 2026-04-26) ──
+  // Diese Trigger schauen auf die DEFENSIVE Performance: lassen wir zu
+  // viele Schüsse/xG zu? Müssen wir tiefer stehen?
+
+  // Zu viele zugelassene Schüsse vs Bundesliga-Erwartungswert (50%+ darüber)
+  if (cur.defense === 'high_press' && oppShots > expectedOppShots * 1.5
+      && state.gameTime > 25 && !leading) {
+    needsChange = true
+    changeReason = 'Zu viele zugelassene Schüsse — tiefer stehen'
+  }
+
+  // xG-conceded klar über Bundesliga-Niveau (1.5/Match) → tieferer Block
+  if (oppXG > expectedOppXG * 1.4 && state.gameTime > 30
+      && (cur.defense === 'high_press' || cur.defense === 'mid_press')) {
+    needsChange = true
+    changeReason = `xG-Druck zu hoch (${oppXG.toFixed(2)}) — defensiver`
+  }
+
+  // Schnelle 2 Gegentore in der ersten Halbzeit → Catenaccio aufziehen
+  if (score.team2 >= 2 && state.gameTime < 45
+      && cur.defense !== 'catenaccio' && cur.defense !== 'deep_block') {
+    needsChange = true
+    changeReason = 'Frühe 2 Gegentore — Catenaccio'
+  }
+
+  // Konter-Drohung erkannt: Gegner hat schnelle Stürmer + viele schnelle
+  // Gegenangriffe → Block tiefer halten
+  if (plan.strength.opponentHasFastAttack && oppShots > expectedOppShots * 1.3
+      && cur.defense === 'high_press') {
+    needsChange = true
+    changeReason = 'Schnelle Konter — Block fallen lassen'
   }
 
   if (!needsChange) {
