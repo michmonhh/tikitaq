@@ -27,115 +27,127 @@ export interface FormationSlot {
 // FormationType wird in src/engine/types.ts definiert (Domain-Typ)
 
 // ─── 4-3-3 (Klassisch, ausgeglichen) ─────────────────────────
+//
+// Aufstellungs-Konvention (User 2026-04-26):
+//   ST/OM: an der Mittellinie (y≈51-52 selbst bei Bayern)
+//   LM/RM/ZM: knapp dahinter (y≈54-57)
+//   ZDM:   defensiver Halbraum (y≈57-60)
+//   LV/RV: gestaffelt aufrückend (y≈62-66)
+//   IV:    am tiefsten (y≈69-75)
+//   TW:    Box (y≈82-86)
+//
+// Push-Werte sind moderat genug, dass die Staffelung auch bei Bayern
+// (Confidence ~0.74) klar sichtbar bleibt. Bei Bochum (~0.40) ist die
+// Spreizung noch ausgepraegter (eigene Haelfte deutlich enger).
 export const FORMATION_433: FormationSlot[] = [
-  { positionLabel: 'TW',  x: 50, y: 93, push: 20, xSpread: 0 },
-  { positionLabel: 'LV',  x: 22, y: 82, push: 40, xSpread: 12 },
-  { positionLabel: 'IV',  x: 42, y: 84, push: 40, xSpread: 4 },
-  { positionLabel: 'IV',  x: 58, y: 84, push: 40, xSpread: 4 },
-  { positionLabel: 'RV',  x: 78, y: 82, push: 40, xSpread: 12 },
-  { positionLabel: 'ZDM', x: 50, y: 72, push: 18, xSpread: 0 },
-  { positionLabel: 'LM',  x: 25, y: 66, push: 20, xSpread: 12 },
-  { positionLabel: 'RM',  x: 75, y: 66, push: 20, xSpread: 12 },
-  { positionLabel: 'OM',  x: 50, y: 62, push: 10, xSpread: 0 },
-  { positionLabel: 'ST',  x: 40, y: 56, push: 8,  xSpread: 8 },
-  { positionLabel: 'ST',  x: 60, y: 56, push: 8,  xSpread: 8 },
+  { positionLabel: 'TW',  x: 50, y: 92, push: 14, xSpread: 0 },
+  { positionLabel: 'LV',  x: 22, y: 72, push: 14, xSpread: 12 },
+  { positionLabel: 'IV',  x: 42, y: 82, push: 18, xSpread: 4 },
+  { positionLabel: 'IV',  x: 58, y: 82, push: 18, xSpread: 4 },
+  { positionLabel: 'RV',  x: 78, y: 72, push: 14, xSpread: 12 },
+  { positionLabel: 'ZDM', x: 50, y: 64, push: 10, xSpread: 0 },
+  { positionLabel: 'LM',  x: 25, y: 60, push: 8,  xSpread: 12 },
+  { positionLabel: 'RM',  x: 75, y: 60, push: 8,  xSpread: 12 },
+  { positionLabel: 'OM',  x: 50, y: 56, push: 5,  xSpread: 0 },
+  { positionLabel: 'ST',  x: 40, y: 51, push: 3,  xSpread: 8 },
+  { positionLabel: 'ST',  x: 60, y: 51, push: 3,  xSpread: 8 },
 ]
 
 // ─── 4-2-3-1 (Modernes Pressing-System) ──────────────────────
 // 2 ZDMs als Doppel-Sechs, 3 Offensive Mids hinter 1 ST.
 export const FORMATION_4231: FormationSlot[] = [
-  { positionLabel: 'TW',  x: 50, y: 93, push: 20, xSpread: 0 },
-  { positionLabel: 'LV',  x: 22, y: 82, push: 38, xSpread: 12 },
-  { positionLabel: 'IV',  x: 42, y: 84, push: 40, xSpread: 4 },
-  { positionLabel: 'IV',  x: 58, y: 84, push: 40, xSpread: 4 },
-  { positionLabel: 'RV',  x: 78, y: 82, push: 38, xSpread: 12 },
-  { positionLabel: 'ZDM', x: 42, y: 72, push: 14, xSpread: 4 },
-  { positionLabel: 'ZDM', x: 58, y: 72, push: 14, xSpread: 4 },
-  { positionLabel: 'LM',  x: 25, y: 62, push: 20, xSpread: 12 },
-  { positionLabel: 'OM',  x: 50, y: 60, push: 12, xSpread: 0 },
-  { positionLabel: 'RM',  x: 75, y: 62, push: 20, xSpread: 12 },
-  { positionLabel: 'ST',  x: 50, y: 54, push: 8,  xSpread: 0 },
+  { positionLabel: 'TW',  x: 50, y: 92, push: 14, xSpread: 0 },
+  { positionLabel: 'LV',  x: 22, y: 72, push: 14, xSpread: 12 },
+  { positionLabel: 'IV',  x: 42, y: 82, push: 18, xSpread: 4 },
+  { positionLabel: 'IV',  x: 58, y: 82, push: 18, xSpread: 4 },
+  { positionLabel: 'RV',  x: 78, y: 72, push: 14, xSpread: 12 },
+  { positionLabel: 'ZDM', x: 42, y: 64, push: 10, xSpread: 4 },
+  { positionLabel: 'ZDM', x: 58, y: 64, push: 10, xSpread: 4 },
+  { positionLabel: 'LM',  x: 25, y: 56, push: 7,  xSpread: 12 },
+  { positionLabel: 'OM',  x: 50, y: 53, push: 4,  xSpread: 0 },
+  { positionLabel: 'RM',  x: 75, y: 56, push: 7,  xSpread: 12 },
+  { positionLabel: 'ST',  x: 50, y: 51, push: 3,  xSpread: 0 },
 ]
 
 // ─── 4-4-2 (Klassische Doppel-Achterreihe) ───────────────────
 // Flache Vier im Mittelfeld, 2 Stürmer.
 export const FORMATION_442: FormationSlot[] = [
-  { positionLabel: 'TW',  x: 50, y: 93, push: 20, xSpread: 0 },
-  { positionLabel: 'LV',  x: 22, y: 82, push: 38, xSpread: 12 },
-  { positionLabel: 'IV',  x: 42, y: 84, push: 40, xSpread: 4 },
-  { positionLabel: 'IV',  x: 58, y: 84, push: 40, xSpread: 4 },
-  { positionLabel: 'RV',  x: 78, y: 82, push: 38, xSpread: 12 },
-  { positionLabel: 'LM',  x: 22, y: 68, push: 18, xSpread: 12 },
-  { positionLabel: 'ZDM', x: 42, y: 70, push: 16, xSpread: 4 },
-  { positionLabel: 'ZDM', x: 58, y: 70, push: 16, xSpread: 4 },
-  { positionLabel: 'RM',  x: 78, y: 68, push: 18, xSpread: 12 },
-  { positionLabel: 'ST',  x: 40, y: 56, push: 8,  xSpread: 8 },
-  { positionLabel: 'ST',  x: 60, y: 56, push: 8,  xSpread: 8 },
+  { positionLabel: 'TW',  x: 50, y: 92, push: 14, xSpread: 0 },
+  { positionLabel: 'LV',  x: 22, y: 72, push: 14, xSpread: 12 },
+  { positionLabel: 'IV',  x: 42, y: 82, push: 18, xSpread: 4 },
+  { positionLabel: 'IV',  x: 58, y: 82, push: 18, xSpread: 4 },
+  { positionLabel: 'RV',  x: 78, y: 72, push: 14, xSpread: 12 },
+  { positionLabel: 'LM',  x: 22, y: 60, push: 8,  xSpread: 12 },
+  { positionLabel: 'ZDM', x: 42, y: 62, push: 9,  xSpread: 4 },
+  { positionLabel: 'ZDM', x: 58, y: 62, push: 9,  xSpread: 4 },
+  { positionLabel: 'RM',  x: 78, y: 60, push: 8,  xSpread: 12 },
+  { positionLabel: 'ST',  x: 40, y: 51, push: 3,  xSpread: 8 },
+  { positionLabel: 'ST',  x: 60, y: 51, push: 3,  xSpread: 8 },
 ]
 
 // ─── 3-5-2 (Wing-Backs, dichte Mitte) ────────────────────────
 // 3 Innenverteidiger, LM/RM als hochstehende Wing-Backs, 2 ZDMs +
 // 1 OM in der Mitte, 2 Stürmer.
 export const FORMATION_352: FormationSlot[] = [
-  { positionLabel: 'TW',  x: 50, y: 93, push: 20, xSpread: 0 },
-  { positionLabel: 'IV',  x: 32, y: 86, push: 38, xSpread: 6 },
-  { positionLabel: 'IV',  x: 50, y: 86, push: 38, xSpread: 0 },
-  { positionLabel: 'IV',  x: 68, y: 86, push: 38, xSpread: 6 },
-  { positionLabel: 'LM',  x: 18, y: 70, push: 22, xSpread: 12 },
-  { positionLabel: 'ZDM', x: 42, y: 72, push: 16, xSpread: 4 },
-  { positionLabel: 'OM',  x: 50, y: 64, push: 12, xSpread: 0 },
-  { positionLabel: 'ZDM', x: 58, y: 72, push: 16, xSpread: 4 },
-  { positionLabel: 'RM',  x: 82, y: 70, push: 22, xSpread: 12 },
-  { positionLabel: 'ST',  x: 42, y: 56, push: 8,  xSpread: 6 },
-  { positionLabel: 'ST',  x: 58, y: 56, push: 8,  xSpread: 6 },
+  { positionLabel: 'TW',  x: 50, y: 92, push: 14, xSpread: 0 },
+  { positionLabel: 'IV',  x: 32, y: 82, push: 18, xSpread: 6 },
+  { positionLabel: 'IV',  x: 50, y: 82, push: 18, xSpread: 0 },
+  { positionLabel: 'IV',  x: 68, y: 82, push: 18, xSpread: 6 },
+  { positionLabel: 'LM',  x: 18, y: 64, push: 12, xSpread: 12 },
+  { positionLabel: 'ZDM', x: 42, y: 64, push: 10, xSpread: 4 },
+  { positionLabel: 'OM',  x: 50, y: 54, push: 5,  xSpread: 0 },
+  { positionLabel: 'ZDM', x: 58, y: 64, push: 10, xSpread: 4 },
+  { positionLabel: 'RM',  x: 82, y: 64, push: 12, xSpread: 12 },
+  { positionLabel: 'ST',  x: 42, y: 51, push: 3,  xSpread: 6 },
+  { positionLabel: 'ST',  x: 58, y: 51, push: 3,  xSpread: 6 },
 ]
 
 // ─── 4-1-4-1 (Defensiver Block mit 6er-Anker) ────────────────
 // 1 ZDM als Sechs, dahinter 4 Mids in flacher Linie, 1 Stürmer.
 export const FORMATION_4141: FormationSlot[] = [
-  { positionLabel: 'TW',  x: 50, y: 93, push: 20, xSpread: 0 },
-  { positionLabel: 'LV',  x: 22, y: 82, push: 36, xSpread: 12 },
-  { positionLabel: 'IV',  x: 42, y: 84, push: 38, xSpread: 4 },
-  { positionLabel: 'IV',  x: 58, y: 84, push: 38, xSpread: 4 },
-  { positionLabel: 'RV',  x: 78, y: 82, push: 36, xSpread: 12 },
-  { positionLabel: 'ZDM', x: 50, y: 74, push: 14, xSpread: 0 },
-  { positionLabel: 'LM',  x: 22, y: 66, push: 18, xSpread: 12 },
-  { positionLabel: 'ZM',  x: 42, y: 66, push: 16, xSpread: 4 },
-  { positionLabel: 'ZM',  x: 58, y: 66, push: 16, xSpread: 4 },
-  { positionLabel: 'RM',  x: 78, y: 66, push: 18, xSpread: 12 },
-  { positionLabel: 'ST',  x: 50, y: 56, push: 8,  xSpread: 0 },
+  { positionLabel: 'TW',  x: 50, y: 92, push: 14, xSpread: 0 },
+  { positionLabel: 'LV',  x: 22, y: 72, push: 14, xSpread: 12 },
+  { positionLabel: 'IV',  x: 42, y: 82, push: 18, xSpread: 4 },
+  { positionLabel: 'IV',  x: 58, y: 82, push: 18, xSpread: 4 },
+  { positionLabel: 'RV',  x: 78, y: 72, push: 14, xSpread: 12 },
+  { positionLabel: 'ZDM', x: 50, y: 66, push: 10, xSpread: 0 },
+  { positionLabel: 'LM',  x: 22, y: 58, push: 8,  xSpread: 12 },
+  { positionLabel: 'ZM',  x: 42, y: 58, push: 8,  xSpread: 4 },
+  { positionLabel: 'ZM',  x: 58, y: 58, push: 8,  xSpread: 4 },
+  { positionLabel: 'RM',  x: 78, y: 58, push: 8,  xSpread: 12 },
+  { positionLabel: 'ST',  x: 50, y: 51, push: 3,  xSpread: 0 },
 ]
 
 // ─── 5-3-2 (Tiefer Block, defensiv-orientiert) ───────────────
 // 5 Verteidiger (LV-IV-IV-IV-RV), 3 Mids, 2 Stürmer als Konter-Anker.
 export const FORMATION_532: FormationSlot[] = [
-  { positionLabel: 'TW',  x: 50, y: 93, push: 18, xSpread: 0 },
-  { positionLabel: 'LV',  x: 18, y: 82, push: 30, xSpread: 8 },
-  { positionLabel: 'IV',  x: 36, y: 84, push: 32, xSpread: 4 },
-  { positionLabel: 'IV',  x: 50, y: 84, push: 32, xSpread: 0 },
-  { positionLabel: 'IV',  x: 64, y: 84, push: 32, xSpread: 4 },
-  { positionLabel: 'RV',  x: 82, y: 82, push: 30, xSpread: 8 },
-  { positionLabel: 'ZDM', x: 38, y: 72, push: 14, xSpread: 4 },
-  { positionLabel: 'OM',  x: 50, y: 66, push: 12, xSpread: 0 },
-  { positionLabel: 'ZDM', x: 62, y: 72, push: 14, xSpread: 4 },
-  { positionLabel: 'ST',  x: 42, y: 56, push: 8,  xSpread: 6 },
-  { positionLabel: 'ST',  x: 58, y: 56, push: 8,  xSpread: 6 },
+  { positionLabel: 'TW',  x: 50, y: 92, push: 12, xSpread: 0 },
+  { positionLabel: 'LV',  x: 18, y: 75, push: 12, xSpread: 8 },
+  { positionLabel: 'IV',  x: 36, y: 83, push: 16, xSpread: 4 },
+  { positionLabel: 'IV',  x: 50, y: 83, push: 16, xSpread: 0 },
+  { positionLabel: 'IV',  x: 64, y: 83, push: 16, xSpread: 4 },
+  { positionLabel: 'RV',  x: 82, y: 75, push: 12, xSpread: 8 },
+  { positionLabel: 'ZDM', x: 38, y: 64, push: 8,  xSpread: 4 },
+  { positionLabel: 'OM',  x: 50, y: 55, push: 6,  xSpread: 0 },
+  { positionLabel: 'ZDM', x: 62, y: 64, push: 8,  xSpread: 4 },
+  { positionLabel: 'ST',  x: 42, y: 51, push: 3,  xSpread: 6 },
+  { positionLabel: 'ST',  x: 58, y: 51, push: 3,  xSpread: 6 },
 ]
 
 // ─── 3-4-1-2 (Diamant mit 3er-Kette) ─────────────────────────
 // 3 Innenverteidiger, 2 Wing-Backs (LM/RM), 2 ZDMs, 1 OM, 2 Stürmer.
 export const FORMATION_3412: FormationSlot[] = [
-  { positionLabel: 'TW',  x: 50, y: 93, push: 20, xSpread: 0 },
-  { positionLabel: 'IV',  x: 32, y: 86, push: 36, xSpread: 6 },
-  { positionLabel: 'IV',  x: 50, y: 86, push: 36, xSpread: 0 },
-  { positionLabel: 'IV',  x: 68, y: 86, push: 36, xSpread: 6 },
-  { positionLabel: 'LM',  x: 20, y: 70, push: 22, xSpread: 12 },
-  { positionLabel: 'ZDM', x: 40, y: 72, push: 16, xSpread: 4 },
-  { positionLabel: 'ZDM', x: 60, y: 72, push: 16, xSpread: 4 },
-  { positionLabel: 'RM',  x: 80, y: 70, push: 22, xSpread: 12 },
-  { positionLabel: 'OM',  x: 50, y: 62, push: 12, xSpread: 0 },
-  { positionLabel: 'ST',  x: 42, y: 56, push: 8,  xSpread: 6 },
-  { positionLabel: 'ST',  x: 58, y: 56, push: 8,  xSpread: 6 },
+  { positionLabel: 'TW',  x: 50, y: 92, push: 14, xSpread: 0 },
+  { positionLabel: 'IV',  x: 32, y: 82, push: 18, xSpread: 6 },
+  { positionLabel: 'IV',  x: 50, y: 82, push: 18, xSpread: 0 },
+  { positionLabel: 'IV',  x: 68, y: 82, push: 18, xSpread: 6 },
+  { positionLabel: 'LM',  x: 20, y: 64, push: 12, xSpread: 12 },
+  { positionLabel: 'ZDM', x: 40, y: 64, push: 10, xSpread: 4 },
+  { positionLabel: 'ZDM', x: 60, y: 64, push: 10, xSpread: 4 },
+  { positionLabel: 'RM',  x: 80, y: 64, push: 12, xSpread: 12 },
+  { positionLabel: 'OM',  x: 50, y: 54, push: 5,  xSpread: 0 },
+  { positionLabel: 'ST',  x: 42, y: 51, push: 3,  xSpread: 6 },
+  { positionLabel: 'ST',  x: 58, y: 51, push: 3,  xSpread: 6 },
 ]
 
 // ─── Lookup ─────────────────────────────────────────────────

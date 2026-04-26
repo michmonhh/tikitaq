@@ -248,10 +248,42 @@ export function positionOffensiveFreekick(
 }
 
 // ── Defensive ───────────────────────────────────────────────────────
+//
+// Aufstellungs-Regel (User 2026-04-26):
+//   IVs am tiefsten (kurz vor dem eigenen Tor)
+//   LV links, RV rechts — als Wing-Schutz davor
+//   Mittelfeld dahinter, ZDM zentral, ZM Halfräume, LM/RM auf Flügeln
+//   OM als zentraler Konter-Anker
+//   Stürmer hochstellen (gegnerische Hälfte) als Konter-Anker
+//   TW auf Linie
+
+// Hilfsfunktion: x-Slots fuer IVs je nach Anzahl (3er-Kette / 4er / 1)
+function ivXSlots(count: number): number[] {
+  if (count >= 3) return [35, 50, 65]
+  if (count === 2) return [42, 58]
+  if (count === 1) return [50]
+  return []
+}
+
+// Default-X pro Mid-Rolle (Anker fuer rolle-basierte Verteilung)
+function midX(label: string, fallbackIndex: number): number {
+  switch (label) {
+    case 'LM': return 22
+    case 'RM': return 78
+    case 'OM': return 50
+    case 'ZDM':
+    case 'ZM':
+      return fallbackIndex === 0 ? 42
+        : fallbackIndex === 1 ? 58
+        : 50
+    default:
+      return 30 + fallbackIndex * 14
+  }
+}
 
 export function positionDefensiveFreekick(
   players: PlayerData[],
-  opponents: PlayerData[],
+  _opponents: PlayerData[],
   team: TeamSide,
   ballPos: Position,
 ): PlayerAction[] {
@@ -259,100 +291,113 @@ export function positionDefensiveFreekick(
   const ownGoal = ownGoalCenter(team)
   const distFromOwnGoal = Math.abs(ballPos.y - ownGoalY(team))
 
-  const defenders = players.filter(p => isDefender(p.positionLabel))
-  const midfielders = players.filter(p => isMidfielder(p.positionLabel))
-  const attackers = players.filter(p => isAttacker(p.positionLabel))
-  const goalkeeper = players.find(p => p.positionLabel === 'TW')
+  // Rolle-basierte Gruppierung
+  const tw = players.find(p => p.positionLabel === 'TW')
+  const ivs = players.filter(p => p.positionLabel === 'IV')
+  const lvs = players.filter(p => p.positionLabel === 'LV')
+  const rvs = players.filter(p => p.positionLabel === 'RV')
+  const zdms = players.filter(p => p.positionLabel === 'ZDM')
+  const zms = players.filter(p => p.positionLabel === 'ZM')
+  const lms = players.filter(p => p.positionLabel === 'LM')
+  const rms = players.filter(p => p.positionLabel === 'RM')
+  const oms = players.filter(p => p.positionLabel === 'OM')
+  const sts = players.filter(p => p.positionLabel === 'ST')
+  const ivXs = ivXSlots(ivs.length)
 
   if (distFromOwnGoal <= 30) {
-    // Dangerous free kick near own goal: form a wall
-    const wallCount = Math.min(4, defenders.length + midfielders.length)
+    // ─── Wall-Mode: gefaehrlicher Freistoss nahe eigenem Tor ──────
+    // Wall aus 4 Spielern (bevorzugt Mids) blockt den direkten Schuss.
+    // Verteidiger bleiben auf der Linie und halten gegnerische Stuermer
+    // im 16er manndeckungsnah.
+    const wallCandidates: PlayerData[] = [
+      ...zdms, ...zms, ...lms, ...rms, ...oms,
+    ]
+    const wallCount = Math.min(4, wallCandidates.length)
     const wallPositions = formWall(ballPos, ownGoal, wallCount)
-
-    const wallCandidates = [...defenders, ...midfielders]
-    const wallPlayers: PlayerData[] = []
-    for (let i = 0; i < wallCount && i < wallCandidates.length; i++) {
-      wallPlayers.push(wallCandidates[i])
+    const wallPlayers = new Set<string>()
+    for (let i = 0; i < wallCount; i++) {
+      wallPlayers.add(wallCandidates[i].id)
       actions.push(moveAction(wallCandidates[i], wallPositions[i]))
     }
 
-    if (goalkeeper) {
+    // TW: nah am Pfosten der ballnaeheren Seite
+    if (tw) {
       const gkX = Math.max(38, Math.min(62, ballPos.x))
-      actions.push(moveAction(goalkeeper, { x: gkX, y: ownGoalY(team) === 100 ? 97 : 3 }))
+      actions.push(moveAction(tw, { x: gkX, y: team === 1 ? 97 : 3 }))
     }
 
-    const remainingDef = [...defenders, ...midfielders].filter(
-      p => !wallPlayers.includes(p),
-    )
-    const oppAttackersInBox = opponents.filter(opp => {
-      const oppDistFromGoal = Math.abs(opp.position.y - ownGoalY(team))
-      return oppDistFromGoal <= 22 + 5
-    })
-
-    for (let i = 0; i < remainingDef.length; i++) {
-      if (i < oppAttackersInBox.length) {
-        const opp = oppAttackersInBox[i]
-        actions.push(moveAction(remainingDef[i], {
-          x: (opp.position.x + ownGoal.x) / 2,
-          y: (opp.position.y + ownGoalY(team)) / 2,
-        }))
-      } else {
-        actions.push(moveAction(remainingDef[i], {
-          x: 35 + i * 15,
-          y: team === 1 ? ownGoalY(team) - 12 : ownGoalY(team) + 12,
-        }))
-      }
+    // IVs: ganz tief auf 8 Einheiten vom Tor, X nach Slot
+    const ivLineY = team === 1 ? ownGoalY(team) - 8 : ownGoalY(team) + 8
+    for (let i = 0; i < ivs.length; i++) {
+      actions.push(moveAction(ivs[i], { x: ivXs[i] ?? 50, y: ivLineY }))
     }
 
-    // Stürmer als Konter-Anker in der gegnerischen Hälfte lassen,
-    // nicht auf Mittellinie parken.
-    for (let i = 0; i < attackers.length && i < 2; i++) {
-      actions.push(moveAction(attackers[i], {
-        x: 35 + i * 30,
-        y: shiftToward(50, 15, team),
-      }))
+    // LV/RV: 14 Einheiten vom Tor, je auf ihrer Seite
+    const wingLineY = team === 1 ? ownGoalY(team) - 14 : ownGoalY(team) + 14
+    for (const lv of lvs) actions.push(moveAction(lv, { x: 18, y: wingLineY }))
+    for (const rv of rvs) actions.push(moveAction(rv, { x: 82, y: wingLineY }))
+
+    // Stuermer hoch als Konter-Anker
+    for (let i = 0; i < sts.length; i++) {
+      const x = sts.length === 1 ? 50 : (i === 0 ? 40 : 60)
+      actions.push(moveAction(sts[i], { x, y: shiftToward(50, 15, team) }))
+    }
+
+    // Verbleibende Offensive (OM nicht in Wall) ein wenig vor der eigenen
+    // Haelfte — Anlauf-Punkt fuer Befreiungspass
+    for (const om of oms) {
+      if (wallPlayers.has(om.id)) continue
+      actions.push(moveAction(om, { x: 50, y: shiftToward(50, 8, team) }))
     }
   } else {
-    // Midfield free kick: compact shape
-    const midY = (ballPos.y + ownGoalY(team)) / 2
+    // ─── Mittelfeld-Mode: defensive Linie vor dem Ball ────────────
+    // Y wird relativ zum Ball gestaffelt — Mid auf Hoehe Ball, LV/RV
+    // 9 Einheiten zurueck, IVs 14 Einheiten zurueck (am tiefsten).
+    // X strikt rolle-basiert.
 
-    for (let i = 0; i < defenders.length; i++) {
-      actions.push(moveAction(defenders[i], {
-        x: 25 + i * 20,
-        y: team === 1 ? Math.max(midY, ballPos.y + 5) : Math.min(midY, ballPos.y - 5),
-      }))
+    // IVs am tiefsten
+    const ivLineY = team === 1 ? ballPos.y + 14 : ballPos.y - 14
+    for (let i = 0; i < ivs.length; i++) {
+      actions.push(moveAction(ivs[i], { x: ivXs[i] ?? 50, y: ivLineY }))
     }
 
-    const nearOpponents = opponents.filter(
-      opp => distance(opp.position, ballPos) < 20,
-    )
-    for (let i = 0; i < midfielders.length; i++) {
-      if (i < nearOpponents.length) {
-        const opp = nearOpponents[i]
-        actions.push(moveAction(midfielders[i], {
-          x: opp.position.x,
-          y: (opp.position.y + ownGoalY(team)) / 2,
-        }))
-      } else {
-        actions.push(moveAction(midfielders[i], {
-          x: 30 + i * 20,
-          y: shiftToward(ballPos.y, -5, team),
-        }))
-      }
+    // LV/RV davor (9 Einheiten zurueck)
+    const wingLineY = team === 1 ? ballPos.y + 9 : ballPos.y - 9
+    for (const lv of lvs) actions.push(moveAction(lv, { x: 18, y: wingLineY }))
+    for (const rv of rvs) actions.push(moveAction(rv, { x: 82, y: wingLineY }))
+
+    // ZDM/ZM: zentrale Mid-Linie, leicht hinter Ball (4-5 Einheiten)
+    const defMidY = team === 1 ? ballPos.y + 4 : ballPos.y - 4
+    for (let i = 0; i < zdms.length; i++) {
+      actions.push(moveAction(zdms[i], { x: midX('ZDM', i), y: defMidY }))
+    }
+    for (let i = 0; i < zms.length; i++) {
+      actions.push(moveAction(zms[i], { x: midX('ZM', i), y: defMidY - (team === 1 ? 2 : -2) }))
     }
 
-    // Stürmer als Konter-Anker, nicht nur knapp über Mittellinie.
-    for (let i = 0; i < attackers.length && i < 2; i++) {
-      actions.push(moveAction(attackers[i], {
-        x: 35 + i * 30,
-        y: shiftToward(50, 18, team),
-      }))
+    // LM/RM auf Fluegeln, leicht vor dem Ball (Konter-Anlauf)
+    const wingMidY = team === 1 ? ballPos.y - 2 : ballPos.y + 2
+    for (const lm of lms) actions.push(moveAction(lm, { x: 22, y: wingMidY }))
+    for (const rm of rms) actions.push(moveAction(rm, { x: 78, y: wingMidY }))
+
+    // OM als hoeherer zentraler Konter-Anker
+    for (const om of oms) {
+      actions.push(moveAction(om, { x: 50, y: shiftToward(50, 12, team) }))
     }
 
-    if (goalkeeper) {
-      actions.push(moveAction(goalkeeper, { x: 50, y: team === 1 ? 95 : 5 }))
+    // Stuermer als hoechster Konter-Anker
+    for (let i = 0; i < sts.length; i++) {
+      const x = sts.length === 1 ? 50 : (i === 0 ? 40 : 60)
+      actions.push(moveAction(sts[i], { x, y: shiftToward(50, 18, team) }))
+    }
+
+    if (tw) {
+      actions.push(moveAction(tw, { x: 50, y: team === 1 ? 95 : 5 }))
     }
   }
 
   return actions
 }
+
+// `distance` bleibt importiert fuer evtl. spaetere Erweiterungen
+void distance
