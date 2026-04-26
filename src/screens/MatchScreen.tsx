@@ -51,6 +51,7 @@ export function MatchScreen() {
       matchConfig.team1Id, matchConfig.team2Id,
       matchConfig.isVsAI, matchConfig.mustDecide ?? false,
       matchConfig.formation1, matchConfig.formation2,
+      matchConfig.customLineup1, matchConfig.customLineup2,
     )
 
     // Duel: determine which team this player controls

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { FormationType } from '../engine/types'
+import type { CustomLineup } from '../engine/formation'
 
 export type Screen =
   | 'intro'
@@ -32,6 +33,10 @@ export interface MatchConfig {
   // MatchPlanningScreen vom User für seine Mannschaft überschrieben.
   formation1?: FormationType
   formation2?: FormationType
+  // User-Override der Aufstellung (Drag&Drop im Planning-Screen). Pro
+  // Slot der Roster-Index aus TEAM_ROSTERS. Wenn nicht gesetzt: auto-Wahl.
+  customLineup1?: CustomLineup
+  customLineup2?: CustomLineup
   // Zurück-Navigation aus dem Planning-Screen — wo kam der User her?
   // (relevant z.B. für Saison-Modus, wo der Back-Button zur Saison-Übersicht
   // führen soll, nicht ins Hauptmenü.)
@@ -47,8 +52,14 @@ interface UIStore {
   startMatch: (config: MatchConfig) => void
   /** Geht erst in den MatchPlanningScreen, dann ins Match. */
   startPlanning: (config: MatchConfig) => void
-  /** Vom Planning aus ins Match — übernimmt die im Planning gewählte Formation. */
-  confirmPlanningAndStart: (formation1: FormationType, formation2: FormationType) => void
+  /** Vom Planning aus ins Match — übernimmt die im Planning gewählte Formation
+   *  und (optional) die per Drag&Drop angepasste Aufstellung. */
+  confirmPlanningAndStart: (
+    formation1: FormationType,
+    formation2: FormationType,
+    customLineup1?: CustomLineup,
+    customLineup2?: CustomLineup,
+  ) => void
   goBack: () => void
 }
 
@@ -65,12 +76,12 @@ export const useUIStore = create<UIStore>((set, get) => ({
     matchConfig: { ...config, planningOrigin: get().screen },
   }),
 
-  confirmPlanningAndStart: (formation1, formation2) => {
+  confirmPlanningAndStart: (formation1, formation2, customLineup1, customLineup2) => {
     const cfg = get().matchConfig
     if (!cfg) return
     set({
       screen: 'match',
-      matchConfig: { ...cfg, formation1, formation2 },
+      matchConfig: { ...cfg, formation1, formation2, customLineup1, customLineup2 },
     })
   },
 

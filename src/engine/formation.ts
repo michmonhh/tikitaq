@@ -318,6 +318,19 @@ export interface BenchEntry {
 export interface FormationResult {
   starters: PlayerData[]   // 22 Spieler (11 pro Team)
   bench: BenchEntry[]      // alle nicht-eingesetzten Spieler beider Teams
+  /** Pro Slot der Roster-Index aus TEAM_ROSTERS. Länge entspricht der
+   *  Slot-Anzahl der jeweiligen Formation (typisch 11). -1 wenn kein
+   *  Spieler zugeordnet werden konnte (Roster-Lücke).
+   *  Wird im MatchPlanningScreen für Drag&Drop-State gebraucht. */
+  starterRosterIndices1: number[]
+  starterRosterIndices2: number[]
+}
+
+export interface CustomLineup {
+  /** Pro Slot der Formation der Roster-Index (0-basiert in TEAM_ROSTERS).
+   *  Länge MUSS slots.length entsprechen, sonst wird der Override
+   *  ignoriert und automatische Slot-Wahl genutzt. */
+  starterRosterIndices: number[]
 }
 
 export function createFormation(
@@ -325,8 +338,12 @@ export function createFormation(
   team2Id?: number,
   formation1: FormationType = '4-3-3',
   formation2: FormationType = '4-3-3',
+  customLineup1?: CustomLineup,
+  customLineup2?: CustomLineup,
 ): PlayerData[] {
-  const result = createFormationDetailed(team1Id, team2Id, formation1, formation2)
+  const result = createFormationDetailed(
+    team1Id, team2Id, formation1, formation2, customLineup1, customLineup2,
+  )
   return result.starters
 }
 
@@ -335,6 +352,8 @@ export function createFormationDetailed(
   team2Id?: number,
   formation1: FormationType = '4-3-3',
   formation2: FormationType = '4-3-3',
+  customLineup1?: CustomLineup,
+  customLineup2?: CustomLineup,
 ): FormationResult {
   const roster1 = team1Id !== undefined ? getEffectiveRoster(team1Id) : undefined
   const roster2 = team2Id !== undefined ? getEffectiveRoster(team2Id) : undefined
@@ -351,6 +370,8 @@ export function createFormationDetailed(
 
   const starters: PlayerData[] = []
   const bench: BenchEntry[] = []
+  const starterRosterIndices1: number[] = new Array(slots1.length).fill(-1)
+  const starterRosterIndices2: number[] = new Array(slots2.length).fill(-1)
 
   // Pool jeweils aus Roster bauen, pro Slot besten Spieler picken
   const pool1: RosterEntry[] = (roster1 ?? []).map((t, i) => ({
@@ -360,19 +381,42 @@ export function createFormationDetailed(
     template: t, rosterIndex: i, used: false,
   }))
 
+  /** Pickt den Spieler für slot i: zuerst Custom-Override (falls gültig),
+   *  sonst automatischer pickForSlot. */
+  function pickWithOverride(
+    pool: RosterEntry[],
+    slotLabel: string,
+    slotIndex: number,
+    custom: CustomLineup | undefined,
+    expectedSlotsLen: number,
+  ): RosterEntry | null {
+    if (custom && custom.starterRosterIndices.length === expectedSlotsLen) {
+      const wantedIdx = custom.starterRosterIndices[slotIndex]
+      const e = pool.find(p => p.rosterIndex === wantedIdx && !p.used)
+      if (e) return e
+      // Override zeigt auf nicht-existenten oder schon genutzten Spieler
+      // → fallback auf auto-pick
+    }
+    return pickForSlot(pool, slotLabel)
+  }
+
   // Wechselseitig befüllen — Indizes 0,1 → Team 1 Slot 0, Team 2 Slot 0, etc.
-  // Damit bleibt die Reihenfolge der `starters`-Liste konsistent mit dem
-  // existierenden Pattern (parallel iterieren über Slots).
   const maxLen = Math.max(slots1.length, slots2.length)
   for (let i = 0; i < maxLen; i++) {
     if (i < slots1.length) {
-      const pick = pickForSlot(pool1, slots1[i].positionLabel)
-      if (pick) pick.used = true
+      const pick = pickWithOverride(pool1, slots1[i].positionLabel, i, customLineup1, slots1.length)
+      if (pick) {
+        pick.used = true
+        starterRosterIndices1[i] = pick.rosterIndex
+      }
       starters.push(createPlayer(1, i, slots1[i], pick?.template, cf1, startConf1))
     }
     if (i < slots2.length) {
-      const pick = pickForSlot(pool2, slots2[i].positionLabel)
-      if (pick) pick.used = true
+      const pick = pickWithOverride(pool2, slots2[i].positionLabel, i, customLineup2, slots2.length)
+      if (pick) {
+        pick.used = true
+        starterRosterIndices2[i] = pick.rosterIndex
+      }
       starters.push(createPlayer(2, i, slots2[i], pick?.template, cf2, startConf2))
     }
   }
@@ -385,7 +429,7 @@ export function createFormationDetailed(
     if (!e.used) bench.push({ template: e.template, rosterIndex: e.rosterIndex, team: 2 })
   }
 
-  return { starters, bench }
+  return { starters, bench, starterRosterIndices1, starterRosterIndices2 }
 }
 
 export function getTeamPlayers(players: PlayerData[], team: TeamSide): PlayerData[] {

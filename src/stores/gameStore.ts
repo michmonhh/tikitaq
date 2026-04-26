@@ -51,13 +51,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   selectPlayer: (playerId) => set({ selectedPlayerId: playerId }),
 
-  initGame: (team1Id, team2Id, isVsAI = true, mustDecide = false, formation1, formation2) => {
+  initGame: (team1Id, team2Id, isVsAI = true, mustDecide = false, formation1, formation2, customLineup1, customLineup2) => {
     resetOpponentModel() // Clear opponent learning data for new match
-    // Wenn keine Formations übergeben wurden: aus den TEAMS-Defaults ziehen.
-    // (User-Override aus MatchPlanningScreen kommt explizit über die Args.)
     const f1: FormationType = formation1 ?? (team1Id !== undefined ? getTeamDefaultFormation(team1Id) : '4-3-3')
     const f2: FormationType = formation2 ?? (team2Id !== undefined ? getTeamDefaultFormation(team2Id) : '4-3-3')
-    const players = createFormation(team1Id, team2Id, f1, f2)
+    const players = createFormation(team1Id, team2Id, f1, f2, customLineup1, customLineup2)
     let state = createInitialGameState(players, mustDecide)
     // Anstoß-Ticker
     state = addTicker(state, 'Anpfiff – 1. Halbzeit', 'kickoff')

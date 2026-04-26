@@ -55,6 +55,8 @@ export interface GameStore {
     mustDecide?: boolean,
     formation1?: import('../../engine/types').FormationType,
     formation2?: import('../../engine/types').FormationType,
+    customLineup1?: import('../../engine/formation').CustomLineup,
+    customLineup2?: import('../../engine/formation').CustomLineup,
   ) => void
   selectPlayer: (playerId: string | null) => void
   setActivePlayer: (playerId: string | null) => void
