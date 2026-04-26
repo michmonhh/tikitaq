@@ -29,6 +29,8 @@ import { isGegenpressActive, getMarkingAssignments, resetPositioningState } from
 import { isFirstPresser } from './positioning/gegenpress'
 import { offensivePosition } from './positioning/offensive'
 import { defensivePosition, manMarkingPosition, goalkeeperPosition } from './positioning/defensive'
+import { isMovementPolicyActiveForTeam } from './movement_policy/manager'
+import { consumeMovementDecision } from './movement_policy/override'
 
 // ── Öffentliche API (re-exportiert aus Submodulen) ──
 export { selectPressers, updateGegenpress } from './positioning/gegenpress'
@@ -51,9 +53,26 @@ export function decidePositioning(
   pressers: Set<string>,
 ): { target: Position; secondaryTarget?: Position; reason: string } {
 
-  // Torwart
+  // Torwart — eigener Sonderfall, nicht durch Movement-Policy geleitet
   if (player.positionLabel === 'TW') {
     return goalkeeperPosition(player, state, team, plan)
+  }
+
+  // ── Movement-Policy-Override (Tier 2) ────────────────────────────
+  // Wenn für dieses Team eine Movement-Policy aktiv ist UND der pre-turn
+  // Async-Hook eine Entscheidung für diesen Spieler abgelegt hat, nutzen
+  // wir dessen Target. Sonst läuft die Heuristik (wie bisher).
+  // Loser Ball + erster Presser bleibt aus dem Override raus, weil das
+  // Sonderlogik mit `secondaryTarget` braucht (Path-Finding zum Ball).
+  if (isMovementPolicyActiveForTeam(team)) {
+    const decision = consumeMovementDecision(player.id)
+    if (decision && decision.chosenIndex < decision.options.length) {
+      const opt = decision.options[decision.chosenIndex]
+      return {
+        target: opt.target,
+        reason: `MP: ${opt.type}`,
+      }
+    }
   }
 
   // Pressing (inkl. Gegenpress + loser Ball)

@@ -29,6 +29,7 @@ import { decideBallAction, generateOptions } from './playerDecision'
 import { refreshIntent, getIntent, resetIntents } from './matchIntent'
 import { getActivePolicy, isPolicyActiveForTeam } from './policy/manager'
 import { setPolicyDecision } from './policy/override'
+import { runMovementHeuristic } from './movement_policy/runner'
 
 // ══════════════════════════════════════════
 //  Modul-State
@@ -287,6 +288,16 @@ export function executeAITurn(state: GameState): PlayerAction[] {
     }
   }
   const pressers = selectPressers(players, state, team, plan ?? null, acted)
+
+  // ── Tier 2: Movement-Policy / Recording-Hook ──
+  // Generiert Movement-Optionen pro Off-Ball-Spieler, schreibt sie in
+  // den Override-Slot (für decidePositioning) und triggert Trajectory-
+  // Recording wenn Training-Export aktiv. Default ist no-op wenn weder
+  // Policy aktiv noch Recording läuft.
+  runMovementHeuristic(
+    state, team, players, plan ?? null, lastFieldReading,
+    acted, pressers, hasBall, ballLoose,
+  )
 
   // Alle Zielpositionen sammeln und danach Abstände erzwingen
   const targetEntries: {

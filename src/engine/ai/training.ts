@@ -43,6 +43,7 @@
 import type { GameState, TeamSide, PlayerData } from '../types'
 import type { BallOption } from './playerDecision/types'
 import { getIntent } from './matchIntent'
+import type { MovementOption } from './movement_policy/types'
 
 // ── Feature-Flag + Output-Target ──
 //
@@ -55,12 +56,18 @@ let exportActive = false
 let bufferedLines: string[] = []
 let currentMatchId: string | null = null
 
+// Movement-Trajectories werden in einem separaten Buffer gehalten — sie
+// werden in eine eigene Datei geschrieben, weil das Volumen ~10× größer
+// ist (1 Carrier-Decision vs ~10 Movement-Decisions pro Turn).
+let movementBufferedLines: string[] = []
+
 /**
  * Aktiviert Training-Export. Buffer wird beim nächsten Match gefüllt.
  */
 export function initTrainingExport(filename: string | null): void {
   exportActive = filename !== null
   bufferedLines = []
+  movementBufferedLines = []
   currentMatchId = null
 }
 
@@ -87,6 +94,16 @@ export function isTrainingExportActive(): boolean {
 export function drainTrainingBuffer(): string[] {
   const out = bufferedLines
   bufferedLines = []
+  return out
+}
+
+/**
+ * Gibt Movement-Trajectories zurück und leert den Puffer. Schreibt der
+ * Arena-Runner in eine separate Datei (z.B. `*_movement.jsonl.gz`).
+ */
+export function drainMovementBuffer(): string[] {
+  const out = movementBufferedLines
+  movementBufferedLines = []
   return out
 }
 
@@ -181,6 +198,87 @@ function serializeOption(o: BallOption) {
     target: [+o.target.x.toFixed(2), +o.target.y.toFixed(2)],
     receiver_id: o.receiverId ?? null,
   }
+}
+
+// ── Movement-Decision-Recording (Tier 2) ──
+
+export interface MovementDecisionExtras {
+  reward?: number
+  done?: boolean
+  logProb?: number
+  probs?: number[]
+}
+
+function serializeMovementOption(o: MovementOption) {
+  return {
+    type: o.type,
+    target: [+o.target.x.toFixed(2), +o.target.y.toFixed(2)],
+    score: +o.score.toFixed(3),
+    context_id: o.contextId ?? null,
+  }
+}
+
+/**
+ * Aufzeichnung einer Movement-Decision. Pro Off-Ball-Spieler des aktiven
+ * Teams pro Turn. Output geht in den separaten movement-Buffer.
+ *
+ * Achtung: für 22-Spieler-Match mit ~180 Turns ergibt das pro Match
+ * ~3000 Movement-Records (vs ~180 Carrier-Records). Daher separates
+ * Output-File und potenziell stärkere Sub-Sampling-Strategie im
+ * Trainings-Loader.
+ */
+export function recordMovementDecision(
+  state: GameState,
+  team: TeamSide,
+  player: PlayerData,
+  options: MovementOption[],
+  chosenIndex: number,
+  extras: MovementDecisionExtras = {},
+): void {
+  if (!exportActive) return
+  if (!currentMatchId) return
+
+  const intent = getIntent(team)
+  const turnIdx = Math.floor(state.gameTime * 2)
+
+  // Für Movement-Records reduzieren wir den State auf das was die Policy
+  // sieht. Wir speichern keine kompletten Roster-Listen pro Record, weil
+  // das Volumen sonst explodiert. Der Python-Encoder muss aus den
+  // gespeicherten Feldern die Per-Player-Observation rekonstruieren.
+  const carrier = state.players.find(p => p.id === state.ball.ownerId) ?? null
+  const teammates = state.players.filter(p => p.team === team && p.id !== player.id)
+  const opponents = state.players.filter(p => p.team !== team)
+
+  const record: Record<string, unknown> = {
+    record_type: 'movement',
+    match_id: currentMatchId,
+    turn: turnIdx,
+    team,
+    game_time_min: +state.gameTime.toFixed(2),
+    score: { ...state.score },
+    self: serializePlayer(player),
+    carrier: carrier ? serializePlayer(carrier) : null,
+    ball: { position: [state.ball.position.x, state.ball.position.y] },
+    ball_owner_team: carrier?.team ?? null,
+    teammates: teammates.map(serializePlayer),
+    opponents: opponents.map(serializePlayer),
+    intent: intent ? {
+      attack_side: intent.attackSide,
+      turns_valid: Math.max(0, intent.validUntilTurn - turnIdx),
+    } : null,
+    options: options.map(serializeMovementOption),
+    chosen_option_index: chosenIndex,
+    ai_version: 'movement_v1',
+  }
+
+  if (extras.reward !== undefined) record.reward = +extras.reward.toFixed(4)
+  if (extras.done !== undefined) record.done = extras.done
+  if (extras.logProb !== undefined) record.log_prob = +extras.logProb.toFixed(4)
+  if (extras.probs !== undefined) {
+    record.probs = extras.probs.map(p => +p.toFixed(4))
+  }
+
+  movementBufferedLines.push(JSON.stringify(record))
 }
 
 /**

@@ -19,7 +19,8 @@ import { TEAMS, getTeamById } from '../src/data/teams'
 import { runAIMatch } from '../src/engine/simulation/runAIMatch'
 import type { ArenaMatchResult } from '../src/engine/simulation/replayTypes'
 import {
-  initTrainingExport, setTrainingMatchId, endTrainingMatch, drainTrainingBuffer,
+  initTrainingExport, setTrainingMatchId, endTrainingMatch,
+  drainTrainingBuffer, drainMovementBuffer,
 } from '../src/engine/ai/training'
 import { loadOnnxPolicy, type OnnxPolicy } from '../src/engine/ai/policy/onnxPolicy'
 import { setPolicyDecision, clearPolicyDecisions } from '../src/engine/ai/policy/override'
@@ -30,45 +31,74 @@ import { generateOptions } from '../src/engine/ai/playerDecision'
 import { getIntent } from '../src/engine/ai/matchIntent'
 import type { GameState, TeamSide } from '../src/engine/types'
 
-let trainingOutputPath: string | null = null
-let trainingGzipStream: zlib.Gzip | null = null
-let trainingFileStream: fs.WriteStream | null = null
+// Pro Stream-Slot ein File. Carrier-Decisions gehen in Slot 'training';
+// Movement-Decisions (Tier 2) in Slot 'movement', das parallel geöffnet
+// wird wenn der Output-Pfad auf einen .jsonl.gz endet — dann gibt es
+// daneben ein automatisch abgeleitetes `*_movement.jsonl.gz`.
+interface TrainingStream {
+  path: string
+  gzip: zlib.Gzip | null
+  file: fs.WriteStream | null
+}
+
+let trainingStream: TrainingStream | null = null
+let movementStream: TrainingStream | null = null
+
+function openStream(path: string): TrainingStream {
+  if (path.endsWith('.gz')) {
+    const file = fs.createWriteStream(path, { flags: 'w' })
+    const gzip = zlib.createGzip({ level: 6 })
+    gzip.pipe(file)
+    return { path, gzip, file }
+  }
+  fs.writeFileSync(path, '')
+  return { path, gzip: null, file: null }
+}
+
+function deriveMovementPath(carrierPath: string): string {
+  // a/b/run1.jsonl.gz → a/b/run1_movement.jsonl.gz
+  if (carrierPath.endsWith('.jsonl.gz')) {
+    return carrierPath.replace(/\.jsonl\.gz$/, '_movement.jsonl.gz')
+  }
+  if (carrierPath.endsWith('.jsonl')) {
+    return carrierPath.replace(/\.jsonl$/, '_movement.jsonl')
+  }
+  if (carrierPath.endsWith('.gz')) {
+    return carrierPath.replace(/\.gz$/, '_movement.gz')
+  }
+  return `${carrierPath}_movement`
+}
 
 function openTrainingOutput(path: string): void {
-  trainingOutputPath = path
-  // Endet der Pfad auf .gz oder .jsonl.gz → streamed gzip.
-  // Kompressionsrate ~10-15× bei JSONL-Daten mit redundanten Keys.
-  if (path.endsWith('.gz')) {
-    trainingFileStream = fs.createWriteStream(path, { flags: 'w' })
-    trainingGzipStream = zlib.createGzip({ level: 6 })  // balanced: ~10× compression, fast
-    trainingGzipStream.pipe(trainingFileStream)
+  trainingStream = openStream(path)
+  movementStream = openStream(deriveMovementPath(path))
+}
+
+function writeStream(s: TrainingStream | null, lines: string[]): void {
+  if (!s || lines.length === 0) return
+  const payload = lines.join('\n') + '\n'
+  if (s.gzip) {
+    s.gzip.write(payload)
   } else {
-    // Plain JSONL — alte Datei überschreiben
-    fs.writeFileSync(path, '')
+    fs.appendFileSync(s.path, payload)
   }
 }
 
 function flushTrainingToFile(): void {
-  if (!trainingOutputPath) return
-  const lines = drainTrainingBuffer()
-  if (lines.length === 0) return
-  const payload = lines.join('\n') + '\n'
-  if (trainingGzipStream) {
-    trainingGzipStream.write(payload)
-  } else {
-    fs.appendFileSync(trainingOutputPath, payload)
+  writeStream(trainingStream, drainTrainingBuffer())
+  writeStream(movementStream, drainMovementBuffer())
+}
+
+async function closeStream(s: TrainingStream | null): Promise<void> {
+  if (s && s.gzip && s.file) {
+    s.gzip.end()
+    await finished(s.file)
   }
 }
 
 async function closeTrainingOutput(): Promise<void> {
-  // Wichtig: gzip.end() löst über pipe() automatisch ein file.end() aus.
-  // Wir warten auf 'finish'/'close' am File-Stream, sonst kann der
-  // Prozess vor dem Flushen exit'en und der Gzip-EOS-Marker fehlt
-  // → "Compressed file ended before EOS marker" beim Lesen.
-  if (trainingGzipStream && trainingFileStream) {
-    trainingGzipStream.end()
-    await finished(trainingFileStream)
-  }
+  await closeStream(trainingStream)
+  await closeStream(movementStream)
 }
 
 function arg(flag: string, fallback?: string): string | undefined {
