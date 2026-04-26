@@ -68,18 +68,20 @@ export const INTERCEPTION = {
 } as const
 
 // --- Tackling ---
-// 2026-04-26 (User-Direktive): Tackle-Radius um 70% reduziert. Spieler
-// sollen nur dann tackeln, wenn sie den Gegner tatsaechlich erreichen
-// — nicht durch ein "magnetisches Tackle-Feld" aus der Distanz.
-// BASE_RADIUS: 6 → 1.8.
-// Beispiele effektiver Radius:
-//   defensiveRadius=30 (schwacher ST):  1.8 × (0.5 + 0.30) = 1.44
-//   defensiveRadius=60 (Mid):           1.8 × (0.5 + 0.60) = 1.98
-//   defensiveRadius=85 (Top-IV):        1.8 × (0.5 + 0.85) = 2.43
-// Spieler-Disc-Radius ist 4 → Tackle ergibt sich praktisch nur bei
-// echtem Disc-Disc-Kontakt.
+// Iterations-Historie:
+// 2026-04-26 v1: BASE_RADIUS 6 → 1.8 (70% Reduktion) — User wollte "nur
+//   echter Kontakt". Aber: Spieler-Disc-Radius ist 4, und beim Test waren
+//   gar keine Zweikaempfe mehr sichtbar. Tackle-Radius war kleiner als
+//   die Disc selbst → Tackles nur bei massiver Disc-Ueberlappung moeglich.
+// 2026-04-26 v2: BASE_RADIUS 1.8 → 3.6 (40% Reduktion vom Original).
+//   Effektive Radien:
+//     defensiveRadius=30 (schwacher ST):  3.6 × (0.5 + 0.30) = 2.88
+//     defensiveRadius=60 (Mid):           3.6 × (0.5 + 0.60) = 3.96
+//     defensiveRadius=85 (Top-IV):        3.6 × (0.5 + 0.85) = 4.86
+//   Top-IV erreicht den Ball ungefaehr bei Disc-Beruehrung (Distanz 4),
+//   schwacher ST tackelt nur wenn er fast drinsteht — realistisch.
 export const TACKLING = {
-  BASE_RADIUS: 1.8,
+  BASE_RADIUS: 3.6,
   MIN_FACTOR: 0.5,
   STAT_WEIGHT: 0.01,    // defensiveRadius stat weight
   // Win probability: attacker's ballShielding vs defender's tackling
