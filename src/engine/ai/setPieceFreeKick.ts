@@ -1,5 +1,15 @@
 /**
  * Free kick positioning — offensive and defensive.
+ *
+ * Konventionen / Regeln (User-Direktive 2026-04-26):
+ * 1. In der Naehe des Schuetzen darf maximal EIN eigener Spieler stehen
+ *    (= short-pass option). Alle anderen halten Mindestabstand
+ *    SHOOTER_KEEPOUT_RADIUS, sonst werden ihre Targets radial nach aussen
+ *    geschoben.
+ * 2. Verteidiger stehen bei OFFENSIVEN Freistoessen NICHT tief —
+ *    sondern ruecken mit auf zur Konter-Absicherung. Bei einem Mittel-
+ *    feld-Freistoss (ballPos.y ~ 50) stehen sie auf Hoehe ballPos+8,
+ *    nicht halfway zwischen Ball und eigenem Tor.
  */
 
 import type { PlayerData, Position, PlayerAction, TeamSide } from '../types'
@@ -10,6 +20,37 @@ import {
   isDefender, isAttacker, isMidfielder,
   moveAction,
 } from './setPieceHelpers'
+
+/** Mindestabstand zum Schuetzen, wenn man NICHT die kurze Option ist. */
+const SHOOTER_KEEPOUT_RADIUS = 12
+
+/**
+ * Wenn `target` zu nahe am Schuetzen ist, schiebt es radial weg.
+ * Ausnahme: wenn `isShortOption` true, bleibt das Target wie gegeben
+ * (genau ein Spieler darf in der Naehe stehen).
+ */
+function enforceShooterKeepout(
+  target: Position,
+  ballPos: Position,
+  isShortOption: boolean,
+): Position {
+  if (isShortOption) return target
+  const dx = target.x - ballPos.x
+  const dy = target.y - ballPos.y
+  const dist = Math.sqrt(dx * dx + dy * dy)
+  if (dist >= SHOOTER_KEEPOUT_RADIUS) return target
+  // Zu nah — radial nach aussen schieben. Wenn target identisch zum
+  // ballPos ist (dist=0), wird in Default-Richtung "nach hinten" gesetzt
+  // (Richtung eigene Haelfte).
+  if (dist < 0.01) {
+    return { x: ballPos.x + SHOOTER_KEEPOUT_RADIUS, y: ballPos.y }
+  }
+  const scale = SHOOTER_KEEPOUT_RADIUS / dist
+  return clamp({
+    x: ballPos.x + dx * scale,
+    y: ballPos.y + dy * scale,
+  })
+}
 
 // ── Wall formation ──────────────────────────────────────────────────
 
@@ -72,8 +113,24 @@ export function positionOffensiveFreekick(
   const defenders = players.filter(p => isDefender(p.positionLabel))
   const goalkeeper = players.find(p => p.positionLabel === 'TW')
 
+  // Wir ermitteln EINEN naechstgelegenen Spieler (ausser Schuetze) als
+  // einzige zulaessige Short-Option. Der Schuetze selbst steht am ballPos
+  // — das ist nicht in `players` enthalten, weil er bereits seine action
+  // hat, daher hier ignorieren wir ihn implizit.
+  const allFieldPlayers = [...attackers, ...midfielders, ...defenders]
+  const nearestFieldPlayer = allFieldPlayers
+    .map(p => ({ p, d: distance(p.position, ballPos) }))
+    .sort((a, b) => a.d - b.d)[0]?.p ?? null
+
+  /** Push pro Spieler — Short-Option-Spieler bekommt sein wunsch-Target,
+   *  alle anderen werden via enforceShooterKeepout vom Schuetzen weg. */
+  const push = (p: PlayerData, target: Position) => {
+    const isShort = nearestFieldPlayer?.id === p.id
+    actions.push(moveAction(p, enforceShooterKeepout(target, ballPos, isShort)))
+  }
+
   if (goalDist <= 35) {
-    // Attacking third: load the box
+    // ─── Attacking third: Box laden ───────────────────────────────
     const boxTargets: Position[] = [
       { x: 35, y: team === 1 ? goalY + 14 : goalY - 14 },
       { x: 65, y: team === 1 ? goalY + 14 : goalY - 14 },
@@ -83,88 +140,111 @@ export function positionOffensiveFreekick(
 
     const boxRunners = [...attackers, ...midfielders].slice(0, 4)
     for (let i = 0; i < boxRunners.length; i++) {
-      actions.push(moveAction(boxRunners[i], boxTargets[i % boxTargets.length]))
+      push(boxRunners[i], boxTargets[i % boxTargets.length])
     }
 
     const remainingMids = midfielders.filter(m => !boxRunners.includes(m))
     for (const mid of remainingMids) {
-      actions.push(moveAction(mid, {
-        x: ballPos.x + (mid.positionLabel === 'LM' ? -8 : 8),
-        y: ballPos.y,
-      }))
+      // Restliche Mids als Sicherung am 16er-Eingang
+      push(mid, {
+        x: mid.positionLabel === 'LM' ? 25 : mid.positionLabel === 'RM' ? 75 : 50,
+        y: shiftToward(ballPos.y, -10, team),
+      })
     }
 
-    const ownGoal = ownGoalY(team)
+    // Verteidiger ruecken AUF — Konter-Absicherung knapp hinter Mittellinie,
+    // nicht 30 Einheiten tief am eigenen Tor. User-Feedback 2026-04-26:
+    // Verteidiger standen viel zu tief.
+    const defenseLineY = team === 1 ? 58 : 42
     for (let i = 0; i < defenders.length; i++) {
-      const stayBackY = team === 1 ? ownGoal - 30 : ownGoal + 30
-      const xSpread = 25 + i * 20
-      actions.push(moveAction(defenders[i], { x: xSpread, y: stayBackY }))
+      const xSpread = 25 + i * 18
+      push(defenders[i], { x: xSpread, y: defenseLineY })
     }
 
     if (goalkeeper) {
       actions.push(moveAction(goalkeeper, { x: 50, y: team === 1 ? 93 : 7 }))
     }
   } else if (goalDist <= 65) {
-    // Midfield: balanced positioning
-    const shortOptions = midfielders.slice(0, 2)
-    for (let i = 0; i < shortOptions.length; i++) {
-      const xOff = i === 0 ? -10 : 10
-      actions.push(moveAction(shortOptions[i], {
-        x: ballPos.x + xOff,
-        y: shiftToward(ballPos.y, 5, team),
-      }))
+    // ─── Midfield: balanced positioning ───────────────────────────
+    // Genau EIN Mittelfeldspieler als kurze Option (nearestFieldPlayer).
+    // Andere Mids breit verteilt am Halfraum bzw Fluegel.
+    for (const mid of midfielders) {
+      if (mid.id === nearestFieldPlayer?.id) {
+        // Short option seitlich versetzt
+        push(mid, {
+          x: ballPos.x + (mid.position.x >= ballPos.x ? 9 : -9),
+          y: shiftToward(ballPos.y, 4, team),
+        })
+        continue
+      }
+      // Andere Mids — auf Fluegel oder Halfraum
+      const xTarget =
+        mid.positionLabel === 'LM' ? 20 :
+        mid.positionLabel === 'RM' ? 80 :
+        mid.positionLabel === 'OM' ? 50 :
+        38 + (Math.abs(mid.position.x - 50) > 15 ? 0 : 24)
+      push(mid, {
+        x: xTarget,
+        y: shiftToward(ballPos.y, 12, team),
+      })
     }
 
     for (let i = 0; i < attackers.length; i++) {
-      actions.push(moveAction(attackers[i], {
+      push(attackers[i], {
         x: 40 + i * 20,
-        y: shiftToward(ballPos.y, 20, team),
-      }))
+        y: shiftToward(ballPos.y, 22, team),
+      })
     }
 
-    const remainingMids = midfielders.filter(m => !shortOptions.includes(m))
-    for (const mid of remainingMids) {
-      const xTarget = mid.positionLabel === 'LM' ? 20 : mid.positionLabel === 'RM' ? 80 : 50
-      actions.push(moveAction(mid, {
-        x: xTarget,
-        y: shiftToward(ballPos.y, 10, team),
-      }))
-    }
-
-    const halfwayY = (ballPos.y + ownGoalY(team)) / 2
+    // Verteidiger ruecken mit auf — auf Hoehe ballPos plus etwas
+    // zurueck (8 Einheiten). Vorher: halfway zwischen ballPos und
+    // eigenem Tor → bei ballPos.y=50 stand die Kette bei y=75. Jetzt
+    // bei y=58 (Team 1). Realistisch Bundesliga-ueblich.
+    const defenseLineY = shiftToward(ballPos.y, -8, team)
     for (let i = 0; i < defenders.length; i++) {
-      const xSpread = 30 + i * 18
-      actions.push(moveAction(defenders[i], { x: xSpread, y: halfwayY }))
+      const xSpread = 25 + i * 18
+      push(defenders[i], { x: xSpread, y: defenseLineY })
     }
 
     if (goalkeeper) {
       actions.push(moveAction(goalkeeper, { x: 50, y: team === 1 ? 93 : 7 }))
     }
   } else {
-    // Own half: compact and safe
-    for (let i = 0; i < midfielders.length; i++) {
-      const xOff = (i % 2 === 0 ? -12 : 12)
-      actions.push(moveAction(midfielders[i], {
-        x: ballPos.x + xOff,
-        y: shiftToward(ballPos.y, 8 + i * 4, team),
-      }))
+    // ─── Own half: compact und sicher ──────────────────────────────
+    // Eigener Freistoss tief in der eigenen Haelfte. Hier ist eine
+    // tiefere Verteidigung gerechtfertigt, ABER auch hier max EIN
+    // Mid in der Schuetzen-Naehe.
+    for (const mid of midfielders) {
+      if (mid.id === nearestFieldPlayer?.id) {
+        push(mid, {
+          x: ballPos.x + (mid.position.x >= ballPos.x ? 10 : -10),
+          y: shiftToward(ballPos.y, 6, team),
+        })
+        continue
+      }
+      // Andere Mids hochstellen als Anlauf-Punkte
+      push(mid, {
+        x: mid.positionLabel === 'LM' ? 22 : mid.positionLabel === 'RM' ? 78 : 50,
+        y: shiftToward(ballPos.y, 18, team),
+      })
     }
 
-    // Stürmer nicht auf die Mittellinie parken — sie sollen als Konter-
-    // Ausgangspunkt in der gegnerischen Hälfte bleiben (y=35 Team 1 / y=65 Team 2).
+    // Stürmer als Konter-Anker in der gegnerischen Hälfte
     for (let i = 0; i < attackers.length; i++) {
-      actions.push(moveAction(attackers[i], {
+      push(attackers[i], {
         x: 40 + i * 20,
         y: shiftToward(50, 15, team),
-      }))
+      })
     }
 
+    // Verteidiger nicht ganz tief — Aufrueckung zur Mittellinie hin,
+    // damit beim Pass die Linie nicht 25 Einheiten hinter dem Ball ist.
     const ownGoal = ownGoalY(team)
+    const defenseLineY = team === 1
+      ? Math.min(ownGoal - 18, ballPos.y + 6)
+      : Math.max(ownGoal + 18, ballPos.y - 6)
     for (let i = 0; i < defenders.length; i++) {
-      actions.push(moveAction(defenders[i], {
-        x: 30 + i * 18,
-        y: team === 1 ? ownGoal - 20 : ownGoal + 20,
-      }))
+      push(defenders[i], { x: 30 + i * 18, y: defenseLineY })
     }
 
     if (goalkeeper) {
