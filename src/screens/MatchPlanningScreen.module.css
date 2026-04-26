@@ -232,8 +232,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  /* Text-Farbe wird vom inline-style gesetzt (kontrast-getrieben);
+   * text-shadow nur subtil, damit weisser Text auf hellblau und
+   * schwarzer Text auf gelb beide klar sichtbar sind. */
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
   user-select: none;
   cursor: pointer;
   transform: translate(-50%, -50%);
@@ -359,8 +361,8 @@
   justify-content: center;
   font-size: 9px;
   font-weight: 700;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  /* color via inline style — dynamisch an Disc-Helligkeit angepasst */
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
   flex-shrink: 0;
   border: 1px solid rgba(0, 0, 0, 0.4);
 }

@@ -265,10 +265,15 @@ export interface Team {
   id: number
   name: string
   shortName: string
+  /** Heimtrikot-Farbe (Disc-Primaerfarbe) */
   color: string
+  /** Auswaertstrikot-Farbe — wird genutzt wenn beide Teams aehnliche
+   *  Primaerfarben haben. Z.B. Bayern (rot) vs Mainz (rot): das
+   *  Auswaerts-Team faellt auf colorAlt zurueck (typisch weiss). */
+  colorAlt: string
   levels: TeamLevels
   leagueId: LeagueId
-  defaultFormation?: FormationType  // Bevorzugte Formation der Mannschaft
+  defaultFormation?: FormationType
 }
 
 // --- Multiplayer Types ---

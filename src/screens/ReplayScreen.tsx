@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useUIStore } from '../stores/uiStore'
 import { useArenaStore } from '../stores/arenaStore'
 import { getTeamById } from '../data/teams'
+import { pickDiscColors } from '../data/teamColors'
 import { Camera } from '../canvas/Camera'
 import { PitchRenderer } from '../canvas/PitchRenderer'
 import { PlayerRenderer } from '../canvas/PlayerRenderer'
@@ -88,10 +89,11 @@ export function ReplayScreen() {
   useEffect(() => {
     // Renderer kennen Default-Kit-Farben. Wir überschreiben sie mit den
     // echten Team-Farben aus data/teams.ts, damit Dortmund gelb bleibt etc.
-    if (playerRendererRef.current && home?.color && away?.color) {
-      playerRendererRef.current.setTeamColors(home.color, away.color)
+    if (playerRendererRef.current && home && away && lastResult) {
+      const dc = pickDiscColors(lastResult.homeId, lastResult.awayId)
+      playerRendererRef.current.setTeamColors(dc.home.disc, dc.away.disc)
     }
-  }, [home, away])
+  }, [home, away, lastResult])
 
   // Canvas-Init + Resize
   useEffect(() => {
@@ -104,8 +106,9 @@ export function ReplayScreen() {
     // Team-Farben direkt bei der Renderer-Erstellung setzen — der separate
     // useEffect feuert beim ersten Mount vor dem Canvas-Init und greift dann
     // auf einen noch nicht erstellten Renderer zu.
-    if (home?.color && away?.color) {
-      playerRenderer.setTeamColors(home.color, away.color)
+    if (home && away && lastResult) {
+      const dc = pickDiscColors(lastResult.homeId, lastResult.awayId)
+      playerRenderer.setTeamColors(dc.home.disc, dc.away.disc)
     }
     playerRendererRef.current = playerRenderer
     ballRendererRef.current = new BallRenderer(camera)

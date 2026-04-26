@@ -21,6 +21,7 @@ import { useUIStore } from '../stores/uiStore'
 import { Button } from '../components/Button'
 import { Modal } from '../components/Modal'
 import { getTeamById, getTeamDefaultFormation } from '../data/teams'
+import { pickDiscColors, type DiscColors } from '../data/teamColors'
 import { TEAM_ROSTERS, type PlayerTemplate } from '../data/players'
 import {
   createFormationDetailed, ALL_FORMATIONS, getFormationSlots,
@@ -258,6 +259,12 @@ export function MatchPlanningScreen() {
     )
   }
 
+  // ─── Disc-Farben ────────────────────────────────────────────────
+  // Wenn Heim und Auswaerts aehnliche Farben haben, faellt das Auswaerts-
+  // Team automatisch auf seine colorAlt zurueck. Plus pro Team eine
+  // Text-Farbe (Position-Label) mit Kontrast zur Disc.
+  const discColors = pickDiscColors(t1, t2)
+
   // ─── Render ─────────────────────────────────────────────────────
 
   const leftPanel = selectedPlayer?.side === 1
@@ -265,7 +272,7 @@ export function MatchPlanningScreen() {
     : <BenchPanel
         bench={lineup1.bench}
         roster={roster1}
-        teamColor={team1.color}
+        discColors={discColors.home}
         label={`Bank (${lineup1.bench.length}/${BENCH_MAX})`}
         draggable
         onDragStart={(idx) => onDragStart({ kind: 'bench', benchIndex: idx })}
@@ -281,7 +288,7 @@ export function MatchPlanningScreen() {
     : <BenchPanel
         bench={lineup2.bench}
         roster={roster2}
-        teamColor={team2.color}
+        discColors={discColors.away}
         label={`Bank (${lineup2.bench.length}/${BENCH_MAX})`}
         draggable={false}
         onClickRow={(idx) => handleBenchClick(idx, 2)}
@@ -293,9 +300,9 @@ export function MatchPlanningScreen() {
       <div className={styles.header}>
         <button className={styles.backBtn} onClick={goBack}>← Zurück</button>
         <div className={styles.matchupHeader}>
-          <span className={styles.teamNameH} style={{ color: team1.color }}>{team1.name}</span>
+          <span className={styles.teamNameH} style={{ color: discColors.home.disc }}>{team1.name}</span>
           <span className={styles.vs}>vs</span>
-          <span className={styles.teamNameH} style={{ color: team2.color }}>{team2.name}</span>
+          <span className={styles.teamNameH} style={{ color: discColors.away.disc }}>{team2.name}</span>
         </div>
         <Button variant="primary" size="md" onClick={handlePlay}>
           PLAY
@@ -335,7 +342,7 @@ export function MatchPlanningScreen() {
             >
               <MiniPitch
                 slots={getFormationSlots(f)}
-                color={team1.color}
+                discColors={discColors.home}
                 active={f === formation1}
               />
               <div className={styles.formationCardLabel}>
@@ -363,8 +370,8 @@ export function MatchPlanningScreen() {
             lineup2={lineup2}
             roster1={roster1}
             roster2={roster2}
-            team1Color={team1.color}
-            team2Color={team2.color}
+            team1Discs={discColors.home}
+            team2Discs={discColors.away}
             selectedSide={selectedPlayer?.side ?? null}
             selectedLastName={selectedPlayer?.template.lastName ?? null}
             onClickPitch={handlePitchClick}
@@ -396,7 +403,7 @@ const FORMATION_DESCRIPTIONS: Record<FormationType, string> = {
   '3-4-1-2': 'Diamant, 3er-Kette',
 }
 
-function MiniPitch({ slots, color, active }: { slots: FormationSlot[]; color: string; active: boolean }) {
+function MiniPitch({ slots, discColors, active }: { slots: FormationSlot[]; discColors: DiscColors; active: boolean }) {
   return (
     <svg
       viewBox="0 0 100 100"
@@ -415,9 +422,9 @@ function MiniPitch({ slots, color, active }: { slots: FormationSlot[]; color: st
         const mappedY = ((s.y - 50) / 43) * 93 + 5
         return (
           <g key={i} transform={`translate(${s.x} ${mappedY})`}>
-            <circle r={5} fill={color} stroke="rgba(0,0,0,0.4)" strokeWidth={0.4} />
+            <circle r={5} fill={discColors.disc} stroke="rgba(0,0,0,0.4)" strokeWidth={0.4} />
             <text textAnchor="middle" dominantBaseline="central"
-                  fontSize={3.6} fontWeight={700} fill="#fff" pointerEvents="none">
+                  fontSize={3.6} fontWeight={700} fill={discColors.text} pointerEvents="none">
               {s.positionLabel}
             </text>
           </g>
@@ -436,8 +443,8 @@ interface PitchProps {
   lineup2: LineupState
   roster1: PlayerTemplate[]
   roster2: PlayerTemplate[]
-  team1Color: string
-  team2Color: string
+  team1Discs: DiscColors
+  team2Discs: DiscColors
   selectedSide: 1 | 2 | null
   selectedLastName: string | null
   onClickPitch: (slotIndex: number, side: 1 | 2) => void
@@ -496,7 +503,7 @@ function PitchView(p: PitchProps) {
               tpl={tpl}
               x={pos.x}
               y={pos.y}
-              color={p.team1Color}
+              discColors={p.team1Discs}
               selected={selected}
               dragOver={dragOver}
               draggable
@@ -522,7 +529,7 @@ function PitchView(p: PitchProps) {
               tpl={tpl}
               x={pos.x}
               y={pos.y}
-              color={p.team2Color}
+              discColors={p.team2Discs}
               selected={selected}
               dragOver={false}
               draggable={false}
@@ -541,7 +548,7 @@ interface PitchDiscProps {
   tpl: PlayerTemplate
   x: number  // 0..100
   y: number  // 0..100
-  color: string
+  discColors: DiscColors
   selected: boolean
   dragOver: boolean
   draggable: boolean
@@ -564,7 +571,8 @@ function PitchDisc(p: PitchDiscProps) {
       style={{
         left: `${p.x}%`,
         top: `${p.y}%`,
-        background: p.color,
+        background: p.discColors.disc,
+        color: p.discColors.text,
       }}
       draggable={p.draggable}
       onDragStart={p.onDragStart}
@@ -628,7 +636,7 @@ function StatsPanel({ selected }: { selected: SelectedPlayer }) {
 interface BenchPanelProps {
   bench: number[]   // Roster-Indices
   roster: PlayerTemplate[]
-  teamColor: string
+  discColors: DiscColors
   label: string
   draggable: boolean
   onDragStart?: (benchIndex: number) => (e: React.DragEvent) => void
@@ -671,7 +679,7 @@ function BenchPanel(p: BenchPanelProps) {
             >
               <div
                 className={styles.benchDisc}
-                style={{ background: p.teamColor }}
+                style={{ background: p.discColors.disc, color: p.discColors.text }}
                 title={tpl.positionLabel}
               >
                 {tpl.positionLabel}

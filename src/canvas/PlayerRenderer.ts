@@ -1,6 +1,7 @@
 import { Camera } from './Camera'
 import { VISUAL } from '../engine/constants'
 import type { PlayerData, TeamSide } from '../engine/types'
+import { getContrastTextColor } from '../data/teamColors'
 
 export class PlayerRenderer {
   private camera: Camera
@@ -111,13 +112,13 @@ export class PlayerRenderer {
       ctx.setLineDash([])
     }
 
-    // Position label
+    // Position label — Text-Kontrast dynamisch zur Disc-Farbe
     ctx.globalAlpha = isDimmed ? 0.5 : 1
     const fontSize = Math.max(8, r * 0.7)
     ctx.font = `bold ${fontSize}px system-ui, -apple-system, sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillStyle = player.team === 1 ? '#1a1a1a' : '#ffffff'
+    ctx.fillStyle = getContrastTextColor(color)
     ctx.fillText(player.positionLabel, pos.x, pos.y)
 
     // Selected: show name below disc

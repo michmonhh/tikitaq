@@ -13,7 +13,7 @@ import { useAIMode } from '../hooks/useAIMode'
 import { GameSidebar } from '../components/GameSidebar'
 import { Button } from '../components/Button'
 import { getTeamById } from '../data/teams'
-import { getEffectiveColor } from '../data/teamOverrides'
+import { pickDiscColors } from '../data/teamColors'
 import styles from './MatchScreen.module.css'
 
 export function MatchScreen() {
@@ -116,9 +116,14 @@ export function MatchScreen() {
     setLocalTeam(myTeam)
   }, [duelSync.matchDetails, userId, matchConfig?.isDuel, setLocalTeam])
 
-  const team1Color = matchConfig ? getEffectiveColor(matchConfig.team1Id) : '#eada1e'
-  const team2Color = matchConfig ? getEffectiveColor(matchConfig.team2Id) : '#e32221'
-  const teamColors = useMemo(() => ({ team1: team1Color, team2: team2Color }), [team1Color, team2Color])
+  // Disc-Farben werden ueber pickDiscColors aufgeloest — wenn Heim und
+  // Auswaerts aehnliche Heimfarben haben, faellt Auswaerts auf colorAlt
+  // zurueck, damit beide Teams auf dem Pitch unterscheidbar sind.
+  const teamColors = useMemo(() => {
+    if (!matchConfig) return { team1: '#eada1e', team2: '#e32221' }
+    const dc = pickDiscColors(matchConfig.team1Id, matchConfig.team2Id)
+    return { team1: dc.home.disc, team2: dc.away.disc }
+  }, [matchConfig])
   useGameLoop(canvasRef, containerRef, teamColors)
 
   useEffect(() => {
@@ -267,8 +272,8 @@ export function MatchScreen() {
       <GameSidebar
         team1Name={team1?.shortName ?? 'Team 1'}
         team2Name={team2?.shortName ?? 'Team 2'}
-        team1Color={team1Color}
-        team2Color={team2Color}
+        team1Color={teamColors.team1}
+        team2Color={teamColors.team2}
         onBack={handleBack}
       />
     </div>
