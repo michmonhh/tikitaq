@@ -41,12 +41,12 @@ export function compareStrength(
   // Positionsgruppen aufteilen
   const ownAttackers = ownPlayers.filter(p => ['ST', 'OM', 'LM', 'RM'].includes(p.positionLabel))
   const ownDefenders = ownPlayers.filter(p => ['IV', 'LV', 'RV'].includes(p.positionLabel))
-  const ownMidfield = ownPlayers.filter(p => ['ZDM', 'LM', 'RM', 'OM'].includes(p.positionLabel))
+  const ownMidfield = ownPlayers.filter(p => ['ZDM', 'ZM', 'LM', 'RM', 'OM'].includes(p.positionLabel))
   const ownWings = ownPlayers.filter(p => ['LM', 'RM'].includes(p.positionLabel))
 
   const oppAttackers = opponentPlayers.filter(p => ['ST', 'OM', 'LM', 'RM'].includes(p.positionLabel))
   const oppDefenders = opponentPlayers.filter(p => ['IV', 'LV', 'RV'].includes(p.positionLabel))
-  const oppMidfield = opponentPlayers.filter(p => ['ZDM', 'LM', 'RM', 'OM'].includes(p.positionLabel))
+  const oppMidfield = opponentPlayers.filter(p => ['ZDM', 'ZM', 'LM', 'RM', 'OM'].includes(p.positionLabel))
 
   // Vergleiche berechnen (jeweils -1 bis +1)
   const pace = normalizedDiff(

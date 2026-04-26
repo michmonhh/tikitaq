@@ -146,7 +146,7 @@ function calcCentralCongestion(oppGrid: number[][], totalOpponents: number): num
 function calcGapBetweenLines(opponents: PlayerData[]): number {
   // Gegner-Verteidiger und -Mittelfeldspieler identifizieren
   const defLabels = ['IV', 'LV', 'RV']
-  const midLabels = ['ZDM', 'LM', 'RM', 'OM']
+  const midLabels = ['ZDM', 'ZM', 'LM', 'RM', 'OM']
 
   const defenders = opponents.filter(p => defLabels.includes(p.positionLabel))
   const midfielders = opponents.filter(p => midLabels.includes(p.positionLabel))

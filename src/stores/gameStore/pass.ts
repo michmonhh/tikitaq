@@ -186,13 +186,8 @@ export function makePassBall(set: StoreSet, get: StoreGet): GameStore['passBall'
             // hier vereinfacht, weil Reception-Foul ein Edge-Case ist.
           }
 
-          // Tackle-Event in den Ticker
-          state = { ...state, ticker: [...state.ticker, {
-            minute: state.gameTime,
-            message: tackleResult.event.message,
-            type: tackleResult.event.type,
-            team: tackleResult.winner.team,
-          }] }
+          // Tackle-Event als Overlay anzeigen (analog move.ts)
+          get().showEvent(tackleResult.event.message, 3000, tackleResult.event.type)
         }
       }
     } else if (result.interceptedBy) {

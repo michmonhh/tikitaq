@@ -140,12 +140,14 @@ export function decideBallAction(
 
     // Defensive Rollen sollen nicht in Gegner-Radius dribbeln/vorrücken.
     // Indikator: successChance < 0.80 heißt Gegner blockt den Pfad.
-    // TW/IV/LV/RV/ZDM bekommen dann einen Malus, Offensive (LM/RM/OM/ST)
-    // nicht — die dürfen auch riskante Dribblings wagen.
+    // TW/IV/LV/RV/ZDM/ZM bekommen dann einen Malus, Offensive
+    // (LM/RM/OM/ST) nicht — die dürfen auch riskante Dribblings wagen.
+    // ZM (Box-to-Box) wird wie ZDM behandelt (zentraler Mid, soll
+    // nicht riskant durchdribbeln, sondern Pässe spielen).
     if ((opt.type === 'advance' || opt.type === 'dribble')
       && opt.successChance < 0.80
-      && ['TW', 'IV', 'LV', 'RV', 'ZDM'].includes(carrier.positionLabel)) {
-      const penalty = carrier.positionLabel === 'ZDM' ? 25 : 35
+      && ['TW', 'IV', 'LV', 'RV', 'ZDM', 'ZM'].includes(carrier.positionLabel)) {
+      const penalty = (carrier.positionLabel === 'ZDM' || carrier.positionLabel === 'ZM') ? 25 : 35
       opt.score -= penalty
     }
 

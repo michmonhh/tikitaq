@@ -61,7 +61,7 @@ export function isAttacker(label: string): boolean {
 
 /** Check if a position label represents a midfielder (not OM). */
 export function isMidfielder(label: string): boolean {
-  return label === 'ZDM' || label === 'LM' || label === 'RM'
+  return label === 'ZDM' || label === 'ZM' || label === 'LM' || label === 'RM'
 }
 
 /** Build a move action for a player. */

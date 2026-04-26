@@ -115,7 +115,8 @@ export function getInterceptRadius(player: PlayerData): number {
   switch (player.positionLabel) {
     case 'TW': return INTERCEPTION.GOALKEEPER_RADIUS
     case 'IV': case 'LV': case 'RV': return INTERCEPTION.DEFENDER_RADIUS
-    case 'ZDM': case 'LM': case 'RM': case 'OM': return INTERCEPTION.MIDFIELDER_RADIUS
+    case 'ZDM': case 'ZM': case 'LM': case 'RM': case 'OM':
+      return INTERCEPTION.MIDFIELDER_RADIUS
     case 'ST': return INTERCEPTION.FORWARD_RADIUS
     default: return INTERCEPTION.MIDFIELDER_RADIUS
   }
