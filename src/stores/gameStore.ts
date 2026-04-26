@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { createFormation } from '../engine/formation'
 import { createInitialGameState } from '../engine/turn'
 import { resetOpponentModel, initAIPlan } from '../engine/ai'
+import { getTeamDefaultFormation } from '../data/teams'
+import type { FormationType } from '../engine/types'
 import { addTicker } from './gameStore/helpers'
 import type { GameStore } from './gameStore/types'
 import { makeMovePlayer } from './gameStore/move'
@@ -49,9 +51,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   selectPlayer: (playerId) => set({ selectedPlayerId: playerId }),
 
-  initGame: (team1Id, team2Id, isVsAI = true, mustDecide = false) => {
+  initGame: (team1Id, team2Id, isVsAI = true, mustDecide = false, formation1, formation2) => {
     resetOpponentModel() // Clear opponent learning data for new match
-    const players = createFormation(team1Id, team2Id)
+    // Wenn keine Formations übergeben wurden: aus den TEAMS-Defaults ziehen.
+    // (User-Override aus MatchPlanningScreen kommt explizit über die Args.)
+    const f1: FormationType = formation1 ?? (team1Id !== undefined ? getTeamDefaultFormation(team1Id) : '4-3-3')
+    const f2: FormationType = formation2 ?? (team2Id !== undefined ? getTeamDefaultFormation(team2Id) : '4-3-3')
+    const players = createFormation(team1Id, team2Id, f1, f2)
     let state = createInitialGameState(players, mustDecide)
     // Anstoß-Ticker
     state = addTicker(state, 'Anpfiff – 1. Halbzeit', 'kickoff')

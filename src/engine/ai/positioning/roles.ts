@@ -1,16 +1,20 @@
 import type { PlayerData, Position } from '../../types'
-import { FORMATION_433 } from '../../formation'
 import type { RoleGroup } from './config'
 
 /**
  * Berechnet die Formationsheimposition eines Spielers.
- * Nutzt den Slot-Index aus der Player-ID (t1-3 → Index 3) und
- * die aktuelle Confidence für Push/Spread.
- * Ergebnis: dort wo der Spieler im Mannschaftsgefüge "hingehört".
+ *
+ * Vor dem Multi-Formations-Refactor: Lookup in FORMATION_433 per Index aus
+ * der Player-ID. Jetzt: jeder Player trägt seinen Slot direkt
+ * (`formationSlot`), gesetzt beim Erstellen mit der jeweiligen Team-
+ * Formation. Damit kann jedes Team eine andere Formation spielen, ohne
+ * dass diese Funktion wissen muss welche.
+ *
+ * Konvention: `formationSlot.x/y` liegt in Team-1-Koordinaten. Für Team 2
+ * wird hier gespiegelt.
  */
 export function getFormationHome(player: PlayerData): Position {
-  const idx = parseInt(player.id.split('-')[1], 10)
-  const slot = FORMATION_433[idx]
+  const slot = player.formationSlot
   if (!slot) return player.origin
 
   const cf = Math.max(0.15, Math.min(0.95, player.confidence / 100))
@@ -21,8 +25,6 @@ export function getFormationHome(player: PlayerData): Position {
   // Y-Floor pro Rolle: Stürmer dürfen ihre Heimat in der gegnerischen Hälfte
   // haben (y < 50 für Team 1), Mittelfeld maximal Mittellinie, Abwehr bleibt
   // in eigener Hälfte.
-  // 2026-04-24: Stürmer-yFloor 35 → 28 — User-Feedback, Grundlinien-Präsenz
-  // zu niedrig. 28 lässt Stürmer-Heimat im Strafraum-Bereich (16m = y 16.5).
   const role = getRoleGroup(player)
   const yFloor = role === 'attacker' ? 28 : 50
   const baseY = Math.max(yFloor, slot.y - slot.push * cf)
@@ -33,11 +35,21 @@ export function getFormationHome(player: PlayerData): Position {
   return { x: baseX, y: baseY }
 }
 
-/** Rolle aus Positionslabel — stabil, driftet nicht mit origin */
+/** Rolle aus Positionslabel — stabil, driftet nicht mit origin.
+ *
+ *  Position-Labels:
+ *    - TW: Torwart (separat behandelt)
+ *    - LV/IV/RV: Verteidiger (Außen-/Innen-/Außen-Verteidiger)
+ *    - ZDM: Defensiver Mittelfeldspieler
+ *    - ZM: Zentraler Mittelfeldspieler (Box-to-Box)
+ *    - LM/RM: Linker/Rechter Mittelfeldspieler (Flügel)
+ *    - OM: Offensiver Mittelfeldspieler
+ *    - ST: Stürmer
+ */
 export function getRoleGroup(player: PlayerData): RoleGroup {
   const label = player.positionLabel
   if (['IV', 'LV', 'RV'].includes(label)) return 'defender'
-  if (['ZDM', 'LM', 'RM'].includes(label)) return 'midfielder'
+  if (['ZDM', 'ZM', 'LM', 'RM'].includes(label)) return 'midfielder'
   return 'attacker'  // ST, OM, TW (TW wird separat behandelt)
 }
 

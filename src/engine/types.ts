@@ -30,14 +30,28 @@ export interface PlayerGameStats {
   conceded: number
 }
 
+/**
+ * Slot-Definition aus der Formation des Teams. Wird beim Erstellen des
+ * Players gesetzt und bleibt fix während des Matches. Wird in
+ * roles.ts/getFormationHome() genutzt um die team-1-Koordinaten zu
+ * berechnen; team-2 wird beim Lookup gespiegelt.
+ */
+export interface PlayerFormationSlot {
+  x: number       // Basis-Koordinate in Team-1-Sicht (0-100)
+  y: number       // Basis-Koordinate in Team-1-Sicht (0-100, 100 = eigenes Tor)
+  push: number    // Vorwärtsschub bei hohem Selbstvertrauen
+  xSpread: number // Laterale Streuung bei hohem Selbstvertrauen
+}
+
 export interface PlayerData {
   id: string
   team: TeamSide
-  positionLabel: string  // TW, IV, LV, RV, ZDM, LM, RM, OM, ST
+  positionLabel: string  // TW, IV, LV, RV, ZDM, ZM, LM, RM, OM, ST
   firstName: string
   lastName: string
   position: Position
   origin: Position       // Position at start of turn (for movement radius calc)
+  formationSlot: PlayerFormationSlot  // Heim-Anker aus der Team-Formation
   stats: PlayerStats
   gameStats: PlayerGameStats
   fitness: number          // 0-100, decreases with distance covered and actions
@@ -242,6 +256,11 @@ export interface TeamLevels {
   tw: number
 }
 
+/** Vom Coach bevorzugte Grundformation. Optional, Default '4-3-3'.
+ *  Kann vom User im MatchPlanningScreen überschrieben werden. */
+export type FormationType =
+  | '4-3-3' | '4-2-3-1' | '4-4-2' | '3-5-2' | '4-1-4-1' | '5-3-2' | '3-4-1-2'
+
 export interface Team {
   id: number
   name: string
@@ -249,6 +268,7 @@ export interface Team {
   color: string
   levels: TeamLevels
   leagueId: LeagueId
+  defaultFormation?: FormationType  // Bevorzugte Formation der Mannschaft
 }
 
 // --- Multiplayer Types ---
